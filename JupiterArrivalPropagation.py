@@ -94,8 +94,8 @@ use_one_seed_only = True
 # List of minimum and maximum values for each design parameter (trajectory parameter)
 if mission_case == 1:
     decision_variable_range = \
-        [[5.1, 62502,  6, 10, 0.1, 0.1, 1, 1],
-         [6.1, 62835, 80, 80,  10,  10, 4, 4]]
+        [[5.1, 10958,  6, 10, 0.1, 0.1, 1, 1],
+         [6.1, 11291, 80, 80,  10,  10, 4, 4]]
     # The entries of the vector 'trajectory_parameters' contains the following:
     # * Entry 0: Arrival velocity in km/s
     # * Entry 1: Initial epoch in Julian days since J2000 (MJD2000)
@@ -108,8 +108,8 @@ if mission_case == 1:
 
 else:
     decision_variable_range = \
-        [[5.1, 62502, 6, 10, 0.1, 0.1, 0.1, 1, 1],
-         [6.1, 62835, 80, 80, 10,  10,  10, 4, 4]]
+        [[5.1, 10958, 6, 10, 0.1, 0.1, 0.1, 1, 1],
+         [6.1, 11291, 80, 80, 10,  10,  10, 4, 4]]
     # The entries of the vector 'trajectory_parameters' contains the following:
     # * Entry 0: Arrival velocity in km/s
     # * Entry 1: Initial epoch in Julian days since J2000 (MJD2000)
