@@ -64,64 +64,9 @@ galilean_moons_data = {
 #     print(f'g_0 of {moon}: {galilean_moons_data[moon][g_0]:.3f} m/s^2')
 
 
-# Problem parameters
-flight_path_angle_at_atmosphere_entry = -3.  # degrees
-interplanetary_arrival_velocity_in_jupiter_frame = 5600 # m/s
-delta_angle_from_hohmann_trajectory = 0.94  # degrees
-# second_arc_time_of_flight = 0.3  # days
-choose_flyby_moon = 'Europa'
-number_of_epochs_to_plot = 1000
-
-
-
-# Parameters reprocessing
-flight_path_angle_at_atmosphere_entry = flight_path_angle_at_atmosphere_entry * np.pi / 180  # rad
-delta_angle_from_hohmann_trajectory = delta_angle_from_hohmann_trajectory * np.pi / 180  # rad
-
-
 def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
     return vector / np.linalg.norm(vector)
-
-
-def ccw_rotation_z(vector, angle):
-    """ Returns the input vector rotated counterclockwise w.r.t. the z axis by the input signed angle"""
-    if len(vector) != 3:
-        raise Exception('Vector for rotation must be 3-D!')
-    counterclockwise_rotation_matrix = np.array(
-        [[np.cos(angle), -np.sin(angle), 0.], [np.sin(angle), np.cos(angle), 0.], [0., 0., 1.]])
-    return (counterclockwise_rotation_matrix @ vector.reshape(3,1)).reshape(3)
-
-
-def ccw_rotation_x(vector, angle):
-    """ Returns the input vector rotated counterclockwise w.r.t. the x axis by the input signed angle"""
-
-    vector_shape = np.shape(vector)
-    counterclockwise_rotation_matrix = np.array(
-        [[1, 0., 0.], [0., np.cos(angle), -np.sin(angle)], [0., np.sin(angle), np.cos(angle)]])
-
-    if len(vector_shape) == 1:
-        if len(vector) != 3:
-            raise Exception('Vector for rotation must have three components!')
-        return (counterclockwise_rotation_matrix @ vector.reshape(3, 1)).reshape(3)
-
-    elif len(vector_shape) == 2:
-        vector = vector.T  # makes the vector with shape (3,n)
-        if len(vector[:,0]) != 3:
-            raise Exception('Vector for rotation must have three components!')
-
-        number_of_vectors = len(vector[0,:])
-        rotated_vectors = np.zeros((3,number_of_vectors))
-
-        for i in range(number_of_vectors):
-            rotated_vectors[:,i] = counterclockwise_rotation_matrix @ vector[:,i]
-        rotated_vectors = rotated_vectors.T  # shape of rotated_vectors is now (n,3)
-        return rotated_vectors
-
-    else:
-        raise Exception('Wrong input vector dimensions. '
-                        'Vector must be either a 1-D array with 3 entries, '
-                        'or a 2-D array of vectors with shape (n,3) where "n" is the number of vectors')
 
 
 def rotation_matrix(axis, theta):
@@ -170,6 +115,7 @@ def rotate_vectors_by_given_matrix(rot_matrix, vector):
                         'Vector must be either a 1-D array with 3 entries, '
                         'or a 2-D array of vectors with shape (n,3) where "n" is the number of vectors')
 
+
 def cartesian_2d_from_polar(r, theta):
     x = r * np.cos(theta)
     y = r * np.sin(theta)
@@ -198,7 +144,7 @@ def compute_lambert_targeter_state_history(
         departure_epoch,
         arrival_epoch,
         central_body_grav_parameter=central_body_gravitational_parameter,
-        number_of_epochs=number_of_epochs_to_plot):
+        number_of_epochs: int = 200):
     """
     Computes the lambert problem and returns the history of states
     :param initial_state:
@@ -242,7 +188,7 @@ def compute_lambert_targeter_state_history(
 # TO BE FIXED
 def plot_trajectory_arc(lambert_arc_history,
                         central_body='Jupiter',
-                        figure_title='',
+                        figure_title: str = '',
                         ):
     cartesian_elements_lambert = np.vstack(list(lambert_arc_history.values()))
     trajectory_epochs = lambert_arc_history.keys()
@@ -296,3 +242,68 @@ def plot_trajectory_arc(lambert_arc_history,
     # z = z_0 + moon_radius * np.cos(v)
     # ax.plot_wireframe(x, y, z, color="b")
     plt.show()
+
+
+def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
+                                        flyby_initial_velocity_vector: np.ndarray,
+                                        arc_departure_position: np.ndarray,
+                                        arc_arrival_radius: float,
+                                        mu_moon: float,
+                                        moon_in_plane_velocity: np.ndarray,
+                                        ) -> float:
+    """
+    Function to calculate the arrival f.p.a. for the post-flyby arc that ends up at Jupiter's atmosphere.
+    All units are in I.S.
+
+    :param flyby_rp: pericenter radius of flyby
+    :param flyby_initial_velocity_vector: arrival v infinite in moon's frame
+    :param arc_departure_position: departure position vector of the post-flyby arc
+    :param arc_arrival_radius: arrival radius of the post-flyby arc
+    :param mu_moon: gravitational parameter of the flyby moon
+    :param moon_radius: radius of the flyby moon
+    :param moon_SOI_radius: SOI radius of the flyby moon
+    :param moon_in_plane_velocity: velocity vector of the flyby moon in the flyby plane (here assumed to be coincident)
+
+    :return: arrival f.p.a. of the post-flyby arc
+    """
+
+    # Calculate v_inf_t
+    flyby_initial_velocity = LA.norm(flyby_initial_velocity_vector)
+
+    # Calculate axis normal to flyby plane (based on assumption:flyby plane coincides with moon orbital plane)
+    flyby_orbital_plane_normal_axis = unit_vector(np.cross(moon_in_plane_velocity, flyby_initial_velocity_vector))
+
+    # Calculate resulting flyby bending angle
+    flyby_alpha_angle = 2 * np.arcsin(1 / (1 + flyby_rp * flyby_initial_velocity ** 2 / mu_moon))
+
+    # Calculate the v_inf_t_star
+    flyby_final_velocity_vector = (rotation_matrix(flyby_orbital_plane_normal_axis,flyby_alpha_angle) @
+                                   flyby_initial_velocity_vector.reshape(3, 1)).reshape(3)
+
+    # Get initial radius of post-flyby arc
+    arc_departure_radius = LA.norm(arc_departure_position)
+
+    # Calculate post-flyby arc departure velocity
+    arc_departure_velocity_vector = flyby_final_velocity_vector + moon_in_plane_velocity
+    arc_departure_velocity = LA.norm(arc_departure_velocity_vector)
+
+    # Calculate post-flyby arc departure flight path angle
+    arc_departure_fpa = np.arcsin(
+        np.dot(unit_vector(arc_departure_position), unit_vector(arc_departure_velocity_vector)))
+
+    # Calculate post-flyby arc orbital energy
+    arc_orbital_energy = arc_departure_velocity ** 2 / 2 - \
+        central_body_gravitational_parameter / arc_departure_radius
+
+    # Calculate post-flyby arc arrival velocity
+    arc_arrival_velocity = np.sqrt(
+        2 * (arc_orbital_energy + central_body_gravitational_parameter / arc_arrival_radius))
+
+    # Pre-calculation for post-flyby arc arrival flight path angle
+    # (arccos argument will be clipped at [-1,1] for cases where orbit doesn't intersect Jup atmosphere)
+    arccos_argument = arc_departure_radius / arc_arrival_radius * arc_departure_velocity * np.cos(arc_departure_fpa) / arc_arrival_velocity
+
+    # Post-flyby arc arrival flight path angle
+    arc_arrival_fpa = - np.arccos(np.clip(arccos_argument, -1, 1))
+
+    return arc_arrival_fpa
