@@ -87,7 +87,7 @@ def rotation_matrix(axis, theta):
                      [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
 
-def rotate_vectors_by_given_matrix(rot_matrix, vector):
+def rotate_vectors_by_given_matrix(rot_matrix: np.ndarray, vector: np.ndarray):
     """Returns a vector (or array of vectors) rotated according to the chosen rotation matrix"""
 
     vector_shape = np.shape(vector)
@@ -307,3 +307,75 @@ def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
     arc_arrival_fpa = - np.arccos(np.clip(arccos_argument, -1, 1))
 
     return arc_arrival_fpa
+
+
+def calculate_fpa_from_flyby_geometry(sigma_angle: float,
+                                      arc_1_initial_velocity: float,
+                                      arc_1_initial_radius: float,
+                                      delta_hoh: float,
+                                      arc_2_final_radius: float,
+                                      mu_moon: float,
+                                      moon_SOI: float,
+                                      moon_state_at_flyby: np.ndarray,
+                                      ) -> float:
+    moon_position = moon_state_at_flyby[0:3]
+    moon_velocity = moon_state_at_flyby[3:6]
+
+    orbit_axis = unit_vector(np.cross(moon_position, moon_velocity))
+    flyby_initial_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, np.pi/2-sigma_angle), unit_vector(moon_position)) * moon_SOI
+
+    h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
+    energy_arc_1 = arc_1_initial_velocity**2/2 - central_body_gravitational_parameter / arc_1_initial_radius
+
+    arc_1_final_position = moon_position + flyby_initial_position
+    arc_1_final_radius = LA.norm(arc_1_final_position)
+    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + central_body_gravitational_parameter/arc_1_final_radius))
+
+    arc_1_final_fpa = - np.arccos(h_arc_1/(arc_1_final_radius*arc_1_final_velocity))
+    arc_1_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, np.pi / 2 - arc_1_final_fpa), unit_vector(arc_1_final_position)) * arc_1_final_velocity
+
+    flyby_initial_velocity_vector = arc_1_final_velocity_vector - moon_velocity
+
+    flyby_v_inf_t = LA.norm(flyby_initial_velocity_vector)
+
+    # phi_2_angle = np.arccos(np.dot(unit_vector(-moon_velocity),unit_vector(flyby_initial_velocity_vector)))
+    #
+    # delta_angle = 2 * np.pi - np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+
+    flyby_axis = unit_vector(np.cross(flyby_initial_velocity_vector, -flyby_initial_position))
+
+    phi_2_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_velocity_vector)))
+    if np.dot(np.cross(-moon_velocity, flyby_initial_velocity_vector), flyby_axis) < 0:
+        phi_2_angle = - phi_2_angle + 2 * np.pi
+
+    delta_minus_2pi = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+    if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) > 0:
+        delta_minus_2pi = - delta_minus_2pi + 2 * np.pi
+    delta_angle = 2 * np.pi - delta_minus_2pi
+
+    B_parameter = moon_SOI * np.sin(phi_2_angle - delta_angle)
+
+    alpha_angle = 2 * np.arcsin(1/np.sqrt(1 + B_parameter**2 * flyby_v_inf_t**4 / mu_moon **2))
+    beta_angle = phi_2_angle + alpha_angle /2 - np.pi /2
+
+    position_rot_angle = 2 * (2 * np.pi - delta_angle + beta_angle)
+    if position_rot_angle > 2*np.pi:
+        position_rot_angle = position_rot_angle - 2 * np.pi
+    flyby_final_position = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, position_rot_angle), flyby_initial_position)
+
+    flyby_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, alpha_angle), flyby_initial_velocity_vector)
+
+    arc_2_departure_position = moon_position + flyby_final_position
+    arc_2_departure_velocity_vector = moon_velocity + flyby_final_velocity_vector
+
+    arc_2_departure_radius = LA.norm(arc_2_departure_position)
+    arc_2_departure_velocity = LA.norm(arc_2_departure_velocity_vector)
+
+    arc_2_h = LA.norm(np.cross(arc_2_departure_position, arc_2_departure_velocity_vector))
+    arc_2_energy = arc_2_departure_velocity**2/2 - central_body_gravitational_parameter / arc_2_departure_radius
+
+    arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + central_body_gravitational_parameter / arc_2_final_radius))
+
+    arc_2_final_fpa = - np.arccos(np.clip(arc_2_h/(arc_2_final_radius * arc_2_arrival_velocity), -1, 1))
+
+    return arc_2_final_fpa
