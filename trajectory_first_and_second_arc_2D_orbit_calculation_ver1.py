@@ -3,6 +3,8 @@ from handle_functions import *
 # known issues:
 # none
 
+do_regula_falsi_function_debugging = False
+
 # Set flyby epoch -> edit this to be initial epoch!!
 first_arc_arrival_epoch_days = 11293.  # days
 
@@ -15,7 +17,7 @@ flight_path_angle_at_atmosphere_entry = -3.  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600 # m/s
-delta_angle_from_hohmann_trajectory = 0.93  # degrees
+delta_angle_from_hohmann_trajectory = 0.92  # degrees
 
 # Trajectory geometry
 choose_flyby_moon = 'Io'
@@ -47,7 +49,7 @@ moon_flyby_state = spice_interface.get_body_cartesian_state_at_epoch(
 # ASSUMPTION: Trajectory lies on the moon orbital plane
 
 # Calculate first arc orbital plane based on the one of the moon
-first_arc_angular_momentum_cap = np.cross(moon_flyby_state[0:3], moon_flyby_state[3:6])
+first_arc_angular_momentum_cap = unit_vector(np.cross(moon_flyby_state[0:3], moon_flyby_state[3:6]))
 first_arc_line_of_nodes_cap = np.cross(z_axis, first_arc_angular_momentum_cap)
 
 # First arc initial known conditions
@@ -121,6 +123,29 @@ second_arc_arrival_radius = jupiter_radius + arrival_pericenter_altitude
 # Sub-problem free parameter: flyby_pericenter_radius
 
 # REGULA FALSI #########################################################################################################
+
+# DEBUG #############
+if do_regula_falsi_function_debugging:
+    radii = np.linspace(moon_radius, moon_SOI_radius, 200)
+    function_values = np.zeros(len(radii))
+    for i, chosen_radius in enumerate(radii):
+        fpa_function = calculate_fpa_from_flyby_pericenter(flyby_rp=chosen_radius,
+                                                           arc_arrival_radius=second_arc_arrival_radius,
+                                                           arc_departure_position=second_arc_departure_position,
+                                                           flyby_initial_velocity_vector=flyby_initial_velocity_vector,
+                                                           mu_moon=mu_moon,
+                                                           moon_in_plane_velocity=moon_velocity)
+        function_lol = fpa_function - flight_path_angle_at_atmosphere_entry
+        function_values[i] = function_lol
+
+    plt.axhline(y=0)
+    plt.plot(radii, function_values)
+    plt.show()
+    quit()
+
+
+#####################
+
 
 interval_left_boundary_a = moon_radius
 interval_right_boundary_b = moon_SOI_radius
