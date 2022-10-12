@@ -13,10 +13,10 @@ flight_path_angle_at_atmosphere_entry = -3.  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600 # m/s
-delta_angle_from_hohmann_trajectory = 0.92  # degrees
+delta_angle_from_hohmann_trajectory = 0.98 # degrees
 
 # Trajectory geometry
-choose_flyby_moon = 'Io'
+choose_flyby_moon = 'Ganymede'
 safety_altitude_flyby = 0.
 
 # Plotting parameters
@@ -54,8 +54,9 @@ moon_radius = galilean_moons_data[choose_flyby_moon]['Radius']
 moon_SOI_radius = galilean_moons_data[choose_flyby_moon]['SOI_Radius']
 mu_moon = galilean_moons_data[choose_flyby_moon]['mu']
 
-sigma_angles = np.linspace(0,2*np.pi,400)
+sigma_angles = np.linspace(0,np.pi,400)
 function_values = np.zeros(len(sigma_angles))
+pericenter_violation = np.zeros(len(sigma_angles))
 
 for i, sigma_angle in enumerate(sigma_angles):
     fpa_a = calculate_fpa_from_flyby_geometry(sigma_angle=sigma_angle,
@@ -65,11 +66,17 @@ for i, sigma_angle in enumerate(sigma_angles):
                                               arc_2_final_radius=second_arc_arrival_radius,
                                               mu_moon=mu_moon,
                                               moon_SOI=moon_SOI_radius,
-                                              moon_state_at_flyby=moon_flyby_state)
+                                              moon_state_at_flyby=moon_flyby_state,
+                                              moon_radius=moon_radius)
+    if fpa_a > 900:
+        fpa_a = fpa_a - 1000
+        pericenter_violation[i] = fpa_a - flight_path_angle_at_atmosphere_entry
+        plt.scatter(sigma_angles[i] * 180 / np.pi, pericenter_violation[i], color='red')
+
     f_a = fpa_a - flight_path_angle_at_atmosphere_entry
 
     function_values[i] = f_a
 
 plt.axhline(y=0)
-plt.plot(sigma_angles*180/np.pi, function_values)
+plt.plot(sigma_angles*180/np.pi, function_values*180/np.pi)
 plt.show()
