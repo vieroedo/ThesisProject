@@ -138,6 +138,42 @@ def radius_from_true_anomaly(true_anomaly, eccentricity, sma, planet_SoI = jupit
     return radius
 
 
+def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
+                                    eccentricity: float,
+                                    semi_major_axis: float,
+                                    mu_parameter: float) -> float:
+    """
+
+    :param true_anomaly_range: vector containing initial and final true anomalies (interval width must be < 2*pi)
+    :param eccentricity: eccentricity of the orbit
+    :param semi_major_axis: sma of the orbit. If the orbit is parabolic, it indicates the p parameter
+    :param mu_parameter: central body grav parameter
+    :return: delta t between the two true anomalies
+    """
+    if not len(true_anomaly_range) == 2:
+        raise Exception('The true_anomaly_range must be a ndarray with size (2,)')
+
+    if eccentricity > 1:
+        arctanh_argument = np.tan(true_anomaly_range/2) * np.sqrt((eccentricity - 1)/(eccentricity + 1))
+        eccentric_anomaly_range = 2 * np.arctanh(arctanh_argument)
+        mean_anomaly_range = eccentricity * np.sinh(eccentric_anomaly_range) - eccentric_anomaly_range
+        angular_velocity = np.sqrt(mu_parameter/-semi_major_axis**3)
+    elif eccentricity == 1:
+        p_parameter = semi_major_axis
+        mean_anomaly_range = 1/2 * (np.tan(true_anomaly_range/2) + np.tan(true_anomaly_range/2)**3/3)
+        angular_velocity =  np.sqrt(mu_parameter/p_parameter**3)
+        warnings.warn('Not implemented for parabolic orbits lol')
+    else:
+        arctan_argument = np.tan(true_anomaly_range / 2) * np.sqrt((1-eccentricity) / (1+eccentricity))
+        eccentric_anomaly_range = 2 * np.arctan(arctan_argument)
+        mean_anomaly_range = eccentric_anomaly_range - eccentricity * np.sin(eccentric_anomaly_range)
+        angular_velocity = np.sqrt(mu_parameter/semi_major_axis**3)
+
+    time_range = mean_anomaly_range / angular_velocity
+
+    return time_range[1] - time_range[0]
+
+
 def compute_lambert_targeter_state_history(
         initial_state,
         final_state,
@@ -184,64 +220,6 @@ def compute_lambert_targeter_state_history(
         lambert_arc_history[state] = lambert_arc_ephemeris.cartesian_state(state)
 
     return lambert_arc_history
-
-# TO BE FIXED
-def plot_trajectory_arc(lambert_arc_history,
-                        central_body='Jupiter',
-                        figure_title: str = '',
-                        ):
-    cartesian_elements_lambert = np.vstack(list(lambert_arc_history.values()))
-    trajectory_epochs = lambert_arc_history.keys()
-    # t_list = time_plot
-
-    # arrival_transverse_velocity = lambertTargeter.get_transverse_arrival_velocity()
-    # arrival_radial_velocity = lambertTargeter.get_radial_arrival_velocity()
-    #
-    # arrival_flight_path_angle = np.arctan(arrival_radial_velocity / arrival_transverse_velocity)
-    #
-    # print(
-    #     f'Initial velocity: {LA.norm(cartesian_elements_lambert[0, 3:])} \n Final velocity: {LA.norm(cartesian_elements_lambert[-1, 3:])}')
-    # print(f'Final velocity vector: {cartesian_elements_lambert[-1, 3:]}')
-    # print(f'Final f.p.a. : {arrival_flight_path_angle} rad    {arrival_flight_path_angle * 180 / np.pi} degrees')
-    # print(
-    #     f'For moon phase angle boundaries you should shift time by: ({delta_t_to_low_boundary / constants.JULIAN_DAY:.5f}, {delta_t_to_high_boundary / constants.JULIAN_DAY:.5f})')
-
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
-    xline = cartesian_elements_lambert[:, 0]
-    yline = cartesian_elements_lambert[:, 1]
-    zline = cartesian_elements_lambert[:, 2]
-    ax.plot3D(xline, yline, zline, 'gray')
-    ax.set_xlabel('x (m)')
-    ax.set_ylabel('y (m)')
-    ax.set_zlabel('z (m)')
-    ax.set_title(figure_title)
-
-    xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
-    XYZlim = np.asarray([min(xyzlim[0]), max(xyzlim[1])])
-    ax.set_xlim3d(XYZlim)
-    ax.set_ylim3d(XYZlim)
-    ax.set_zlim3d(XYZlim * 0.75)
-    ax.set_aspect('auto')
-
-    # draw jupiter
-    u, v = np.mgrid[0:2 * np.pi:20j, 0:np.pi:10j]
-    x = jupiter_radius * np.cos(u) * np.sin(v)
-    y = jupiter_radius * np.sin(u) * np.sin(v)
-    z = jupiter_radius * np.cos(v)
-    ax.plot_wireframe(x, y, z, color="r")
-
-    # TO BE ADDED
-    # # draw moon
-    # u, v = np.mgrid[0:2 * np.pi:20j, 0:np.pi:10j]
-    # x_0 = moon_cartesian_state_at_arrival[0]
-    # y_0 = moon_cartesian_state_at_arrival[1]
-    # z_0 = moon_cartesian_state_at_arrival[2]
-    # x = x_0 + moon_radius * np.cos(u) * np.sin(v)
-    # y = y_0 + moon_radius * np.sin(u) * np.sin(v)
-    # z = z_0 + moon_radius * np.cos(v)
-    # ax.plot_wireframe(x, y, z, color="b")
-    plt.show()
 
 
 def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
@@ -317,12 +295,15 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
                                       mu_moon: float,
                                       moon_SOI: float,
                                       moon_state_at_flyby: np.ndarray,
+                                      moon_radius: float = 0.,
                                       ) -> float:
+
+
     moon_position = moon_state_at_flyby[0:3]
     moon_velocity = moon_state_at_flyby[3:6]
 
     orbit_axis = unit_vector(np.cross(moon_position, moon_velocity))
-    flyby_initial_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, np.pi/2-sigma_angle), unit_vector(moon_position)) * moon_SOI
+    flyby_initial_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, -sigma_angle), unit_vector(moon_velocity)) * moon_SOI
 
     h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
     energy_arc_1 = arc_1_initial_velocity**2/2 - central_body_gravitational_parameter / arc_1_initial_radius
@@ -342,25 +323,38 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     #
     # delta_angle = 2 * np.pi - np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
 
-    flyby_axis = unit_vector(np.cross(flyby_initial_velocity_vector, -flyby_initial_position))
+    flyby_axis = unit_vector(np.cross(flyby_initial_position, flyby_initial_velocity_vector))
+
+    # We dont want clockwise orbits
+    if np.dot(flyby_axis, orbit_axis) < 0:
+        return -1
 
     phi_2_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_velocity_vector)))
     if np.dot(np.cross(-moon_velocity, flyby_initial_velocity_vector), flyby_axis) < 0:
         phi_2_angle = - phi_2_angle + 2 * np.pi
 
-    delta_minus_2pi = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
-    if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) > 0:
-        delta_minus_2pi = - delta_minus_2pi + 2 * np.pi
-    delta_angle = 2 * np.pi - delta_minus_2pi
+    # delta_minus_2pi = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+    # if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) > 0:
+    #     delta_minus_2pi = - delta_minus_2pi + 2 * np.pi
+    # delta_angle = 2 * np.pi - delta_minus_2pi
 
-    B_parameter = moon_SOI * np.sin(phi_2_angle - delta_angle)
+    delta_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+    if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) < 0:
+        delta_angle = 2 * np.pi - delta_angle
 
-    alpha_angle = 2 * np.arcsin(1/np.sqrt(1 + B_parameter**2 * flyby_v_inf_t**4 / mu_moon **2))
+    # Sometimes it needs a minus sign but we work around it with abs value. Only its squared value is needed so no issue
+    B_parameter = abs(moon_SOI * np.sin(phi_2_angle - delta_angle))
+
+    alpha_angle = 2 * np.arcsin(1/np.sqrt(1 + (B_parameter**2 * flyby_v_inf_t**4) / mu_moon **2))
+    if alpha_angle < 0:
+        warnings.warn('Alpha angle negative!!!!')
+
     beta_angle = phi_2_angle + alpha_angle /2 - np.pi /2
 
-    position_rot_angle = 2 * (2 * np.pi - delta_angle + beta_angle)
-    if position_rot_angle > 2*np.pi:
-        position_rot_angle = position_rot_angle - 2 * np.pi
+
+    position_rot_angle = 2 * (- delta_angle + beta_angle)
+    # if position_rot_angle > 2*np.pi:
+    #     position_rot_angle = position_rot_angle - 2 * np.pi
     flyby_final_position = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, position_rot_angle), flyby_initial_position)
 
     flyby_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, alpha_angle), flyby_initial_velocity_vector)
@@ -377,5 +371,13 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + central_body_gravitational_parameter / arc_2_final_radius))
 
     arc_2_final_fpa = - np.arccos(np.clip(arc_2_h/(arc_2_final_radius * arc_2_arrival_velocity), -1, 1))
+
+    root_argument = 1 + (B_parameter ** 2 * flyby_v_inf_t ** 4) / (mu_moon ** 2)
+    flyby_pericenter = mu_moon / (flyby_v_inf_t ** 2) * (np.sqrt(root_argument) - 1)
+    flyby_altitude = flyby_pericenter - moon_radius
+    if flyby_altitude < 0:
+        print(f'Flyby impact! Altitude: {flyby_altitude/1e3} km     Sigma: {sigma_angle*180/np.pi} deg')
+        return -1
+    #     arc_2_final_fpa = arc_2_final_fpa + 1000
 
     return arc_2_final_fpa
