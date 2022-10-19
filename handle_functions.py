@@ -20,6 +20,8 @@ y_axis = np.array([0., 1., 0.])
 z_axis = np.array([0., 0., 1.])
 
 # Global values of the problem
+jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
+jupiter_1bar_density = 0.16  # kg/m^3
 jupiter_mass = 1898.6e24  # kg
 jupiter_radius = 69911e3  # m
 jupiter_SOI_radius = 48.2e9  # m
@@ -27,7 +29,7 @@ central_body_gravitational_parameter = spice_interface.get_body_gravitational_pa
 global_frame_orientation = 'ECLIPJ2000'
 
 # orbital and physical data of galilean moons in SI units
-# (entries: 'SMA' 'Mass' 'Radius' 'Orbital_period' 'SOI_Radius' 'mu' 'g_0')
+# (entries: 'SMA' 'Mass' 'Radius' 'Orbital_Period' 'SOI_Radius' 'mu' 'g_0')
 galilean_moons_data = {
                        'Io': {'SMA': 421.77e6,
                               'Mass': 893.3e20,
@@ -122,6 +124,15 @@ def cartesian_2d_from_polar(r, theta):
     return x, y
 
 
+########################################################################################################################
+# ASTRODYNAMICS HELPER FUNCTIONS #######################################################################################
+########################################################################################################################
+
+
+def orbital_energy(radius: float, velocity: float):
+    return velocity**2/2 - central_body_gravitational_parameter/radius
+
+
 def true_anomaly_from_radius(radius,eccentricity,sma):
     """ WARNING: the solutions of ths function are 2! +theta and -theta"""
     theta = np.arccos(np.clip(1/eccentricity * (sma*(1-eccentricity**2)/radius - 1), -1, 1))
@@ -132,7 +143,9 @@ def radius_from_true_anomaly(true_anomaly, eccentricity, sma, planet_SoI = jupit
     e = eccentricity
     theta = true_anomaly
     if e>1:
-        radius = np.where(theta < np.arccos(-1/e), sma * (1 - e**2) / (1 + e*np.cos(theta)), planet_SoI)
+        # radius = np.where(theta < np.arccos(-1/e), sma * (1 - e**2) / (1 + e*np.cos(theta)), planet_SoI)
+        radius = sma * (1 - e**2) / (1 + e*np.cos(theta))
+
     else:
         radius = sma * (1 - e**2) / (1 + e*np.cos(theta))
     return radius
@@ -162,7 +175,7 @@ def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
         p_parameter = semi_major_axis
         mean_anomaly_range = 1/2 * (np.tan(true_anomaly_range/2) + np.tan(true_anomaly_range/2)**3/3)
         angular_velocity =  np.sqrt(mu_parameter/p_parameter**3)
-        warnings.warn('Not implemented for parabolic orbits lol')
+        # warnings.warn('Not implemented for parabolic orbits lol')
     else:
         arctan_argument = np.tan(true_anomaly_range / 2) * np.sqrt((1-eccentricity) / (1+eccentricity))
         eccentric_anomaly_range = 2 * np.arctan(arctan_argument)
@@ -172,6 +185,25 @@ def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
     time_range = mean_anomaly_range / angular_velocity
 
     return time_range[1] - time_range[0]
+
+
+def moon_circular_2d_state(epoch: float, choose_moon: str) -> np.ndarray((6,)):
+    orbital_radius = galilean_moons_data[choose_moon]['SMA']
+    orbital_period = galilean_moons_data[choose_moon]['Orbital_Period']
+
+    true_anomaly = epoch * 2 * np.pi / orbital_period
+    k_value = int(true_anomaly/2*np.pi)
+    true_anomaly = true_anomaly - 2*k_value*np.pi
+
+    x_pos, y_pos = cartesian_2d_from_polar(orbital_radius, true_anomaly)
+    z_pos = 0.
+
+    moon_velocity = np.sqrt(central_body_gravitational_parameter/orbital_radius)
+
+    x_vel, y_vel = cartesian_2d_from_polar(moon_velocity, true_anomaly+np.pi/2)
+    z_vel = 0.
+
+    return np.array([x_pos, y_pos, z_pos, x_vel, y_vel, z_vel])
 
 
 def compute_lambert_targeter_state_history(
@@ -221,6 +253,10 @@ def compute_lambert_targeter_state_history(
 
     return lambert_arc_history
 
+########################################################################################################################
+
+########################################################################################################################
+
 
 def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
                                         flyby_initial_velocity_vector: np.ndarray,
@@ -228,10 +264,12 @@ def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
                                         arc_arrival_radius: float,
                                         mu_moon: float,
                                         moon_in_plane_velocity: np.ndarray,
+                                        verbose: bool=True
                                         ) -> float:
     """
     Function to calculate the arrival f.p.a. for the post-flyby arc that ends up at Jupiter's atmosphere.
     All units are in I.S.
+    The function returns error code 1000 if the lowest altitude of the second arc doesn't intersect Jupiter's atmosphere
 
     :param flyby_rp: pericenter radius of flyby
     :param flyby_initial_velocity_vector: arrival v infinite in moon's frame
@@ -242,7 +280,7 @@ def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
     :param moon_SOI_radius: SOI radius of the flyby moon
     :param moon_in_plane_velocity: velocity vector of the flyby moon in the flyby plane (here assumed to be coincident)
 
-    :return: arrival f.p.a. of the post-flyby arc
+    :return: arrival f.p.a. of the post-flyby arc, which lies in the interval [0, np.pi]
     """
 
     # Calculate v_inf_t
@@ -284,7 +322,12 @@ def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
     # Post-flyby arc arrival flight path angle
     arc_arrival_fpa = - np.arccos(np.clip(arccos_argument, -1, 1))
 
-    return arc_arrival_fpa
+    # if arccos_argument > 1:
+    #     if verbose:
+    #         print('The second arc of the trajectory doesn\'t intersect Jupiter\'s atmosphere!   Function error code: 1000')
+    #     return arccos_argument
+
+    return arc_arrival_fpa  # non-error values are between 0 and np.pi
 
 
 def calculate_fpa_from_flyby_geometry(sigma_angle: float,
@@ -297,7 +340,6 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
                                       moon_state_at_flyby: np.ndarray,
                                       moon_radius: float = 0.,
                                       ) -> float:
-
 
     moon_position = moon_state_at_flyby[0:3]
     moon_velocity = moon_state_at_flyby[3:6]
@@ -381,3 +423,297 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     #     arc_2_final_fpa = arc_2_final_fpa + 1000
 
     return arc_2_final_fpa
+
+def calculate_fpa_from_flyby_geometry_simplified(pericenter_radius: float,
+                                                 arc_1_initial_velocity: float,
+                                                 arc_1_initial_radius: float,
+                                                 delta_hoh: float,
+                                                 arc_2_final_radius: float,
+                                                 mu_moon: float,
+                                                 moon_SOI: float,
+                                                 moon_state_at_flyby: np.ndarray,
+                                                 moon_radius: float = 0.,
+                                                 ) -> (float, float):
+    moon_position = moon_state_at_flyby[0:3]
+    moon_velocity = moon_state_at_flyby[3:6]
+    orbit_axis = unit_vector(np.cross(moon_position, moon_velocity))
+
+    # beta_angle = ...
+
+    ## secant method ###
+
+    max_iter = 100
+    # curr_iter = 0
+    tolerance = 1e-5
+    function_values = np.zeros(max_iter+1)
+    x_values = np.zeros(max_iter+1)
+
+    x_values[0] = 0.
+    function_values[0] = beta_angle_function(beta_angle_guess=x_values[0],
+                                             pericenter_radius=pericenter_radius,
+                                             arc_1_initial_velocity=arc_1_initial_velocity,
+                                             arc_1_initial_radius=arc_1_initial_radius,
+                                             delta_hoh=delta_hoh,
+                                             mu_moon=mu_moon,
+                                             moon_SOI=moon_SOI,
+                                             moon_state_at_flyby=moon_state_at_flyby,
+                                             moon_radius=moon_radius)
+    save_x = 0.
+    x_values[1] = np.pi
+    for curr_iter in range(1,max_iter):
+        if curr_iter == 1:
+            x_values[curr_iter] = np.pi
+        function_values[curr_iter] = beta_angle_function(beta_angle_guess=x_values[curr_iter],
+                                                         pericenter_radius=pericenter_radius,
+                                                         arc_1_initial_velocity=arc_1_initial_velocity,
+                                                         arc_1_initial_radius=arc_1_initial_radius,
+                                                         delta_hoh=delta_hoh,
+                                                         mu_moon=mu_moon,
+                                                         moon_SOI=moon_SOI,
+                                                         moon_state_at_flyby=moon_state_at_flyby,
+                                                         moon_radius=moon_radius)
+
+        x_values[curr_iter+1] = x_values[curr_iter] - function_values[curr_iter] *\
+                                       (x_values[curr_iter]-x_values[curr_iter-1]) / (function_values[curr_iter]-function_values[curr_iter-1])
+
+        if abs(x_values[curr_iter+1] - x_values[curr_iter]) < tolerance:
+            save_x = x_values[curr_iter+1]
+            break
+    beta_angle = save_x
+
+    ####################
+
+    flyby_pericenter_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, beta_angle), unit_vector(-moon_velocity)) * pericenter_radius
+
+    h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
+    energy_arc_1 = arc_1_initial_velocity**2/2 - central_body_gravitational_parameter / arc_1_initial_radius
+
+    arc_1_final_position = moon_position + flyby_pericenter_position
+    arc_1_final_radius = LA.norm(arc_1_final_position)
+    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + central_body_gravitational_parameter/arc_1_final_radius))
+
+    arc_1_final_fpa = - np.arccos(h_arc_1/(arc_1_final_radius*arc_1_final_velocity))
+    arc_1_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, np.pi / 2 - arc_1_final_fpa), unit_vector(arc_1_final_position)) * arc_1_final_velocity
+
+    flyby_initial_velocity_vector = arc_1_final_velocity_vector - moon_velocity
+
+    flyby_v_inf_t = LA.norm(flyby_initial_velocity_vector)
+
+    # phi_2_angle = np.arccos(np.dot(unit_vector(-moon_velocity),unit_vector(flyby_initial_velocity_vector)))
+    #
+    # delta_angle = 2 * np.pi - np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+
+    flyby_axis = unit_vector(np.cross(flyby_pericenter_position, flyby_initial_velocity_vector))
+
+    # We dont want clockwise orbits
+    # if np.dot(flyby_axis, orbit_axis) < 0:
+    #     return -1000
+
+    phi_2_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_velocity_vector)))
+    if np.dot(np.cross(-moon_velocity, flyby_initial_velocity_vector), flyby_axis) < 0:
+        phi_2_angle = - phi_2_angle + 2 * np.pi
+
+    # delta_minus_2pi = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+    # if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) > 0:
+    #     delta_minus_2pi = - delta_minus_2pi + 2 * np.pi
+    # delta_angle = 2 * np.pi - delta_minus_2pi
+
+    # delta_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+    # if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) < 0:
+    #     delta_angle = 2 * np.pi - delta_angle
+
+    # Sometimes it needs a minus sign but we work around it with abs value. Only its squared value is needed so no issue
+    # B_parameter = abs(moon_SOI * np.sin(phi_2_angle - delta_angle))
+
+    alpha_angle = 2 * np.arcsin(1/(1 + pericenter_radius * flyby_v_inf_t**2/mu_moon))
+    if alpha_angle < 0:
+        warnings.warn('Alpha angle negative!!!!')
+
+    # function_beta_angle = phi_2_angle + alpha_angle / 2 - np.pi / 2 - beta_angle
+
+
+    # position_rot_angle = 2 * (- delta_angle + beta_angle)
+    # if position_rot_angle > 2*np.pi:
+    #     position_rot_angle = position_rot_angle - 2 * np.pi
+
+    flyby_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, alpha_angle), flyby_initial_velocity_vector)
+
+    arc_2_departure_position = moon_position + flyby_pericenter_position
+    arc_2_departure_velocity_vector = moon_velocity + flyby_final_velocity_vector
+
+    arc_2_departure_radius = LA.norm(arc_2_departure_position)
+    arc_2_departure_velocity = LA.norm(arc_2_departure_velocity_vector)
+
+    arc_2_h = LA.norm(np.cross(arc_2_departure_position, arc_2_departure_velocity_vector))
+    arc_2_energy = arc_2_departure_velocity**2/2 - central_body_gravitational_parameter / arc_2_departure_radius
+
+    arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + central_body_gravitational_parameter / arc_2_final_radius))
+
+    arc_2_final_fpa = - np.arccos(np.clip(arc_2_h/(arc_2_final_radius * arc_2_arrival_velocity), -1, 1))
+
+    # flyby_altitude = pericenter_radius - moon_radius
+    # if flyby_altitude < 0:
+    #     print(f'Flyby impact! Altitude: {flyby_altitude/1e3} km')
+    #     return -1
+    #     arc_2_final_fpa = arc_2_final_fpa + 1000
+
+    return arc_2_final_fpa, beta_angle
+
+
+def beta_angle_function(beta_angle_guess: float,
+                        pericenter_radius:float,
+                        arc_1_initial_velocity: float,
+                        arc_1_initial_radius: float,
+                        delta_hoh: float,
+                        mu_moon: float,
+                        moon_state_at_flyby: np.ndarray,
+                        moon_SOI: float,
+                        moon_radius: float = 0.,
+                        ) -> float:
+    moon_position = moon_state_at_flyby[0:3]
+    moon_velocity = moon_state_at_flyby[3:6]
+    orbit_axis = unit_vector(np.cross(moon_position, moon_velocity))
+
+    flyby_pericenter_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, beta_angle_guess),
+                                                               unit_vector(-moon_velocity)) * pericenter_radius
+
+    h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
+    energy_arc_1 = arc_1_initial_velocity ** 2 / 2 - central_body_gravitational_parameter / arc_1_initial_radius
+
+    arc_1_final_position = moon_position + flyby_pericenter_position
+    arc_1_final_radius = LA.norm(arc_1_final_position)
+    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + central_body_gravitational_parameter / arc_1_final_radius))
+
+    arc_1_final_fpa = - np.arccos(h_arc_1 / (arc_1_final_radius * arc_1_final_velocity))
+    arc_1_final_velocity_vector = rotate_vectors_by_given_matrix(
+        rotation_matrix(orbit_axis, np.pi / 2 - arc_1_final_fpa),
+        unit_vector(arc_1_final_position)) * arc_1_final_velocity
+
+    flyby_initial_velocity_vector = arc_1_final_velocity_vector - moon_velocity
+
+    flyby_v_inf_t = LA.norm(flyby_initial_velocity_vector)
+
+    flyby_axis = unit_vector(np.cross(flyby_pericenter_position, flyby_initial_velocity_vector))
+
+    # We dont want clockwise orbits
+    # if np.dot(flyby_axis, orbit_axis) < 0:
+    #     return 1
+
+    phi_2_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_velocity_vector)))
+    if np.dot(np.cross(-moon_velocity, flyby_initial_velocity_vector), flyby_axis) < 0:
+        phi_2_angle = - phi_2_angle + 2 * np.pi
+
+    alpha_angle = 2 * np.arcsin(1 / (1 + pericenter_radius * flyby_v_inf_t ** 2 / mu_moon))
+    if alpha_angle < 0:
+        warnings.warn('Alpha angle negative!!!!')
+
+    function_beta_angle = phi_2_angle + alpha_angle / 2 - np.pi / 2 - beta_angle_guess
+
+    return function_beta_angle
+
+
+def calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp: float,
+                                                     flyby_initial_velocity_vector: np.ndarray,
+                                                     arc_departure_position: np.ndarray,
+                                                     mu_moon: float,
+                                                     moon_flyby_state: np.ndarray,
+                                                     verbose: bool=True
+                                                     ) -> float:
+    """
+    Function to calculate the orbit pericenter for the post-aerocapture post-flyby arc that ends up at a
+    closed orbit around Jupiter.
+    All units are in I.S.
+    The function returns error code 1000 if the lowest altitude of the second arc doesn't intersect Jupiter's atmosphere
+
+    :param flyby_rp: pericenter radius of flyby
+    :param flyby_initial_velocity_vector: arrival v infinite in moon's frame
+    :param arc_departure_position: departure position vector of the post-flyby arc
+    :param arc_arrival_radius: arrival radius of the post-flyby arc
+    :param mu_moon: gravitational parameter of the flyby moon
+    :param moon_radius: radius of the flyby moon
+    :param moon_SOI_radius: SOI radius of the flyby moon
+    :param moon_in_plane_velocity: velocity vector of the flyby moon in the flyby plane (here assumed to be coincident)
+
+    :return: arrival f.p.a. of the post-flyby arc, which lies in the interval [0, np.pi]
+    """
+
+    # Calculate v_inf_t
+    flyby_initial_velocity = LA.norm(flyby_initial_velocity_vector)
+
+    # Calculate axis normal to flyby plane (based on assumption:flyby plane coincides with moon orbital plane)
+    flyby_orbital_axis = unit_vector(np.cross(moon_flyby_state[0:3], moon_flyby_state[3:6]))
+
+    # Calculate resulting flyby bending angle
+    flyby_alpha_angle = 2 * np.arcsin(1 / (1 + flyby_rp * flyby_initial_velocity ** 2 / mu_moon))
+
+    # Calculate the v_inf_t_star
+    flyby_final_velocity_vector = (rotation_matrix(flyby_orbital_axis, flyby_alpha_angle) @
+                                   flyby_initial_velocity_vector.reshape(3, 1)).reshape(3)
+
+    # Get initial radius of post-flyby arc
+    arc_departure_radius = LA.norm(arc_departure_position)
+
+    # Calculate post-flyby arc departure velocity
+    arc_departure_velocity_vector = flyby_final_velocity_vector + moon_flyby_state[3:6]
+    arc_departure_velocity = LA.norm(arc_departure_velocity_vector)
+
+    # Calculate post-flyby arc departure flight path angle
+    arc_departure_fpa = np.arcsin(
+        np.dot(unit_vector(arc_departure_position), unit_vector(arc_departure_velocity_vector)))
+
+    # Calculate post-flyby arc orbital energy
+    arc_orbital_energy = arc_departure_velocity ** 2 / 2 - \
+        central_body_gravitational_parameter / arc_departure_radius
+
+    arc_angular_momentum = arc_departure_radius * arc_departure_velocity * np.cos(arc_departure_fpa)
+
+    arc_semilatus_rectum = arc_angular_momentum ** 2 / central_body_gravitational_parameter
+    arc_semimajor_axis = - central_body_gravitational_parameter / (2 * arc_orbital_energy)
+    arc_eccentricity = np.sqrt(1 - arc_semilatus_rectum / arc_semimajor_axis)
+
+    arc_pericenter_radius = arc_semimajor_axis * (1-arc_eccentricity)
+
+    return arc_pericenter_radius
+
+
+
+########################################################################################################################
+# ATMOSPHERIC ENTRY HELPER FUNCTIONS ###################################################################################
+########################################################################################################################
+
+
+def atmospheric_entry_distance_travelled(fpa_angle: np.ndarray,
+                                         atmospheric_entry_fpa: float,
+                                         effective_entry_fpa: float,
+                                         scale_height: float) -> np.ndarray:
+
+    tangent_sum_fpa_angle = np.tan(effective_entry_fpa / 2) + np.tan(fpa_angle / 2)
+    tangent_subtraction_fpa_angle = np.tan(effective_entry_fpa / 2) - np.tan(fpa_angle / 2)
+
+    tangent_sum_fpa_entry = np.tan(effective_entry_fpa / 2) + np.tan(atmospheric_entry_fpa / 2)
+    tangent_subtraction_fpa_entry = np.tan(effective_entry_fpa / 2) - np.tan(atmospheric_entry_fpa / 2)
+
+    logarithm_arg = (tangent_sum_fpa_angle / tangent_subtraction_fpa_angle) * (
+                tangent_sum_fpa_entry / tangent_subtraction_fpa_entry)
+
+    horizontal_distance_traveled = scale_height * (
+                fpa_angle - atmospheric_entry_fpa + 1 / np.tan(effective_entry_fpa) * np.log(logarithm_arg))
+
+    return horizontal_distance_traveled
+
+
+def atmospheric_entry_altitude(fpa_angle: np.ndarray,
+                               fpa_entry: float,
+                               density_entry: float,
+                               density_0: float,
+                               weight_over_surface_cl_coeff: float,
+                               g_acceleration: float,
+                               beta_parameter: float,
+                               ) -> np.ndarray:
+    current_density = (np.cos(fpa_angle) - np.cos(fpa_entry)) * 2*beta_parameter/g_acceleration * weight_over_surface_cl_coeff + density_entry
+    current_altitude = - 1/beta_parameter * np.log(current_density/density_0)
+
+    return current_altitude
+
+
+# def entry_coords_to_polar_2d():
