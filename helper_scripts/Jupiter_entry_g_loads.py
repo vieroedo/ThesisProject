@@ -8,7 +8,7 @@ textsize= 12
 
 jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
 g_earth = 9.81  # m/s^2
-entry_velocity = 57.5e3  # m/s
+entry_velocity = 59.5e3  # m/s
 
 if verify:
     entry_velocity = 7e3  # m/s

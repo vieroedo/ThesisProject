@@ -13,16 +13,20 @@ flight_path_angle_at_atmosphere_entry = -3.  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600 # m/s
-delta_angle_from_hohmann_trajectory = 0.98 # degrees
+delta_angle_from_hohmann_trajectory = 0.92 # degrees
 
 # Trajectory geometry
-choose_flyby_moon = 'Ganymede'
+choose_flyby_moon = 'Io'
 safety_altitude_flyby = 0.
 
 # Plotting parameters
 number_of_epochs_to_plot = 200
 
 ########################################################################################################################
+
+moon_radius = galilean_moons_data[choose_flyby_moon]['Radius']
+## parameters for beta function
+choose_pericenter = moon_radius + 5600e3
 
 
 # Parameters reprocessing ##############################################################################################
@@ -54,29 +58,46 @@ moon_radius = galilean_moons_data[choose_flyby_moon]['Radius']
 moon_SOI_radius = galilean_moons_data[choose_flyby_moon]['SOI_Radius']
 mu_moon = galilean_moons_data[choose_flyby_moon]['mu']
 
-sigma_angles = np.linspace(0,np.pi,400)
-function_values = np.zeros(len(sigma_angles))
+choose_length = 400
+sigma_angles = np.linspace(0,np.pi,choose_length)
+function_values_lol = np.zeros(len(sigma_angles))
 pericenter_violation = np.zeros(len(sigma_angles))
 
-for i, sigma_angle in enumerate(sigma_angles):
-    fpa_a = calculate_fpa_from_flyby_geometry(sigma_angle=sigma_angle,
-                                              arc_1_initial_velocity=first_arc_departure_velocity,
-                                              arc_1_initial_radius=first_arc_departure_radius,
-                                              delta_hoh=delta_angle_from_hohmann_trajectory,
-                                              arc_2_final_radius=second_arc_arrival_radius,
-                                              mu_moon=mu_moon,
-                                              moon_SOI=moon_SOI_radius,
-                                              moon_state_at_flyby=moon_flyby_state,
-                                              moon_radius=moon_radius)
+pericenters = np.linspace(moon_radius, moon_SOI_radius, choose_length)
+
+
+for i, pericenter_radius in enumerate(pericenters):
+    fpa_a, beta_angle = calculate_fpa_from_flyby_geometry_simplified(pericenter_radius=pericenter_radius, #sigma_angle=sigma_angle,
+                                                         arc_1_initial_velocity=first_arc_departure_velocity,
+                                                         arc_1_initial_radius=first_arc_departure_radius,
+                                                         delta_hoh=delta_angle_from_hohmann_trajectory,
+                                                         arc_2_final_radius=second_arc_arrival_radius,
+                                                         mu_moon=mu_moon,
+                                                         moon_SOI=moon_SOI_radius,
+                                                         moon_state_at_flyby=moon_flyby_state,
+                                                         moon_radius=moon_radius)
     if fpa_a > 900:
         fpa_a = fpa_a - 1000
         pericenter_violation[i] = fpa_a - flight_path_angle_at_atmosphere_entry
         plt.scatter(sigma_angles[i] * 180 / np.pi, pericenter_violation[i], color='red')
 
-    f_a = fpa_a - flight_path_angle_at_atmosphere_entry
+    function_values_lol[i] = fpa_a - flight_path_angle_at_atmosphere_entry
 
-    function_values[i] = f_a
+plt.plot(pericenters/1e3, function_values_lol * 180 / np.pi)
+
+#
+# for i, sigma_angle in enumerate(sigma_angles):
+#     function_values_lol[i] = beta_angle_function(beta_angle_guess=sigma_angle,
+#                                              pericenter_radius=choose_pericenter,
+#                                              arc_1_initial_velocity=first_arc_departure_velocity,
+#                                              arc_1_initial_radius=first_arc_departure_radius,
+#                                              delta_hoh=delta_angle_from_hohmann_trajectory,
+#                                              mu_moon=mu_moon,
+#                                              moon_SOI=moon_SOI_radius,
+#                                              moon_state_at_flyby=moon_flyby_state,
+#                                              moon_radius=moon_radius)
+# plt.plot(sigma_angles * 180 / np.pi, function_values_lol * 180 / np.pi)
+
 
 plt.axhline(y=0)
-plt.plot(sigma_angles*180/np.pi, function_values*180/np.pi)
 plt.show()

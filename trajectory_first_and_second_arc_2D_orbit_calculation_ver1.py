@@ -3,7 +3,7 @@ from handle_functions import *
 # known issues:
 # none
 
-do_regula_falsi_function_debugging = False
+do_regula_falsi_function_debugging = True
 
 # Set flyby epoch -> edit this to be initial epoch!!
 first_arc_arrival_epoch_days = 11293.  # days
@@ -13,7 +13,7 @@ first_arc_arrival_epoch_days = 11293.  # days
 
 # Atmospheric entry conditions
 arrival_pericenter_altitude = 2000e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -3.  # degrees
+flight_path_angle_at_atmosphere_entry = -0.2  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600 # m/s
@@ -122,11 +122,12 @@ second_arc_arrival_radius = jupiter_radius + arrival_pericenter_altitude
 
 # Sub-problem free parameter: flyby_pericenter_radius
 
+
 # REGULA FALSI #########################################################################################################
 
 # DEBUG #############
 if do_regula_falsi_function_debugging:
-    radii = np.linspace(moon_radius, moon_SOI_radius, 200)
+    radii = np.linspace(moon_radius, moon_SOI_radius, 500)
     function_values = np.zeros(len(radii))
     for i, chosen_radius in enumerate(radii):
         fpa_function = calculate_fpa_from_flyby_pericenter(flyby_rp=chosen_radius,

@@ -1,3 +1,4 @@
+import numpy as np
 from tudatpy.kernel import constants
 from tudatpy.kernel.interface import spice_interface
 from handle_functions import *
@@ -17,5 +18,9 @@ for moon in r_SOI.keys():
 
 ecc = 1.5
 sma = -50e6
-theta = np.linspace(0,2,200)
-radius
+theta_max = np.arccos(-1/ecc)
+theta = np.linspace(-theta_max,theta_max,200)
+radii = radius_from_true_anomaly(theta, ecc, sma, planet_SoI=1e9)
+x, y = cartesian_2d_from_polar(radii, theta)
+plt.plot(x, y)
+plt.show()
