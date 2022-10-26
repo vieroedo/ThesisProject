@@ -1,3 +1,5 @@
+import numpy as np
+
 from handle_functions import *
 
 """
@@ -14,16 +16,19 @@ do_regula_falsi_function_debugging = False
 # (Consider moving to related script in case other ones using this library need different parameters)
 
 # Atmospheric entry conditions
-arrival_pericenter_altitude = 1000e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+arrival_pericenter_altitude = 500e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -0.2  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600  # m/s
 delta_angle_from_hohmann_trajectory = 0.96  # degrees
 
-# Trajectory geometry
+# First flyby parameters
 choose_flyby_moon = 'Callisto'
 safety_altitude_flyby = 0.
+
+# Post-aerocapture flyby parameters
+p_ae_moon_fb_name = 'Io'  # CANNOT be equal to the moon of first flyby
 
 # Plotting parameters
 number_of_epochs_to_plot = 200
@@ -240,7 +245,8 @@ alpha_max = 2 * np.arcsin(1/(1+flyby_v_inf_t**2/(mu_moon/moon_radius)))
 flyby_delta_v_max = 2 * flyby_v_inf_t * np.sin(alpha_max/2)
 
 # Print flyby data
-print(f'\nFlyby alpha angle: {flyby_alpha_angle*180/np.pi:.5f} deg')
+print(f'\n Moon of flyby: {choose_flyby_moon}')
+print(f'Flyby alpha angle: {flyby_alpha_angle*180/np.pi:.5f} deg')
 print(f'Flyby delta_v: {flyby_delta_v/1e3:.3f} km/s')
 print(f'Max delta_v achievable for {choose_flyby_moon}: {flyby_delta_v_max/1e3:.3f} km/s')
 
@@ -351,9 +357,15 @@ if weight_over_surface_cl_coefficient > minimum_altitude_condition_value:
 
 effective_entry_fpa = - np.arccos(np.cos(atmospheric_entry_fpa) - density_at_atmosphere_entry * atmospheric_entry_g_acc / (2*beta_parameter) * 1 / weight_over_surface_cl_coefficient)
 
+minimum_altitude = atmospheric_entry_trajectory_altitude(0., atmospheric_entry_fpa, density_at_atmosphere_entry,
+                                                         reference_density, weight_over_surface_cl_coefficient,
+                                                         atmospheric_entry_g_acc, beta_parameter)
+
 # Travelled distance (assumed at surface)
-final_distance_travelled = atmospheric_entry_distance_travelled(atmospheric_exit_fpa, atmospheric_entry_fpa,
-                                                                effective_entry_fpa, scale_height)
+final_distance_travelled = atmospheric_entry_trajectory_distance_travelled(atmospheric_exit_fpa, atmospheric_entry_fpa,
+                                                                           effective_entry_fpa, scale_height)
+final_distance_travelled_check = -2*(atmospheric_entry_altitude-minimum_altitude)*(1/np.tan(effective_entry_fpa)) + 2/beta_parameter*(-atmospheric_entry_fpa+np.log(2))
+
 
 atmospheric_entry_phase_angle = final_distance_travelled / jupiter_radius
 
@@ -373,12 +385,21 @@ av_max_over_g = beta_parameter * atmospheric_entry_velocity_norm ** 2 / (g_earth
 
 a_total_max_over_g = av_max_over_g * np.sqrt(1 + lift_over_drag_ratio**2)
 
-print(f'\nMax acceleration on the spacecraft: {a_total_max_over_g:.3f} g  (1g = 9.81 m/s^2)')
+
 
 # Heat loads
 stagnation_point_heat_flux = ...
 integrated_heat_load = ...
 
+
+
+# atm entry prints
+print('\nAtmospheric entry conditions:')
+print(f'- Max acceleration on the spacecraft: {a_total_max_over_g:.3f} g  (1g = 9.81 m/s^2)')
+print('- Stagnation point heat flux: ...')
+print('- Integrated heat load: ...')
+print(f'- Minimum altitude: {minimum_altitude/1e3:.3f} km')
+print(f'- Horizontal distance travelled: {final_distance_travelled/1e3:.3f} km')
 
 ########################################################################################################################
 # CALCULATE THIRD ORBITAL ARC  #########################################################################################
@@ -417,9 +438,6 @@ print('\nAtmospheric exit (/third arc initial) conditions:\n'
 # CALCULATE POST-AEROCAPTURE MOON FLYBY ################################################################################
 
 # POST-AEROCAPTURE MOON FLYBY == p_ae_moon_fb
-
-# Third arc parameters (consider moving them on top)
-p_ae_moon_fb_name = 'Io'  # CANNOT be equal to the moon of first flyby (or if so its position is fixed)
 
 
 
@@ -624,6 +642,7 @@ fourth_arc_semilatus_rectum = fourth_arc_angular_momentum ** 2 / central_body_gr
 fourth_arc_semimajor_axis = - central_body_gravitational_parameter / (2 * fourth_arc_orbital_energy)
 fourth_arc_eccentricity = np.sqrt(1 - fourth_arc_semilatus_rectum / fourth_arc_semimajor_axis)
 
+fourth_arc_orbital_period = 2* np.pi * np.sqrt(fourth_arc_semimajor_axis**3/central_body_gravitational_parameter)
 
 # Print fourth arc quantities for debugging
 print(f'\n\nPost-aerocapture flyby moon: {p_ae_moon_fb_name}')
@@ -631,8 +650,17 @@ print(f'Post-aerocapture flyby pericenter altitude: {(second_flyby_pericenter-p_
 print(f'Final orbit pericenter altitude: {(orbit_pericenter-jupiter_radius)/1e3:.3f} km')
 print(f'Final orbit eccentricity: {fourth_arc_eccentricity:.5f}')
 
+
+print(f'\nFinal orbit orbital period: {fourth_arc_orbital_period/constants.JULIAN_DAY:.3f} days')
+
+moons = ['Io', 'Europa', 'Ganymede', 'Callisto']
+for moon in moons:
+    moon_period = galilean_moons_data[moon]['Orbital_Period']
+    print(f'- expressed in {moon}\'s period: {fourth_arc_orbital_period/moon_period}')
+
+
 # Post other quantities
-print(f'\nFirst arc orbital energy: {first_arc_orbital_energy/1e3:.3f} kJ')
+print(f'\n\nFirst arc orbital energy: {first_arc_orbital_energy/1e3:.3f} kJ')
 print(f'Second arc orbital energy: {second_arc_orbital_energy/1e3:.3f} kJ')
 print(f'Third arc orbital energy: {third_arc_orbital_energy/1e3:.3f} kJ')
 print(f'Fourth arc orbital energy: {fourth_arc_orbital_energy/1e3:.3f} kJ')
@@ -736,7 +764,7 @@ ax.plot3D(x_final_orbit, y_final_orbit, z_final_orbit, 'r')
 ax.set_xlabel('x (m)')
 ax.set_ylabel('y (m)')
 ax.set_zlabel('z (m)')
-ax.set_title('Trajectory up to jupiter atmosphere')
+ax.set_title('Jupiter full arrival trajectory')
 
 xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
 XYZlim = np.asarray([min(xyzlim[0]), max(xyzlim[1])])
@@ -773,4 +801,24 @@ y = y_0 + p_ae_moon_fb_radius * np.sin(u) * np.sin(v)
 z = z_0 + p_ae_moon_fb_radius * np.cos(v)
 ax.plot_wireframe(x, y, z, color="b")
 
+
+########################################################################################################################
+# RE-ENTRY PLOTS  ######################################################################################################
+########################################################################################################################
+
+fpa_vector = np.linspace(atmospheric_entry_fpa, atmospheric_exit_fpa, 200)
+
+altitude_vector = atmospheric_entry_trajectory_altitude(fpa_vector, atmospheric_entry_fpa, density_at_atmosphere_entry,
+                                                        reference_density, weight_over_surface_cl_coefficient,
+                                                        atmospheric_entry_g_acc, beta_parameter)
+downrange_vector = atmospheric_entry_trajectory_distance_travelled(fpa_vector, atmospheric_entry_fpa, effective_entry_fpa, scale_height)
+
+fig2, ax2 = plt.subplots(figsize=(5,6))
+ax2.plot(downrange_vector/1e3, altitude_vector/1e3)
+ax2.set(xlabel='downrange [km]', ylabel='altitude [km]')
+
+
+# ax2.plot(fpa_vector,downrange_vector)
+
+# ax2.set_aspect('equal', 'box')
 plt.show()

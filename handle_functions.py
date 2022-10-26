@@ -676,16 +676,15 @@ def calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp: float,
     return arc_pericenter_radius
 
 
-
 ########################################################################################################################
 # ATMOSPHERIC ENTRY HELPER FUNCTIONS ###################################################################################
 ########################################################################################################################
 
 
-def atmospheric_entry_distance_travelled(fpa_angle: np.ndarray,
-                                         atmospheric_entry_fpa: float,
-                                         effective_entry_fpa: float,
-                                         scale_height: float) -> np.ndarray:
+def atmospheric_entry_trajectory_distance_travelled(fpa_angle: np.ndarray,
+                                                    atmospheric_entry_fpa: float,
+                                                    effective_entry_fpa: float,
+                                                    scale_height: float) -> np.ndarray:
 
     tangent_sum_fpa_angle = np.tan(effective_entry_fpa / 2) + np.tan(fpa_angle / 2)
     tangent_subtraction_fpa_angle = np.tan(effective_entry_fpa / 2) - np.tan(fpa_angle / 2)
@@ -694,7 +693,7 @@ def atmospheric_entry_distance_travelled(fpa_angle: np.ndarray,
     tangent_subtraction_fpa_entry = np.tan(effective_entry_fpa / 2) - np.tan(atmospheric_entry_fpa / 2)
 
     logarithm_arg = (tangent_sum_fpa_angle / tangent_subtraction_fpa_angle) * (
-                tangent_sum_fpa_entry / tangent_subtraction_fpa_entry)
+                tangent_subtraction_fpa_entry / tangent_sum_fpa_entry)
 
     horizontal_distance_traveled = scale_height * (
                 fpa_angle - atmospheric_entry_fpa + 1 / np.tan(effective_entry_fpa) * np.log(logarithm_arg))
@@ -702,14 +701,14 @@ def atmospheric_entry_distance_travelled(fpa_angle: np.ndarray,
     return horizontal_distance_traveled
 
 
-def atmospheric_entry_altitude(fpa_angle: np.ndarray,
-                               fpa_entry: float,
-                               density_entry: float,
-                               density_0: float,
-                               weight_over_surface_cl_coeff: float,
-                               g_acceleration: float,
-                               beta_parameter: float,
-                               ) -> np.ndarray:
+def atmospheric_entry_trajectory_altitude(fpa_angle: np.ndarray,
+                                          fpa_entry: float,
+                                          density_entry: float,
+                                          density_0: float,
+                                          weight_over_surface_cl_coeff: float,
+                                          g_acceleration: float,
+                                          beta_parameter: float,
+                                          ) -> np.ndarray:
     current_density = (np.cos(fpa_angle) - np.cos(fpa_entry)) * 2*beta_parameter/g_acceleration * weight_over_surface_cl_coeff + density_entry
     current_altitude = - 1/beta_parameter * np.log(current_density/density_0)
 
@@ -717,3 +716,43 @@ def atmospheric_entry_altitude(fpa_angle: np.ndarray,
 
 
 # def entry_coords_to_polar_2d():
+
+
+def atmospheric_pressure_given_altitude(altitude,
+                                        surface_acceleration: float,
+                                        b_curvature: float,
+                                        gas_constant: float,
+                                        layers: dict,
+                                        input_density: bool = False):
+
+    # layer dictionary key content: (T_0, h_0, p_0, alpha) from lower to higher
+
+    # number_of_layers = len(layers.keys())
+    location_layer = layers[list(layers.keys())[0]]
+
+    for layer in layers.keys():
+        h_0 = layers[layer][1]
+        T_0 = layers[layer][0]
+
+        if altitude > h_0:
+            location_layer = layer
+        if input_density:
+            layers[layer][2] = layers[layer][2] * gas_constant * T_0
+
+    T_0 = layers[location_layer][0]
+    h_0 = layers[location_layer][1]
+    val_0 = layers[location_layer][2]
+    alpha = layers[location_layer][3]
+
+    # temperature = T_0 + (altitude-h_0) / alpha
+
+    # g_acc = surface_acceleration * (1 - b_curvature * altitude)
+    g_0 = surface_acceleration
+    R_gas = gas_constant
+
+    a_term = (altitude-h_0)/(alpha*T_0) + 1
+    b_term = -((g_0*alpha)/R_gas * (1+b_curvature*(T_0*alpha - h_0)))
+    c_term = g_0 * b_curvature * alpha / R_gas * (altitude-h_0)
+    pressure = val_0 * (a_term**b_term) * np.exp(c_term)
+
+    return pressure
