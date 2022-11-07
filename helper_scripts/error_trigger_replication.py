@@ -1,15 +1,9 @@
-import numpy as np
-
-# Tudatpy imports
-from tudatpy.io import save2txt
 from tudatpy.kernel import constants
 from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.numerical_simulation import propagation_setup
-from tudatpy.kernel.numerical_simulation import environment
-from tudatpy.kernel import numerical_simulation
-from tudatpy.kernel.math import interpolators
 
+import numpy as np
 
 def get_propagator_settings(bodies,
                             termination_settings,
