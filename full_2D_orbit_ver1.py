@@ -16,12 +16,12 @@ do_regula_falsi_function_debugging = False
 # (Consider moving to related script in case other ones using this library need different parameters)
 
 # Atmospheric entry conditions
-arrival_pericenter_altitude = 500e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+arrival_pericenter_altitude = 400e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -0.2  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600  # m/s
-delta_angle_from_hohmann_trajectory = 0.96  # degrees
+delta_angle_from_hohmann_trajectory = 1.02  # degrees
 
 # First flyby parameters
 choose_flyby_moon = 'Callisto'
@@ -122,82 +122,20 @@ second_arc_arrival_radius = jupiter_radius + arrival_pericenter_altitude
 interval_left_boundary_a = moon_radius
 interval_right_boundary_b = moon_SOI_radius
 
-fpa_a = calculate_fpa_from_flyby_pericenter(flyby_rp=interval_left_boundary_a,
-                                            arc_arrival_radius=second_arc_arrival_radius,
-                                            arc_departure_position=second_arc_departure_position,
-                                            flyby_initial_velocity_vector=flyby_initial_velocity,
-                                            mu_moon=mu_moon,
-                                            moon_in_plane_velocity=moon_velocity)
-
-f_a = fpa_a - flight_path_angle_at_atmosphere_entry
-
-fpa_b = calculate_fpa_from_flyby_pericenter(flyby_rp=interval_right_boundary_b,
-                                            arc_arrival_radius=second_arc_arrival_radius,
-                                            arc_departure_position=second_arc_departure_position,
-                                            flyby_initial_velocity_vector=flyby_initial_velocity,
-                                            mu_moon=mu_moon,
-                                            moon_in_plane_velocity=moon_velocity)
-
-f_b = fpa_b - flight_path_angle_at_atmosphere_entry
-
-
-# if f_a > 0:
-#     raise Exception('Second arc doesn\'t meet Jupiter\'s atmosphere: Flyby max bending angle reached.')
-# if f_b < 0:
-#     raise Exception('Flyby is prograde: unwanted scenario.')
-
-if f_a * f_b > 0:
-    raise Exception('The selected interval has either none or multiple zeroes.')
-
 a_int = interval_left_boundary_a
 b_int = interval_right_boundary_b
 
 tolerance = 1e-7
 max_iter = 1000
-i = 0
-assigned_a = False
-assigned_b = False
 
-for i in range(max_iter):
 
-    c_point = (a_int * f_b - b_int * f_a) / (f_b - f_a)
-
-    fpa_c = calculate_fpa_from_flyby_pericenter(flyby_rp=c_point,
-                                                arc_arrival_radius=second_arc_arrival_radius,
-                                                arc_departure_position=second_arc_departure_position,
-                                                flyby_initial_velocity_vector=flyby_initial_velocity,
-                                                mu_moon=mu_moon,
-                                                moon_in_plane_velocity=moon_velocity)
-    f_c = fpa_c - flight_path_angle_at_atmosphere_entry
-
-    if abs(f_c) < tolerance:
-        # Root found
-        break
-
-    if f_c < 0:
-        if assigned_a:
-            # m_ab = 1 - f_c / f_a
-            # if m_ab < 0:
-            m_ab = 0.5
-            f_b = f_b*m_ab
-        a_int = c_point
-        f_a = f_c
-        assigned_a = True
-        assigned_b = False
-
-    if f_c > 0:
-        if assigned_b:
-            # m_ab = 1-f_c/f_b
-            # if m_ab < 0:
-            m_ab = 0.5
-            f_a = f_a*m_ab
-        b_int = c_point
-        f_b = f_c
-        assigned_a = False
-        assigned_b = True
-
-if i == max_iter:
-    raise Warning('Regula falsi hasn\'t converged: max number of iterations reached.')
+c_point, f_c, i = regula_falsi_illinois((a_int, b_int), calculate_fpa_from_flyby_pericenter,
+                                        flight_path_angle_at_atmosphere_entry, tolerance, max_iter,
+                                        arc_arrival_radius=second_arc_arrival_radius,
+                                        arc_departure_position=second_arc_departure_position,
+                                        flyby_initial_velocity_vector=flyby_initial_velocity,
+                                        mu_moon=mu_moon,
+                                        moon_in_plane_velocity=moon_velocity)
 
 # Found root
 flyby_pericenter = c_point
@@ -334,7 +272,7 @@ lift_coefficient = 0.6  # set to 0.6 to make L/D = 0.5 -> https://www.researchga
 drag_coefficient = 1.2
 lift_over_drag_ratio = lift_coefficient/drag_coefficient
 capsule_mass = 2000  # kg
-capsule_surface = 5#12.5  # m^2
+capsule_surface = 2  #12.5  # m^2
 
 capsule_weight = capsule_mass * atmospheric_entry_g_acc
 
@@ -360,6 +298,9 @@ effective_entry_fpa = - np.arccos(np.cos(atmospheric_entry_fpa) - density_at_atm
 minimum_altitude = atmospheric_entry_trajectory_altitude(0., atmospheric_entry_fpa, density_at_atmosphere_entry,
                                                          reference_density, weight_over_surface_cl_coefficient,
                                                          atmospheric_entry_g_acc, beta_parameter)
+
+pressure_at_minimum_altitude = ...
+
 
 # Travelled distance (assumed at surface)
 final_distance_travelled = atmospheric_entry_trajectory_distance_travelled(atmospheric_exit_fpa, atmospheric_entry_fpa,
@@ -394,7 +335,7 @@ integrated_heat_load = ...
 
 
 # atm entry prints
-print('\nAtmospheric entry conditions:')
+print('\nAtmospheric entry trajectory parameters:')
 print(f'- Max acceleration on the spacecraft: {a_total_max_over_g:.3f} g  (1g = 9.81 m/s^2)')
 print('- Stagnation point heat flux: ...')
 print('- Integrated heat load: ...')
@@ -517,80 +458,20 @@ if do_regula_falsi_function_debugging:
 #####################
 
 
-rp_a = calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp=interval_left_boundary_a,
-                                                        arc_departure_position=third_arc_arrival_position,
-                                                        flyby_initial_velocity_vector=p_ae_fb_initial_velocity,
-                                                        mu_moon=p_ae_moon_fb_mu,
-                                                        moon_flyby_state=p_ae_moon_fb_state)
-
-f_a = rp_a - desired_value
-
-rp_b = calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp=interval_right_boundary_b,
-                                                        arc_departure_position=third_arc_arrival_position,
-                                                        flyby_initial_velocity_vector=p_ae_fb_initial_velocity,
-                                                        mu_moon=p_ae_moon_fb_mu,
-                                                        moon_flyby_state=p_ae_moon_fb_state)
-
-f_b = rp_b - desired_value
-
-
-# if f_a > 0:
-#     raise Exception('Fourth arc is still in Jupiter\'s atmosphere : Flyby max bending angle reached.')
-# if f_b < 0:
-#     raise Exception('Flyby is prograde: unwanted scenario.')
-
-if f_a * f_b > 0:
-    raise Exception('The selected interval has either none or multiple zeroes.')
-
 a_int = interval_left_boundary_a
 b_int = interval_right_boundary_b
 
 tolerance = 1e-7
 max_iter = 1000
-i = 0
-assigned_a = False
-assigned_b = False
 
-for i in range(max_iter):
 
-    c_point = (a_int * f_b - b_int * f_a) / (f_b - f_a)
-
-    fpa_c = calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp=c_point,
-                                                             arc_departure_position=third_arc_arrival_position,
-                                                             flyby_initial_velocity_vector=p_ae_fb_initial_velocity,
-                                                             mu_moon=p_ae_moon_fb_mu,
-                                                             moon_flyby_state=p_ae_moon_fb_state
-                                                             )
-    f_c = fpa_c - desired_value
-
-    if abs(f_c) < tolerance:
-        # Root found
-        break
-
-    if f_c < 0:
-        if assigned_a:
-            # m_ab = 1 - f_c / f_a
-            # if m_ab < 0:
-            m_ab = 0.5
-            f_b = f_b*m_ab
-        a_int = c_point
-        f_a = f_c
-        assigned_a = True
-        assigned_b = False
-
-    if f_c > 0:
-        if assigned_b:
-            # m_ab = 1-f_c/f_b
-            # if m_ab < 0:
-            m_ab = 0.5
-            f_a = f_a*m_ab
-        b_int = c_point
-        f_b = f_c
-        assigned_a = False
-        assigned_b = True
-
-if i == max_iter:
-    raise Warning('Regula falsi hasn\'t converged: max number of iterations reached.')
+c_point, f_c, i = regula_falsi_illinois((a_int, b_int), calculate_orbit_pericenter_from_flyby_pericenter,
+                                        desired_value, tolerance, max_iter,
+                                        arc_departure_position=third_arc_arrival_position,
+                                        flyby_initial_velocity_vector=p_ae_fb_initial_velocity,
+                                        mu_moon=p_ae_moon_fb_mu,
+                                        moon_flyby_state=p_ae_moon_fb_state
+                                        )
 
 # Found root
 second_flyby_pericenter = c_point
@@ -598,8 +479,8 @@ orbit_pericenter = f_c + desired_value
 
 # Debugging
 print(f'\nNumber of iterations second time: {i}')
-print(f'Second flyby pericenter altitude: {(second_flyby_pericenter-moon_radius)/1e3:.3f} km')
-print(f'Orbit pericenter altitude result of root finder: {(orbit_pericenter-jupiter_radius)/1e3:.3f} deg')
+print(f'Second flyby pericenter altitude: {(second_flyby_pericenter-p_ae_moon_fb_radius)/1e3:.3f} km')
+print(f'Orbit pericenter altitude result of root finder: {(orbit_pericenter-jupiter_radius)/1e3:.3f} km')
 
 
 ########################################################################################################################
@@ -660,13 +541,13 @@ for moon in moons:
 
 
 # Post other quantities
-print(f'\n\nFirst arc orbital energy: {first_arc_orbital_energy/1e3:.3f} kJ')
-print(f'Second arc orbital energy: {second_arc_orbital_energy/1e3:.3f} kJ')
-print(f'Third arc orbital energy: {third_arc_orbital_energy/1e3:.3f} kJ')
-print(f'Fourth arc orbital energy: {fourth_arc_orbital_energy/1e3:.3f} kJ')
-print(f'Arcs 1-2 delta orbital energy: {abs(first_arc_orbital_energy-second_arc_orbital_energy)/1e3:.3f} kJ')
-print(f'Arcs 2-3 delta orbital energy: {abs(second_arc_orbital_energy-third_arc_orbital_energy)/1e3:.3f} kJ')
-print(f'Arcs 3-4 delta orbital energy: {abs(third_arc_orbital_energy-fourth_arc_orbital_energy)/1e3:.3f} kJ')
+print(f'\n\nFirst arc orbital specific energy: {first_arc_orbital_energy/1e3:.3f} kJ/m')
+print(f'Second arc orbital specific energy: {second_arc_orbital_energy/1e3:.3f} kJ/m')
+print(f'Third arc orbital specific energy: {third_arc_orbital_energy/1e3:.3f} kJ/m')
+print(f'Fourth arc orbital specific energy: {fourth_arc_orbital_energy/1e3:.3f} kJ/m')
+print(f'Arcs 1-2 delta orbital specific energy: {abs(first_arc_orbital_energy-second_arc_orbital_energy)/1e3:.3f} kJ/m')
+print(f'Arcs 2-3 delta orbital specific energy: {abs(second_arc_orbital_energy-third_arc_orbital_energy)/1e3:.3f} kJ/m')
+print(f'Arcs 3-4 delta orbital specific energy: {abs(third_arc_orbital_energy-fourth_arc_orbital_energy)/1e3:.3f} kJ/m')
 
 
 ########################################################################################################################
