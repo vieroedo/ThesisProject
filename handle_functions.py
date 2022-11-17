@@ -3,6 +3,7 @@ import math
 import numpy.linalg as LA
 from matplotlib import pyplot as plt
 import warnings
+from typing import Callable
 
 # TUDAT imports
 from tudatpy.kernel.astro import two_body_dynamics
@@ -13,7 +14,7 @@ from tudatpy.kernel.astro import element_conversion
 
 # Load spice kernels
 spice_interface.load_standard_kernels()
-
+# spice_interface.get_average_radius('Jupiter')
 # Ref system axes
 x_axis = np.array([1., 0., 0.])
 y_axis = np.array([0., 1., 0.])
@@ -23,7 +24,7 @@ z_axis = np.array([0., 0., 1.])
 jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
 jupiter_1bar_density = 0.16  # kg/m^3
 jupiter_mass = 1898.6e24  # kg
-jupiter_radius = 69911e3  # m
+jupiter_radius = spice_interface.get_average_radius('Jupiter')  #69911e3  # m
 jupiter_SOI_radius = 48.2e9  # m
 central_body_gravitational_parameter = spice_interface.get_body_gravitational_parameter('Jupiter')
 global_frame_orientation = 'ECLIPJ2000'
@@ -61,6 +62,15 @@ galilean_moons_data = {
                                     'g_0': 1076e20 * constants.GRAVITATIONAL_CONSTANT / (2403e3**2)}
                        }
 
+# Jupiter atmosphere exponential layered model
+# (T_0, h_0, rho_0, alpha) from lower to higher
+jupiter_atmosphere_model = {
+    'layer_1': [425.0, -132e3, 1.5, -0.56e3],
+    'layer_2': [100.0,   50e3, 2e-2, 2.7e3],
+    'layer_3': [200.0,  320e3, 2e-7, 0.9067e3],
+    'layer_4': [950.0, 1000e3, 3e-11, np.inf]
+}
+
 # for moon in galilean_moons_data.keys():
 #     g_0 = 'g_0'
 #     print(f'g_0 of {moon}: {galilean_moons_data[moon][g_0]:.3f} m/s^2')
@@ -68,6 +78,13 @@ galilean_moons_data = {
 
 def unit_vector(vector):
     """ Returns the unit vector of the vector.  """
+    vec_shape = np.shape(vector)
+    if len(vec_shape) == 2:
+        norms = np.linalg.norm(vector, axis=1)
+        final_vector = np.zeros(vec_shape)
+        for i in range(len(vector[:,0])):
+            final_vector[i,:] = vector[i,:]/norms[i]
+        return final_vector
     return vector / np.linalg.norm(vector)
 
 
@@ -131,6 +148,10 @@ def cartesian_2d_from_polar(r, theta):
 
 def orbital_energy(radius: float, velocity: float):
     return velocity**2/2 - central_body_gravitational_parameter/radius
+
+
+def velocity_from_energy(energy: float, radius: float):
+    return np.sqrt(2*(energy + central_body_gravitational_parameter/radius))
 
 
 def true_anomaly_from_radius(radius,eccentricity,sma):
@@ -734,7 +755,7 @@ def atmospheric_pressure_given_altitude(altitude,
         h_0 = layers[layer][1]
         T_0 = layers[layer][0]
 
-        if altitude > h_0:
+        if altitude >= h_0:
             location_layer = layer
         if input_density:
             layers[layer][2] = layers[layer][2] * gas_constant * T_0
@@ -750,9 +771,97 @@ def atmospheric_pressure_given_altitude(altitude,
     g_0 = surface_acceleration
     R_gas = gas_constant
 
+    if alpha == np.inf:
+        first_term = g_0 * (altitude-h_0) / (R_gas * T_0)
+        second_term = 1 - b_curvature/2 * (altitude - h_0)
+        return val_0 * np.exp(- first_term * second_term)
+
     a_term = (altitude-h_0)/(alpha*T_0) + 1
     b_term = -((g_0*alpha)/R_gas * (1+b_curvature*(T_0*alpha - h_0)))
     c_term = g_0 * b_curvature * alpha / R_gas * (altitude-h_0)
     pressure = val_0 * (a_term**b_term) * np.exp(c_term)
 
     return pressure
+
+
+# def entry_model_A_matrix(v_i, v_f):
+#     A_matrix = np.array([[1, v_i, v_i**2, v_i**3, v_i**4],
+#                         [1, v_f, v_f**2, v_f**3, v_f**4],
+#                         [0, 1, 2*v_i, 3*v_i**2, 4*v_i**3],
+#                         [0, 1, 2*v_f, 3*v_f**2, 4*v_f**3],
+#                         [v_f-v_i, (v_f**2-v_i**2)/2, (v_f**3-v_i**3)/3, (v_f**4-v_i**4)/4, (v_f**5-v_i**5)/5]
+#                         ])
+#     return A_matrix
+#
+# def entry_model_b_vector():
+#     b_vec = np.array([[],
+#                       [],
+#                       [],
+#                       [],
+#                       []
+#                       ])
+
+########################################################################################################################
+# ZERO-FINDING METHODS #################################################################################################
+########################################################################################################################
+
+
+def regula_falsi_illinois(interval_boundaries: tuple,
+                          function: Callable,
+                          zero_value: float = 0.,
+                          tolerance: float = 1e-15,
+                          max_iter: int = 1000,
+                          **kwargs) -> tuple:
+    a_int = interval_boundaries[0]
+    b_int = interval_boundaries[1]
+
+    f_a = function(a_int, **kwargs) - zero_value
+    f_b = function(b_int, **kwargs) - zero_value
+
+    if f_a * f_b > 0:
+        raise Exception('The selected interval has either none or multiple zeroes.')
+
+    ass_a = False
+    ass_b = False
+    i = 0
+    c_point = -1
+    f_c = -1
+
+    for i in range(max_iter):
+
+        c_point = (a_int * f_b - b_int * f_a) / (f_b - f_a)
+
+        f_c = function(c_point, **kwargs) - zero_value
+
+        if abs(f_c) < tolerance:
+            # Root found
+            break
+
+        if f_c < 0:
+            if ass_a:
+                # m_ab = 1 - f_c / f_a
+                # if m_ab < 0:
+                m_ab = 0.5
+                f_b = f_b * m_ab
+            a_int = c_point
+            f_a = f_c
+            ass_a = True
+            ass_b = False
+
+        if f_c > 0:
+            if ass_b:
+                # m_ab = 1-f_c/f_b
+                # if m_ab < 0:
+                m_ab = 0.5
+                f_a = f_a * m_ab
+            b_int = c_point
+            f_b = f_c
+            ass_a = False
+            ass_b = True
+
+    if i == max_iter:
+        raise Warning('Regula falsi hasn\'t converged: max number of iterations reached.')
+
+    return c_point, f_c, i
+
+# add secant method
