@@ -31,12 +31,12 @@ use_benchmark = True
 # if use_benchmark is True ####################################################
 generate_benchmarks = True
 
-playwith_benchmark = True
-silence_plots = True
+playwith_benchmark = False
+silence_benchmark_related_plots = True
 
-plot_error_wrt_benchmark = False
+plot_error_wrt_benchmark = True
 
-benchmark_portion_to_evaluate = 2  # 0, 1, 2, 3 (3 means all three together)
+benchmark_portion_to_evaluate = 3  # 0, 1, 2, 3 (3 means all three together)
 
 # If you play with benchmarks
 lower_limit = 10e3
@@ -44,10 +44,10 @@ upper_limit = 160e3
 no_of_entries = 31
 
 # If you set a single step_size
-choose_step_size = 10000
+choose_step_size = 40e3
 
 # If you set dedicated step sizes for case 3
-set_dedicated_step_sizes = False
+set_dedicated_step_sizes = True
 dedicated_step_sizes = [8e3, 4, 8e3]
 
 # For both cases
@@ -341,6 +341,8 @@ if use_benchmark:
             if playwith_benchmark:
                 benchmark_step_size_to_save = benchmark_step_size
                 benchmark_info[benchmark_step_size_to_save] = np.array([final_epoch] + list(final_state))
+            elif set_dedicated_step_sizes:
+                benchmark_info['step_sizes'] = benchmark_step_size
         else:
             first_bench = np.loadtxt(benchmark_output_path + 'benchmark_1_states' + step_size_name +'.dat')
             first_bench_dep_var = np.loadtxt(benchmark_output_path + 'benchmark_1_dependent_variables' + step_size_name + '.dat')
@@ -383,7 +385,7 @@ if use_benchmark:
                                                                      benchmark_output_path,
                                                                      'benchmarks_dependent_variable_difference' + step_size_name + '.dat')
 
-        if not silence_plots:
+        if not silence_benchmark_related_plots:
             fig1, ax1 = Util.plot_base_trajectory(first_benchmark_state_history)
             fig2, ax2 = Util.plot_time_step(first_benchmark_state_history)
 
@@ -403,15 +405,15 @@ if use_benchmark:
             # max_position_errors[benchmark_step_size/divide_step_size_of] = max_position_error
             max_position_errors[benchmark_step_size] = max_position_error
 
-        if not silence_plots:
+        if not silence_benchmark_related_plots:
             fig_bm, ax_bm = plt.subplots(figsize=(6, 5))
             ax_bm.plot(bench_diff_epochs_plot, position_error)
             ax_bm.set_yscale('log')
 
-        if not silence_plots:
+        if not silence_benchmark_related_plots:
             plt.show()
 
-    if write_results_to_file and generate_benchmarks and playwith_benchmark:
+    if write_results_to_file and generate_benchmarks:
         save2txt(benchmark_info, 'ancillary_benchmark_info.txt', benchmark_output_path)
 
 
@@ -429,7 +431,7 @@ if use_benchmark:
         axx.axhline(y=0.1, color='r',linestyle=':')
         plt.show()
 
-    if playwith_benchmark:
+    if playwith_benchmark or benchmark_portion_to_evaluate != 3:
         quit()
 
 current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,

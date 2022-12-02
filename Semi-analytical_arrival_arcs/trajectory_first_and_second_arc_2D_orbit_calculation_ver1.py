@@ -3,7 +3,7 @@ from handle_functions import *
 # known issues:
 # none
 
-do_regula_falsi_function_debugging = True
+do_regula_falsi_function_debugging = False
 
 # Set flyby epoch -> edit this to be initial epoch!!
 first_arc_arrival_epoch_days = 11293.  # days

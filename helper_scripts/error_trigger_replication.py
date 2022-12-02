@@ -4,6 +4,7 @@ from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.numerical_simulation import propagation_setup
 
 import numpy as np
+# import copy
 
 def get_propagator_settings(bodies,
                             termination_settings,
@@ -83,7 +84,7 @@ current_propagator_settings = get_propagator_settings(bodies,
                                                       dependent_variables_to_save,
                                                       current_propagator)
 
-propagator_settings_2 = current_propagator_settings
+propagator_settings_2 = current_propagator_settings.copy()
 
 print('The two vectors should be identical:')
 print(propagator_settings_2.initial_states)

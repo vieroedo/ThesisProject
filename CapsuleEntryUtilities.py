@@ -299,7 +299,9 @@ def get_dependent_variable_save_settings() -> list:
                                    propagation_setup.dependent_variable.single_acceleration_norm(propagation_setup.acceleration.point_mass_gravity_type, 'Capsule', 'Jupiter'),
                                    propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
                                    propagation_setup.dependent_variable.flight_path_angle('Capsule', 'Jupiter'),
-                                   propagation_setup.dependent_variable.relative_speed('Capsule', 'Jupiter')
+                                   propagation_setup.dependent_variable.airspeed('Capsule', 'Jupiter'),
+                                   propagation_setup.dependent_variable.mach_number('Capsule', 'Jupiter'),
+                                   propagation_setup.dependent_variable.density('Capsule', 'Jupiter')
                                    ]
     return dependent_variables_to_save
 
@@ -353,7 +355,7 @@ def get_integrator_settings(settings_index: int,
     # also note that the relative and absolute tolerances are the same value
     integrator_settings = integrator.runge_kutta_variable_step_size(
         simulation_start_epoch,
-        1.0,
+        40000.0,
         current_coefficient_set,
         np.finfo(float).eps,
         5*constants.JULIAN_DAY,
@@ -662,7 +664,7 @@ def generate_benchmarks(benchmark_step_size,
 
     atmosph_altitude_termination_settings_arc_0 = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
-        limit_value=3.9e6*1e3,  # + benchmark_step_size*2e2*1e3,
+        limit_value=4.5e6*1e3,  # + benchmark_step_size*2e2*1e3,
         use_as_lower_limit=True,
         terminate_exactly_on_final_condition=True,
         termination_root_finder_settings=root_finders.bisection(relative_variable_tolerance=1e-16, absolute_variable_tolerance=1e-16, root_function_tolerance=1e-16)
@@ -670,7 +672,7 @@ def generate_benchmarks(benchmark_step_size,
 
     atmosph_altitude_termination_settings_arc_1 = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
-        limit_value=3.5e6*1e3,  # + benchmark_step_size*2e2*1e3 + 10,
+        limit_value=4.5e6*1e3,  # + benchmark_step_size*2e2*1e3 + 10,
         use_as_lower_limit=False,
         terminate_exactly_on_final_condition=True,
         termination_root_finder_settings=root_finders.bisection(relative_variable_tolerance=1e-16,
@@ -926,11 +928,16 @@ def compare_models(first_model: dict,
 ###########################################################################
 
 
-def plot_base_trajectory(state_history):
-    sim_result = np.vstack(list(state_history.values()))
+def plot_base_trajectory(state_history,
+                         fig = plt.figure(),
+                         ax = plt.axes(projection='3d')):
+    if type(state_history) == dict:
+        sim_result = np.vstack(list(state_history.values()))
+    else:
+        sim_result = state_history[:,1:]
     # Plot 3-D Trajectory
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
+    # fig = plt.figure()
+    # ax = plt.axes(projection='3d')
 
     # draw jupiter
     u, v = np.mgrid[0:2 * np.pi:20j, 0:np.pi:10j]
