@@ -48,19 +48,7 @@ from tudatpy.kernel.math import geometry
 
 def get_initial_state_old() -> np.ndarray:
     """
-    Converts the initial state to inertial coordinates.
-
-    The initial state is expressed in Earth-centered spherical coordinates.
-    These are first converted into Earth-centered cartesian coordinates,
-    then they are finally converted in the global (inertial) coordinate
-    system.
-
-    Parameters
-    ----------
-    simulation_start_epoch : float
-        Start of the simulation [s] with t=0 at J2000.
-    bodies : tudatpy.kernel.numerical_simulation.environment.SystemOfBodies
-        System of bodies present in the simulation.
+    A sample initial state just for trying out things.
 
     Returns
     -------
@@ -73,12 +61,64 @@ def get_initial_state_old() -> np.ndarray:
     return initial_state_vector
 
 
+def get_galileo_initial_state() -> np.ndarray:
+    """
+    Retrieves the Galileo probe atmospheric entry initial state.
+
+    The initial state is expressed in global (inertial) cartesian coordinates.
+
+    Returns
+    -------
+    initial_state_inertial_coordinates : np.ndarray
+        The initial state of the vehicle expressed in inertial coordinates.
+    """
+
+    # Galileo atmospheric entry data (obtained from https://adsabs.harvard.edu/pdf/2006ESASP.631E...6R)
+
+    entry_velocity = 59.6e3  # m/s  # galileo entry velocity wrt atmosphere: 47.4054 km/s
+    entry_fpa = np.deg2rad(-6)  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg
+    latitude = np.deg2rad(6.57)  # rad
+    longitude =  np.deg2rad(4.88)  # rad
+    heading = np.deg2rad(-2.6111)  # rad
+    altitude = 450e3  # m
+    radius = jupiter_radius + altitude
+
+    # Calculate Galileo probe positon
+    x_pos, y_pos, z_pos = cartesian_3d_from_polar(radius, latitude, longitude)
+    position = np.array([x_pos, y_pos, z_pos])
+
+    # Calculate velocity vector tangent to surface and eastward-pointing
+    if z_pos > 0.:
+        vel_eastward_pointing = unit_vector(np.cross(position, np.array([x_pos, y_pos, 0.])))
+    elif z_pos < 0:
+        vel_eastward_pointing = unit_vector(np.cross(np.array([x_pos, y_pos, 0.]), position))
+    else:
+        vel_eastward_pointing = unit_vector(np.cross(z_axis, position))
+
+    # Rotate velocity vector by heading angle
+    rot_matrix_heading = rotation_matrix(unit_vector(position), heading)
+    vel_heading = rotate_vectors_by_given_matrix(rot_matrix_heading, vel_eastward_pointing)
+
+    # Rotate velocity vector by flight path angle
+    rot_axis_fpa = unit_vector(np.cross(position, vel_heading))
+    rot_matrix_fpa = rotation_matrix(rot_axis_fpa, -entry_fpa)
+    vel_final = rotate_vectors_by_given_matrix(rot_matrix_fpa, vel_heading)
+
+    # Calculate initial velocity
+    velocity = vel_final * entry_velocity
+
+    # Build initial state vector
+    initial_state_vector = np.concatenate((position, velocity))
+
+    return initial_state_vector
+
+
 def get_initial_state(atmosphere_entry_fpa: float,
                       atmosphere_entry_altitude: float = 400e3,
                       jupiter_arrival_v_inf: float = 5600,
                       verbose: bool = False) -> np.ndarray:
     """
-    Calculates the initial state from an analytical model.
+    Calculates the initial state given the initial distance and speed, and the arrival fpa.
 
     The initial state is expressed in Jupiter-centered cartesian coordinates.
 
@@ -99,63 +139,65 @@ def get_initial_state(atmosphere_entry_fpa: float,
         The initial state of the vehicle expressed in inertial coordinates.
     """
 
-    # Parameters reprocessing ##############################################################################################
-    atmosphere_entry_fpa = atmosphere_entry_fpa * np.pi / 180  # rad
-    ########################################################################################################################
+    # Problem parameters
+    arrival_fpa = np.deg2rad(atmosphere_entry_fpa)  # rad
+    departure_radius = jupiter_SOI_radius
+    departure_velocity_norm = jupiter_arrival_v_inf
 
-    pre_ae_departure_radius = jupiter_SOI_radius
-    pre_ae_departure_velocity_norm = jupiter_arrival_v_inf
+    # Calculate orbital energy
+    initial_orbital_energy = orbital_energy(departure_radius, departure_velocity_norm)
 
-    pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure_velocity_norm)
+    # Calculate arrival radius and speed
+    arrival_radius = jupiter_radius + atmosphere_entry_altitude
+    arrival_velocity_norm = velocity_from_energy(initial_orbital_energy, arrival_radius)
 
-    pre_ae_arrival_radius = jupiter_radius + atmosphere_entry_altitude
-    pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius)
+    # Calculate angular momentum
+    angular_momentum_norm = arrival_radius * arrival_velocity_norm * np.cos(arrival_fpa)
+    # angular_momentum = z_axis * angular_momentum_norm
 
-    pre_ae_arrival_fpa = atmosphere_entry_fpa
+    # Calculate other orbit elements
+    semilatus_rectum = angular_momentum_norm ** 2 / central_body_gravitational_parameter
+    semimajor_axis = - central_body_gravitational_parameter / (2 * initial_orbital_energy)
+    eccentricity = np.sqrt(1 - semilatus_rectum / semimajor_axis)
 
-    pre_ae_angular_momentum_norm = pre_ae_arrival_radius * pre_ae_arrival_velocity_norm * np.cos(pre_ae_arrival_fpa)
-    pre_ae_angular_momentum = z_axis * pre_ae_angular_momentum_norm
-
-    pre_ae_semilatus_rectum = pre_ae_angular_momentum_norm ** 2 / central_body_gravitational_parameter
-    pre_ae_semimajor_axis = - central_body_gravitational_parameter / (2 * pre_ae_orbital_energy)
-    pre_ae_eccentricity = np.sqrt(1 - pre_ae_semilatus_rectum / pre_ae_semimajor_axis)
-
-    # pre_ae_arrival_radius = jupiter_radius + arrival_pericenter_altitude
-
-    pre_ae_arrival_position = x_axis * pre_ae_arrival_radius
+    # Set arrival position on x axis
+    arrival_position = x_axis * arrival_radius
 
     circ_vel_at_atm_entry = np.sqrt(
         central_body_gravitational_parameter / (jupiter_radius + atmosphere_entry_altitude))
 
+    # Prints for debugging
     if verbose:
         print('\nAtmospheric entry (pre-aerocapture) analytical conditions:\n'
               f'- altitude: {atmosphere_entry_altitude / 1e3} km\n'
-              f'- velocity: {pre_ae_arrival_velocity_norm / 1e3:.3f} km/s\n'
+              f'- velocity: {arrival_velocity_norm / 1e3:.3f} km/s\n'
               f'- ref circular velocity: {circ_vel_at_atm_entry / 1e3:.3f} km/s\n'
-              f'- flight path angle: {pre_ae_arrival_fpa * 180 / np.pi:.3f} deg\n'
-              f'- eccentricity: {pre_ae_eccentricity:.10f} ')
+              f'- flight path angle: {atmosphere_entry_fpa} deg\n'
+              f'- eccentricity: {eccentricity:.10f} ')
 
-    # Calculate initial state vector
-    pre_ae_departure_true_anomaly = true_anomaly_from_radius(pre_ae_departure_radius, pre_ae_eccentricity,
-                                                             pre_ae_semimajor_axis)
-    pre_ae_arrival_true_anomaly = true_anomaly_from_radius(pre_ae_arrival_radius, pre_ae_eccentricity,
-                                                           pre_ae_semimajor_axis)
+    # Calculate delta true anomaly spanned by the spacecraft
+    departure_true_anomaly = true_anomaly_from_radius(departure_radius, eccentricity, semimajor_axis)
+    arrival_true_anomaly = true_anomaly_from_radius(arrival_radius, eccentricity,semimajor_axis)
+    delta_true_anomaly = arrival_true_anomaly - departure_true_anomaly
 
-    delta_true_anomaly = pre_ae_arrival_true_anomaly - pre_ae_departure_true_anomaly
-
+    # Calculate the departure position of the spacecraft
     pos_rotation_matrix = rotation_matrix(z_axis, -delta_true_anomaly)
     pre_ae_departure_position = rotate_vectors_by_given_matrix(pos_rotation_matrix, unit_vector(
-        pre_ae_arrival_position)) * pre_ae_departure_radius
+        arrival_position)) * departure_radius
 
+    # Calculate departure fpa (useful to obtain departure velocity)
     pre_ae_departure_fpa = - np.arccos(
-        pre_ae_angular_momentum_norm / (pre_ae_departure_radius * pre_ae_departure_velocity_norm))
+        angular_momentum_norm / (departure_radius * departure_velocity_norm))
 
+    # Calculate departure velocity
     vel_rotation_matrix = rotation_matrix(z_axis, np.pi / 2 - pre_ae_departure_fpa)
     pre_ae_departure_velocity = rotate_vectors_by_given_matrix(vel_rotation_matrix, unit_vector(
-        pre_ae_departure_position)) * pre_ae_departure_velocity_norm
+        pre_ae_departure_position)) * departure_velocity_norm
 
+    # Build the initial state vector
     initial_state_vector = np.concatenate((pre_ae_departure_position, pre_ae_departure_velocity))
 
+    # Print the state vector for debugging
     if verbose:
         print('\nDeparture state:')
         print(f'{list(initial_state_vector)}')
@@ -165,15 +207,18 @@ def get_initial_state(atmosphere_entry_fpa: float,
 
 def get_termination_settings(simulation_start_epoch: float,
                              maximum_duration: float = 200*constants.JULIAN_DAY,
-                             termination_altitude: float = 0) \
+                             galileo_termination_settings: bool = False) \
         -> tudatpy.kernel.numerical_simulation.propagation_setup.propagator.PropagationTerminationSettings:
     """
     Get the termination settings for the simulation.
 
     Termination settings currently include:
-    - simulation time (one day)
-    - lower and upper altitude boundaries (0-100 km)
-    - fuel run-out
+    - Nominal termination settings, to be satisfied all at once:
+        . Apoapsis greater than 0 termination
+        . Negative fpa termination
+        . No aerodynamic force termination
+    - Time termination (safety setting)
+    - Maximum distance termination (if spacecraft doesn't get captured)
 
     Parameters
     ----------
@@ -181,28 +226,33 @@ def get_termination_settings(simulation_start_epoch: float,
         Start of the simulation [s] with t=0 at J2000.
     maximum_duration : float
         Maximum duration of the simulation [s].
-    termination_altitude : float
-        Minimum altitude [m].
+    galileo_termination_settings: bool
+        Switches to the termination settings for the Galileo Mission.
 
     Returns
     -------
     hybrid_termination_settings : tudatpy.kernel.numerical_simulation.propagation_setup.propagator.PropagationTerminationSettings
         Propagation termination settings object.
     """
+
+    # Return terminatino altitude for the Galileo mission
+    if galileo_termination_settings:
+        termination_settings = propagation_setup.propagator.dependent_variable_termination(
+            dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
+            limit_value=20e3,
+            use_as_lower_limit=True,
+            terminate_exactly_on_final_condition=False
+        )
+        return termination_settings
+
     # Create single PropagationTerminationSettings objects
     # Time
     time_termination_settings = propagation_setup.propagator.time_termination(
         simulation_start_epoch + maximum_duration,
         terminate_exactly_on_final_condition=False
     )
-    # Altitude
-    # lower_altitude_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-    #     dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
-    #     limit_value=termination_altitude,
-    #     use_as_lower_limit=True,
-    #     terminate_exactly_on_final_condition=False
-    # )
 
+    # Maximum altitude
     maximum_altitude_termination_settings = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
         limit_value=jupiter_SOI_radius,
@@ -210,85 +260,63 @@ def get_termination_settings(simulation_start_epoch: float,
         terminate_exactly_on_final_condition=False
     )
 
+    # Minimum apoapsis (if greater than zero te orbit is closed)
     minimum_apoapsis_termination_settings = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.apoapsis_altitude('Capsule', 'Jupiter'),
-        limit_value=0.,#galilean_moons_data['Callisto']['SMA'],
+        limit_value=0.,
         use_as_lower_limit=False,
         terminate_exactly_on_final_condition=False
     )
 
+    # A negative fpa would trigger termination
     fpa_termination_settings = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle('Capsule', 'Jupiter'),
         limit_value=0.,
         use_as_lower_limit=True,
         terminate_exactly_on_final_condition=False
     )
-    # max_fpa_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-    #     dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle('Capsule', 'Jupiter'),
-    #     limit_value=np.pi/2,
-    #     use_as_lower_limit=False,
-    #     terminate_exactly_on_final_condition=False
-    # )
 
-
+    # No aerodynamic force would trigger termination
     aero_force_termination_settings = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.single_acceleration_norm(propagation_setup.acceleration.aerodynamic_type,'Capsule', 'Jupiter'),
         limit_value=1e-4,
         use_as_lower_limit=True,
         terminate_exactly_on_final_condition=False
     )
-    # keplerian_state_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-    #     dependent_variable_settings=propagation_setup.dependent_variable.keplerian_state('Capsule', 'Jupiter'),
-    #     limit_value=np.array([np.inf, 1., -3*np.pi, -3*np.pi, -3*np.pi, -np.pi/6]),
-    #     use_as_lower_limit=True,
-    #     terminate_exactly_on_final_condition=False
-    # )
-    # Define list of termination settings
-    hybrid_settings_list = [
-                                 minimum_apoapsis_termination_settings,
-                                 fpa_termination_settings,
-                                 aero_force_termination_settings,
-                                 # max_fpa_termination_settings
-                                 ]
-    # termination_settings_list = [
-    #     keplerian_state_termination_settings
-    # ]
 
-    # Create termination settings object (when either the time of altitude condition is reached: propagation terminates)
-    hybrid_termination_settings = propagation_setup.propagator.hybrid_termination(hybrid_settings_list,
-                                                                                  fulfill_single_condition=False)
+    # List of settings that trigger termination if satisfied all at once
+    nominal_settings_list = [minimum_apoapsis_termination_settings,
+                             fpa_termination_settings,
+                             aero_force_termination_settings]
 
-    termination_list = [hybrid_termination_settings,
+    # Create termination settings object for the nominal conditions termination
+    nominal_termination_settings = propagation_setup.propagator.hybrid_termination(nominal_settings_list,
+                                                                                   fulfill_single_condition=False)
+
+    # List of all settings that terminate the propagation
+    termination_list = [nominal_termination_settings,
                         maximum_altitude_termination_settings,
                         time_termination_settings]
+
+    # Create termination settings object that terminates when either nominal or non-nominal conditions are reached
     termination_settings = propagation_setup.propagator.hybrid_termination(termination_list,
-                                                                           fulfill_single_condition = True)
+                                                                           fulfill_single_condition=True)
 
     return termination_settings
 
 
-# def custom_termination_function(time:float,
-#
-#                                 bodies):
-#     current_capsule_state = bodies.get('Capsule').state
-#     sin_fpa = np.dot(current_capsule_state[0:3], current_capsule_state[3:6])/\
-#               (LA.norm(current_capsule_state[0:3])*LA.norm(current_capsule_state[3:6]))
-#     fpa = np.arcsin(sin_fpa)
-#     if fpa > 90
-
-
-# NOTE TO STUDENTS: this function can be modified to save more/less dependent variables.
 def get_dependent_variable_save_settings() -> list:
     """
     Retrieves the dependent variables to save.
 
     Currently, the dependent variables saved include:
-    - the Mach number
-    - the altitude wrt the Earth
-
-    Parameters
-    ----------
-    none
+    - Aerodynamic acceleration (3-vector)
+    - Point-mass acceleration norm
+    - Altitude wrt Jupiter 1-bar level
+    - Flight path angle
+    - Airspeed
+    - Mach number
+    - Density of Jupiter's atmosphere
 
     Returns
     -------
@@ -306,38 +334,25 @@ def get_dependent_variable_save_settings() -> list:
     return dependent_variables_to_save
 
 
-
 def get_integrator_settings(settings_index: int,
-                            simulation_start_epoch: float) \
+                            simulation_start_epoch: float,
+                            galileo_integration_settings: bool = False,
+                            galileo_step_size: float = 0.5) \
         -> tudatpy.kernel.numerical_simulation.propagation_setup.integrator.IntegratorSettings:
     """
 
-    Retrieves the integrator settings.
-
-    It selects a combination of integrator to be used (first argument) and
-    the related setting (tolerance for variable step size integrators
-    or step size for fixed step size integrators). The code, as provided, runs the following:
-    - if j=0,1,2,3: a variable-step-size, multi-stage integrator is used (see multiStageTypes list for specific type),
-                     with tolerances 10^(-10+*k)
-    - if j=4      : a fixed-step-size RK4 integrator is used, with step-size 2^(k)
+    Retrieves the integrator settings. An RKF7(8) integration scheme is used.
 
     Parameters
     ----------
-    propagator_index : int
-        Index that selects the propagator type (currently not used).
-        NOTE TO STUDENTS: this argument can be used to select specific combinations of propagator and integrators
-        (provided that the code is expanded).
-    integrator_index : int
-        Index that selects the integrator type as follows:
-            0 -> RK4(5)
-            1 -> RK5(6)
-            2 -> RK7(8)
-            3 -> RKDP7(8)
-            4 -> RK4
     settings_index : int
-        Index that selects the tolerance or the step size (depending on the integrator type).
+        Index that selects the tolerance of the integrator.
     simulation_start_epoch : float
         Start of the simulation [s] with t=0 at J2000.
+    galileo_integration_settings: bool
+        Loads the integration settings for the Galileo mission. An RK7 with fixed step size is used.
+    galileo_step_size: float
+        Sets the step size of the integration for the Galileo mission.
 
     Returns
     -------
@@ -351,8 +366,6 @@ def get_integrator_settings(settings_index: int,
     current_tolerance = 10.0 ** (-10.0 + settings_index)
     # Create integrator settings
     integrator = propagation_setup.integrator
-    # Here (epsilon, inf) are set as respectively min and max step sizes
-    # also note that the relative and absolute tolerances are the same value
     integrator_settings = integrator.runge_kutta_variable_step_size(
         simulation_start_epoch,
         40000.0,
@@ -362,6 +375,17 @@ def get_integrator_settings(settings_index: int,
         current_tolerance,
         current_tolerance)
 
+    # Return integration settings for the galileo probe entry case
+    if galileo_integration_settings:
+        return integrator.runge_kutta_variable_step_size(
+                simulation_start_epoch,
+                galileo_step_size,
+                current_coefficient_set,
+                galileo_step_size,
+                galileo_step_size,
+                np.inf,
+                np.inf)
+
     return integrator_settings
 
 
@@ -370,22 +394,28 @@ def get_propagator_settings(atm_entry_fpa: float,
                             bodies,
                             termination_settings,
                             dependent_variables_to_save,
-                            current_propagator = propagation_setup.propagator.cowell,
+                            current_propagator=propagation_setup.propagator.cowell,
                             jupiter_interpl_excees_vel: float = 5600.,
-                            initial_state_perturbation = np.zeros( 6 ) ):
+                            initial_state_perturbation=np.zeros(6),
+                            galileo_propagator_settings: bool = False,
+                            model_choice: int = 0):
 
     # Define bodies that are propagated and their central bodies of propagation
     bodies_to_propagate = ['Capsule']
     central_bodies = ['Jupiter']
 
-    # Define accelerations for the nominal case
-    acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
-                                                    propagation_setup.acceleration.aerodynamic()]}
-    # # Here different acceleration models are defined
-    # if model_choice == 1:
-    #     acceleration_settings_on_vehicle['Earth'][0] = propagation_setup.acceleration.point_mass_gravity()
-    # elif model_choice == 2:
-    #     acceleration_settings_on_vehicle['Earth'][0] = propagation_setup.acceleration.spherical_harmonic_gravity(4, 4)
+    # Define accelerations for the nominal case and for other variations of the model
+    if model_choice == 0:
+        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
+                                                        propagation_setup.acceleration.aerodynamic()]}
+    elif model_choice == 1:
+        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(2, 0),
+                                                        propagation_setup.acceleration.aerodynamic()]}
+    elif model_choice == 2 or model_choice == 3:
+        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(4, 0),
+                                                        propagation_setup.acceleration.aerodynamic()]}
+    else:
+        return -1
 
     # Create global accelerations' dictionary
     acceleration_settings = {'Capsule': acceleration_settings_on_vehicle}
@@ -409,6 +439,10 @@ def get_propagator_settings(atm_entry_fpa: float,
 
     # Retrieve initial state
     initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel) + initial_state_perturbation
+
+    # Retrieve galileo probe entry initial state instead if needed
+    if galileo_propagator_settings:
+        initial_state = get_galileo_initial_state()
 
     # Create propagation settings for the benchmark
     propagator_settings = propagation_setup.propagator.translational(central_bodies,
@@ -581,7 +615,8 @@ def generate_benchmarks(benchmark_step_size,
                         benchmark_initial_state: np.ndarray = np.zeros(6),
                         termination_epoch: float = 0.,
                         divide_step_size_of: float = 1.,
-                        benchmark_coeff_set = propagation_setup.integrator.CoefficientSets.rkdp_87):
+                        benchmark_coeff_set = propagation_setup.integrator.CoefficientSets.rkdp_87,
+                        galileo_mission: bool = False):
     """
     Function to generate to accurate benchmarks.
 
@@ -615,33 +650,8 @@ def generate_benchmarks(benchmark_step_size,
 
     ### CREATION OF THE TWO BENCHMARKS ###
 
-    # aero_force_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-    #     dependent_variable_settings=propagation_setup.dependent_variable.single_acceleration_norm(
-    #         propagation_setup.acceleration.aerodynamic_type, 'Capsule', 'Jupiter'),
-    #     limit_value=1e-6,
-    #     use_as_lower_limit=False,
-    #     terminate_exactly_on_final_condition=False
-    # )
-    # minimum_altitude_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-    #     dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
-    #     limit_value=0.,  # galilean_moons_data['Callisto']['SMA'],
-    #     use_as_lower_limit=True,
-    #     terminate_exactly_on_final_condition=False
-    #
-    # )
-    # aero_force_termination_settings2 = propagation_setup.propagator.dependent_variable_termination(
-    #     dependent_variable_settings=propagation_setup.dependent_variable.single_acceleration_norm(
-    #         propagation_setup.acceleration.aerodynamic_type, 'Capsule', 'Jupiter'),
-    #     limit_value=1e-6,
-    #     use_as_lower_limit=True,
-    #     terminate_exactly_on_final_condition=True,
-    #     termination_root_finder_settings = root_finders.bisection()
-    # )
-
-    time_termination_settings_meh = propagation_setup.propagator.time_termination(
-            simulation_start_epoch + 10*constants.JULIAN_DAY,
-            terminate_exactly_on_final_condition=False
-        )
+    if galileo_mission:
+        benchmark_case = 4
 
     time_termination_settings = propagation_setup.propagator.time_termination(
         termination_epoch,
@@ -684,10 +694,8 @@ def generate_benchmarks(benchmark_step_size,
                                                                                         fulfill_single_condition=True)
     hybrid_part_termination_settings_arc_1 = propagation_setup.propagator.hybrid_termination([atmosph_altitude_termination_settings_arc_1, fpa_termination_settings_arc_1],
                                                                                              fulfill_single_condition=False)
-    hybrid_termination_settings2 = propagation_setup.propagator.hybrid_termination([hybrid_part_termination_settings_arc_1, time_termination_settings_meh],
-                                                                                   fulfill_single_condition=True)
 
-
+    number_of_arcs = 1
     if benchmark_case == 0:
         first_benchmark_step_size = np.array([benchmark_step_size])  # s
         propagator_settings_list = [benchmark_propagator_settings]
@@ -709,8 +717,12 @@ def generate_benchmarks(benchmark_step_size,
         else:
             first_benchmark_step_size = np.array([benchmark_step_size, benchmark_step_size / divide_step_size_of, benchmark_step_size])  # s
         propagator_settings_list = [benchmark_propagator_settings, benchmark_propagator_settings,benchmark_propagator_settings]
+        number_of_arcs = 3
+    elif benchmark_case == 4:
+        first_benchmark_step_size = np.array([benchmark_step_size])  # s
+        propagator_settings_list = [benchmark_propagator_settings]
     else:
-        return Warning('Wrong case parameter chosen for the benchmark. Allowed values are integers 0, 1, 2, 3')
+        return Warning('Wrong case parameter chosen for the benchmark. Allowed values are integers 0, 1, 2, 3, 4')
     # Define benchmarks' step sizes
 
     second_benchmark_step_size = 2.0 * first_benchmark_step_size
