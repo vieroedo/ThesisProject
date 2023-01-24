@@ -49,15 +49,8 @@ from tudatpy.kernel.math import geometry
 def get_initial_state_old() -> np.ndarray:
     """
     A sample initial state just for trying out things.
-
-    Returns
-    -------
-    initial_state_inertial_coordinates : np.ndarray
-        The initial state of the vehicle expressed in inertial coordinates.
     """
-
     initial_state_vector = np.array([-46846525005.13016, 11342093939.996948, 0.0, 5421.4069183825695, -1402.9779133377706, 0.0])
-
     return initial_state_vector
 
 
@@ -75,10 +68,10 @@ def get_galileo_initial_state() -> np.ndarray:
 
     # Galileo atmospheric entry data (obtained from https://adsabs.harvard.edu/pdf/2006ESASP.631E...6R)
 
-    entry_velocity = 59.6e3  # m/s  # galileo entry velocity wrt atmosphere: 47.4054 km/s
-    entry_fpa = np.deg2rad(-6)  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg
+    entry_velocity = 59.92e3  # m/s  # galileo entry velocity wrt atmosphere: 47.4054 km/s     59.6e3
+    entry_fpa = np.deg2rad(-6.64)  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg   -6.69
     latitude = np.deg2rad(6.57)  # rad
-    longitude =  np.deg2rad(4.88)  # rad
+    longitude = np.deg2rad(4.88)  # rad
     heading = np.deg2rad(-2.6111)  # rad
     altitude = 450e3  # m
     radius = jupiter_radius + altitude
@@ -182,20 +175,20 @@ def get_initial_state(atmosphere_entry_fpa: float,
 
     # Calculate the departure position of the spacecraft
     pos_rotation_matrix = rotation_matrix(z_axis, -delta_true_anomaly)
-    pre_ae_departure_position = rotate_vectors_by_given_matrix(pos_rotation_matrix, unit_vector(
+    departure_position = rotate_vectors_by_given_matrix(pos_rotation_matrix, unit_vector(
         arrival_position)) * departure_radius
 
     # Calculate departure fpa (useful to obtain departure velocity)
-    pre_ae_departure_fpa = - np.arccos(
+    departure_fpa = - np.arccos(
         angular_momentum_norm / (departure_radius * departure_velocity_norm))
 
     # Calculate departure velocity
-    vel_rotation_matrix = rotation_matrix(z_axis, np.pi / 2 - pre_ae_departure_fpa)
-    pre_ae_departure_velocity = rotate_vectors_by_given_matrix(vel_rotation_matrix, unit_vector(
-        pre_ae_departure_position)) * departure_velocity_norm
+    vel_rotation_matrix = rotation_matrix(z_axis, np.pi / 2 - departure_fpa)
+    departure_velocity = rotate_vectors_by_given_matrix(vel_rotation_matrix, unit_vector(
+        departure_position)) * departure_velocity_norm
 
     # Build the initial state vector
-    initial_state_vector = np.concatenate((pre_ae_departure_position, pre_ae_departure_velocity))
+    initial_state_vector = np.concatenate((departure_position, departure_velocity))
 
     # Print the state vector for debugging
     if verbose:
@@ -412,7 +405,7 @@ def get_propagator_settings(atm_entry_fpa: float,
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(2, 0),
                                                         propagation_setup.acceleration.aerodynamic()]}
     elif model_choice == 2 or model_choice == 3:
-        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(4, 0),
+        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(8, 0),
                                                         propagation_setup.acceleration.aerodynamic()]}
     else:
         return -1
@@ -438,7 +431,7 @@ def get_propagator_settings(atm_entry_fpa: float,
     # environment_setup.add_rotation_model(bodies, 'Capsule', rotation_model_settings)
 
     # Retrieve initial state
-    initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel) + initial_state_perturbation
+    initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel, verbose=True) + initial_state_perturbation
 
     # Retrieve galileo probe entry initial state instead if needed
     if galileo_propagator_settings:
@@ -698,35 +691,29 @@ def generate_benchmarks(benchmark_step_size,
     number_of_arcs = 1
     if benchmark_case == 0:
         first_benchmark_step_size = np.array([benchmark_step_size])  # s
-        propagator_settings_list = [benchmark_propagator_settings]
     elif benchmark_case == 1:
-        first_benchmark_step_size = np.array([benchmark_step_size])  #np.array([round(benchmark_step_size / divide_step_size_of, 0)])  # s
-        propagator_settings_list = [benchmark_propagator_settings]
+        first_benchmark_step_size = np.array([benchmark_step_size])  # s
         if not benchmark_initial_state.any():
             return -1
-        propagator_settings_list[0].initial_states = benchmark_initial_state
+        benchmark_propagator_settings.initial_states = benchmark_initial_state
     elif benchmark_case == 2:
         first_benchmark_step_size = np.array([benchmark_step_size])  # s
-        propagator_settings_list = [benchmark_propagator_settings]
         if not benchmark_initial_state.any():
             return -1
-        propagator_settings_list[0].initial_states = benchmark_initial_state
+        benchmark_propagator_settings.initial_states = benchmark_initial_state
     elif benchmark_case == 3:
         if type(benchmark_step_size) is list:
             first_benchmark_step_size = np.array(benchmark_step_size)
         else:
             first_benchmark_step_size = np.array([benchmark_step_size, benchmark_step_size / divide_step_size_of, benchmark_step_size])  # s
-        propagator_settings_list = [benchmark_propagator_settings, benchmark_propagator_settings,benchmark_propagator_settings]
         number_of_arcs = 3
-    elif benchmark_case == 4:
+    elif benchmark_case == 4:  # galileo case
         first_benchmark_step_size = np.array([benchmark_step_size])  # s
-        propagator_settings_list = [benchmark_propagator_settings]
     else:
         return Warning('Wrong case parameter chosen for the benchmark. Allowed values are integers 0, 1, 2, 3, 4')
+
     # Define benchmarks' step sizes
-
     second_benchmark_step_size = 2.0 * first_benchmark_step_size
-
 
     first_benchmark_states = dict()
     second_benchmark_states = dict()
@@ -736,20 +723,20 @@ def generate_benchmarks(benchmark_step_size,
     simulation_start_epoch2 = simulation_start_epoch
     fun_initial_state = benchmark_propagator_settings.initial_states
     fun_initial_state2 = fun_initial_state
-    for i, propagator_settings in enumerate(propagator_settings_list):
+    for i in range(number_of_arcs):
 
         if benchmark_case == 0 or (i == 0 and benchmark_case == 3):
             if termination_epoch != 0:
-                propagator_settings.termination_settings = time_termination_settings
+                benchmark_propagator_settings.termination_settings = time_termination_settings
             else:
-                propagator_settings.termination_settings = hybrid_termination_settings_arc_0
+                benchmark_propagator_settings.termination_settings = hybrid_termination_settings_arc_0
         if benchmark_case == 1 or (i == 1 and benchmark_case == 3):
             if termination_epoch != 0:
-                propagator_settings.termination_settings = time_termination_settings
+                benchmark_propagator_settings.termination_settings = time_termination_settings
             else:
-                propagator_settings.termination_settings = hybrid_part_termination_settings_arc_1
+                benchmark_propagator_settings.termination_settings = hybrid_part_termination_settings_arc_1
         if benchmark_case == 2 or (i == 2 and benchmark_case == 3):
-            propagator_settings.termination_settings = get_termination_settings(simulation_start_epoch)
+            benchmark_propagator_settings.termination_settings = get_termination_settings(simulation_start_epoch)
 
         # Create integrator settings for the first benchmark, using a fixed step size RKDP8(7) integrator
         # (the minimum and maximum step sizes are set equal, while both tolerances are set to inf)
@@ -762,12 +749,12 @@ def generate_benchmarks(benchmark_step_size,
             np.inf,
             np.inf)
 
-        propagator_settings.initial_states = fun_initial_state
+        benchmark_propagator_settings.initial_states = fun_initial_state
         print(f'Running first benchmark...   (step size: {first_benchmark_step_size[i]} s)')
         first_dynamics_simulator = numerical_simulation.SingleArcSimulator(
             bodies,
             benchmark_integrator_settings,
-            propagator_settings, print_dependent_variable_data=False)
+            benchmark_propagator_settings, print_dependent_variable_data=False)
 
         # Create integrator settings for the second benchmark in the same way
         benchmark_integrator_settings = propagation_setup.integrator.runge_kutta_variable_step_size(
@@ -779,12 +766,12 @@ def generate_benchmarks(benchmark_step_size,
             np.inf,
             np.inf)
 
-        propagator_settings.initial_states = fun_initial_state2
+        benchmark_propagator_settings.initial_states = fun_initial_state2
         print(f'Running second benchmark...   (step size: {second_benchmark_step_size[i]} s)')
         second_dynamics_simulator = numerical_simulation.SingleArcSimulator(
             bodies,
             benchmark_integrator_settings,
-            propagator_settings, print_dependent_variable_data=False)
+            benchmark_propagator_settings, print_dependent_variable_data=False)
 
 
         ### WRITE BENCHMARK RESULTS TO FILE ###
@@ -794,13 +781,10 @@ def generate_benchmarks(benchmark_step_size,
         first_benchmark_states = first_benchmark_states | first_benchmark_partial_states
         first_benchmark_dependent_variables = first_benchmark_dependent_variables | first_benchmark_partial_dependent_variables
 
-
-
         second_benchmark_partial_states = second_dynamics_simulator.state_history
         second_benchmark_partial_dependent_variables = second_dynamics_simulator.dependent_variable_history
         second_benchmark_states = second_benchmark_states | second_benchmark_partial_states
         second_benchmark_dependent_variables = second_benchmark_dependent_variables | second_benchmark_partial_dependent_variables
-
 
         final_epoch_st = list(first_benchmark_partial_dependent_variables.keys())[-1]
         print(f'First benchmark final conditions:\n'

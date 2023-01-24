@@ -3,6 +3,7 @@ import math
 import numpy.linalg as LA
 from matplotlib import pyplot as plt
 import warnings
+import os
 from typing import Callable
 
 # TUDAT imports
@@ -11,6 +12,10 @@ from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel import constants
 from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.astro import element_conversion
+from tudatpy.kernel.math import interpolators
+
+handle_functions_directory = os.path.dirname(__file__)
+
 
 # Load spice kernels
 spice_interface.load_standard_kernels()
@@ -21,8 +26,6 @@ y_axis = np.array([0., 1., 0.])
 z_axis = np.array([0., 0., 1.])
 
 # Global values of the problem
-jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
-jupiter_1bar_density = 0.16  # kg/m^3
 jupiter_mass = 1898.6e24  # kg
 jupiter_radius = spice_interface.get_average_radius('Jupiter')  #69911e3  # m
 jupiter_SOI_radius = 48.2e9  # m
@@ -71,9 +74,22 @@ jupiter_atmosphere_model = {
     'layer_4': [950.0, 1000e3, 3e-11, np.inf]
 }
 
-# for moon in galilean_moons_data.keys():
-#     g_0 = 'g_0'
-#     print(f'g_0 of {moon}: {galilean_moons_data[moon][g_0]:.3f} m/s^2')
+# Jupiter atmosphere exponential model
+jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
+jupiter_1bar_density = 0.16  # kg/m^3
+
+# Vehicle properties
+vehicle_mass = 3000  # kg
+vehicle_reference_area = 5.  # m^2
+vehicle_cd = 1.2
+vehicle_cl = 0.6
+
+# Galileo probe data
+galileo_mass = 339.  # kg
+galileo_radius = 0.632  # m
+galileo_ref_area = galileo_radius**2 * np.pi  # m^2
+galileo_cd = 1.02
+galileo_cl = 0.
 
 
 def unit_vector(vector):
@@ -140,6 +156,13 @@ def cartesian_2d_from_polar(r, theta):
     y = r * np.sin(theta)
     return x, y
 
+def cartesian_3d_from_polar(r, latitude, longitude):
+    # singularity per latitude 90 degrees
+    x = r * np.cos(latitude) * np.cos(longitude)
+    y = r * np.cos(latitude) * np.sin(longitude)
+    z = r * np.sin(latitude)
+    return x, y, z
+
 
 ########################################################################################################################
 # ASTRODYNAMICS HELPER FUNCTIONS #######################################################################################
@@ -166,7 +189,6 @@ def radius_from_true_anomaly(true_anomaly, eccentricity, sma, planet_SoI = jupit
     if e>1:
         # radius = np.where(theta < np.arccos(-1/e), sma * (1 - e**2) / (1 + e*np.cos(theta)), planet_SoI)
         radius = sma * (1 - e**2) / (1 + e*np.cos(theta))
-
     else:
         radius = sma * (1 - e**2) / (1 + e*np.cos(theta))
     return radius
@@ -701,6 +723,76 @@ def calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp: float,
 # ATMOSPHERIC ENTRY HELPER FUNCTIONS ###################################################################################
 ########################################################################################################################
 
+galileo_flight_data = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/galileo_flight_data.txt')
+flight_epoch = galileo_flight_data[:,0]
+flight_altitude = galileo_flight_data[:,1] * 1e3
+flight_velocity = galileo_flight_data[:,2] * 1e3
+flight_fpa = galileo_flight_data[:,3]
+flight_mach_no = galileo_flight_data[:,6]
+flight_cd = galileo_flight_data[:,9]
+flight_altitude_boundaries = [flight_altitude[-1], flight_altitude[0]]
+
+
+upper_atmosphere_data = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/galileo_flight_data_2.txt')
+lower_atmosphere_data = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/galileo_lower_atm_flight_data_2.txt')
+
+altitude1 = upper_atmosphere_data[:,0]
+density1 = upper_atmosphere_data[:,3]
+
+altitude2 = lower_atmosphere_data[:,1]
+density2 = lower_atmosphere_data[:,3]
+
+altitude_atmosph = np.concatenate((altitude1, altitude2))
+density_atmosph = np.concatenate((density1, density2))
+interpolation_boundaries = [altitude_atmosph[-1], altitude_atmosph[0]]  # 0=1000km  -1=-135km
+
+entries_number = len(altitude_atmosph)
+density_vector = np.array(list(density_atmosph)).reshape((entries_number,1))
+
+interpolator_settings = interpolators.lagrange_interpolation(
+    8, boundary_interpolation=interpolators.extrapolate_at_boundary)
+
+density_altitude_dictionary = dict(zip(altitude_atmosph, density_vector))
+density_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(density_altitude_dictionary,
+                                                                                          interpolator_settings)
+velocity_vector = np.array(list(flight_velocity)).reshape((len(flight_velocity),1))
+velocity_altitude_dictionary = dict(zip(flight_altitude, velocity_vector))
+velocity_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(velocity_altitude_dictionary,
+                                                                                          interpolator_settings)
+
+
+def galileo_velocity_from_altitude(h):
+    # h in meters
+    velocities = np.zeros(len(h))
+    for i in range(len(h)):
+        if flight_altitude_boundaries[0] < h[i] < flight_altitude_boundaries[1]:
+            velocities[i] = velocity_value_interpolator.interpolate(h[i])
+    return velocities
+
+def jupiter_atmosphere_density_model(h: np.ndarray):
+    selected_altitude_km = h/1e3  # km
+
+    # if selected_altitude_km > interpolation_boundaries[1]:
+    #     ...  # exponential
+    # if selected_altitude_km < interpolation_boundaries[0]:
+    #     ...  # exponential
+
+    if type(selected_altitude_km) == np.float64 or type(selected_altitude_km) == float:
+        if not interpolation_boundaries[0] < selected_altitude_km < interpolation_boundaries[1]:
+            # use altitude in meters since scale height is in meters too
+            return jupiter_1bar_density * np.exp(-h/jupiter_scale_height)
+        density_interpolated = density_value_interpolator.interpolate(selected_altitude_km)
+        return density_interpolated
+    elif type(selected_altitude_km) == np.ndarray:
+        density_values = np.zeros(len(h))
+        for i in range(len(h)):
+            if interpolation_boundaries[0] < selected_altitude_km[i] < interpolation_boundaries[1]:
+                density_values[i] = density_value_interpolator.interpolate(selected_altitude_km[i])
+            else:
+                density_values[i] = jupiter_1bar_density * np.exp(-h[i] / jupiter_scale_height)
+        return density_values
+
+
 
 def atmospheric_entry_trajectory_distance_travelled(fpa_angle: np.ndarray,
                                                     atmospheric_entry_fpa: float,
@@ -736,9 +828,6 @@ def atmospheric_entry_trajectory_altitude(fpa_angle: np.ndarray,
     return current_altitude
 
 
-# def entry_coords_to_polar_2d():
-
-
 def atmospheric_pressure_given_altitude(altitude,
                                         surface_acceleration: float,
                                         b_curvature: float,
@@ -757,8 +846,8 @@ def atmospheric_pressure_given_altitude(altitude,
 
         if altitude >= h_0:
             location_layer = layer
-        if input_density:
-            layers[layer][2] = layers[layer][2] * gas_constant * T_0
+        # if input_density:
+        #     layers[layer][2] = layers[layer][2] * gas_constant * T_0
 
     T_0 = layers[location_layer][0]
     h_0 = layers[location_layer][1]
@@ -784,22 +873,44 @@ def atmospheric_pressure_given_altitude(altitude,
     return pressure
 
 
-# def entry_model_A_matrix(v_i, v_f):
-#     A_matrix = np.array([[1, v_i, v_i**2, v_i**3, v_i**4],
-#                         [1, v_f, v_f**2, v_f**3, v_f**4],
-#                         [0, 1, 2*v_i, 3*v_i**2, 4*v_i**3],
-#                         [0, 1, 2*v_f, 3*v_f**2, 4*v_f**3],
-#                         [v_f-v_i, (v_f**2-v_i**2)/2, (v_f**3-v_i**3)/3, (v_f**4-v_i**4)/4, (v_f**5-v_i**5)/5]
-#                         ])
-#     return A_matrix
-#
-# def entry_model_b_vector():
-#     b_vec = np.array([[],
-#                       [],
-#                       [],
-#                       [],
-#                       []
-#                       ])
+def atmospheric_entry_heat_loads(density, velocity, nose_radius):
+    convective_heat_flux = 2004.2526 * 1/(np.sqrt(2*nose_radius/0.6091)) * (density/1.22522)**(0.4334341) * (velocity/3048) ** (2.9978867)
+    # convective_heat_flux = 3.6380163716698004e-08 / np.sqrt(nose_radius) * density**0.4334341 * velocity ** 2.9978867
+
+    radiative_heat_flux = 9.7632379e-40 * (2* nose_radius)**(-0.17905) * density ** 1.763827469 * velocity ** 10.993852
+    # radiative_heat_flux = 8.623716107859813e-40 * nose_radius**(-0.17905) * density ** 1.763827469 * velocity**10.993852
+
+    zero_cells = np.where(density == 0)
+    gamma_factor = 4 * radiative_heat_flux*1e3 / (density * velocity**3)
+    radiation_with_blockage = radiative_heat_flux*1e3 / (1 + 3 * gamma_factor**0.7)
+    radiation_with_blockage[zero_cells] = 0
+    return convective_heat_flux*1e3, radiative_heat_flux*1e3, radiation_with_blockage
+
+
+def galileo_heat_fluxes_park(entry_altitudes):
+    # Data from https://arc-aiaa-org.tudelft.idm.oclc.org/doi/pdf/10.2514/1.38712
+    galileo_heat_fluxes = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/heat_fluxes_galileo_low_altitudes.txt')
+    qr_boundary_layer_edge = galileo_heat_fluxes[:, 4] * 1e7  # W/m^2
+    qr_wall = galileo_heat_fluxes[:, 5] * 1e7  # W/m^2
+    qc_wall = galileo_heat_fluxes[:, 6] * 1e7  # W/m^2
+    heat_fluxes_altitudes = galileo_heat_fluxes[:, 1] * 1e3  # m
+
+    altitude_boundaries = [heat_fluxes_altitudes[-1], heat_fluxes_altitudes[0]]
+
+    # entries_length = len(heat_fluxes_altitudes)
+    heat_fluxes_vector = np.vstack((qr_boundary_layer_edge, qr_wall, qc_wall)).T  # .reshape((entries_length, 3))
+    interpolator_settings = interpolators.lagrange_interpolation(
+        8, boundary_interpolation=interpolators.extrapolate_at_boundary)
+    heatflux_altitude_dictionary = dict(zip(heat_fluxes_altitudes, heat_fluxes_vector))
+    heatflux_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(heatflux_altitude_dictionary,
+                                                                                           interpolator_settings)
+
+    flight_heat_fluxes = np.zeros((len(entry_altitudes), 3))
+    for i, curr_altitude in enumerate(entry_altitudes):
+        if altitude_boundaries[0] < curr_altitude < altitude_boundaries[1]:
+            flight_heat_fluxes[i, :] = heatflux_value_interpolator.interpolate(curr_altitude)
+
+    return flight_heat_fluxes
 
 ########################################################################################################################
 # ZERO-FINDING METHODS #################################################################################################

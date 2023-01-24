@@ -20,12 +20,20 @@ from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.math import interpolators
 
 import CapsuleEntryUtilities as Util
+# import handle_functions as hanfun
+
+show_galileo_flight = True
+plot_galileo_tabulated_data = True
+plot_heatfluxes_in_dep_var_plots = False
 
 current_dir = os.path.dirname(__file__)
+if show_galileo_flight:
+    current_dir = current_dir + '/GalileoMission'
 benchmark_output_path = current_dir + '/SimulationOutput/benchmarks/'
 
 
-see_error_wrt_benchmark = True
+see_error_wrt_benchmark = False
+
 
 # leave them like this for most script usages
 benchmark_portion_to_evaluate = 3  # 0, 1, 2, 3 (3 means all three together)
@@ -71,7 +79,13 @@ spacecraft_velocity_states = simulation_result[:,3:6]
 ########################################################################################################################
 
 drag_direction = -Util.unit_vector(spacecraft_velocity_states)
-lift_direction = Util.rotate_vectors_by_given_matrix(Util.rotation_matrix(Util.z_axis, np.pi/2), drag_direction)
+# to_fix here
+lift_direction = np.zeros((len(simulation_result[:,0]),3))
+for i in range(len(simulation_result[:,0])):
+    rotation_axis = Util.unit_vector(np.cross(simulation_result[i,0:3], simulation_result[i,3:6]))
+    lift_direction[i] = Util.rotate_vectors_by_given_matrix(Util.rotation_matrix(rotation_axis, np.pi/2), drag_direction[i,:])
+# lift_direction = Util.rotate_vectors_by_given_matrix(Util.rotation_matrix(Util.z_axis, np.pi/2), drag_direction)
+
 
 drag_acc = np.zeros((len(dependent_variables), 3))
 lift_acc = np.zeros((len(dependent_variables), 3))
@@ -90,18 +104,22 @@ entry_epochs_cells = list(np.where(drag_acc > noise_level)[0])
 
 lift_acc_mod = lift_acc[entry_epochs_cells].reshape(len(drag_acc_mod))
 
-downrange = np.zeros(len(entry_epochs_cells))
-
-for i, cell in enumerate(entry_epochs_cells):
-    current_position = simulation_result[cell, 0:3]
-
+# downrange = np.zeros(len(entry_epochs_cells))
+# for i, cell in enumerate(entry_epochs_cells):
+#     current_position = simulation_result[cell, 0:3]
 
 atmosphere_interfaces_cell_no = np.where(drag_acc > 1e-2)[0][[0,-1]]
 
 atmosphere_altitude_interfaces = altitude[atmosphere_interfaces_cell_no].reshape(2)
 atmosphere_fpa_interfaces = (flight_path_angle[atmosphere_interfaces_cell_no[0]], flight_path_angle[atmosphere_interfaces_cell_no[1]])
 
-Fig_f, axs_f = plt.subplots(6, 1, figsize=(7,9), sharex='col')
+if plot_heatfluxes_in_dep_var_plots:
+    plots_number = 7
+else:
+    plots_number = 6
+Fig_f, axs_f = plt.subplots(plots_number, 1, figsize=(7,9), sharex='col')
+
+fig_hf, ax_hf = plt.subplots(figsize=(5,6))
 
 epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(len(drag_acc_mod))
 epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
@@ -132,9 +150,83 @@ axs_f[4].set(ylabel='Density [kg/m^3]', yscale='log')
 axs_f[5].plot(epochs_plot_ae_phase, airspeed[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3)
 axs_f[5].set(xlabel='elapsed time [s]', ylabel='Airspeed [km/s]')
 
+
+if show_galileo_flight:
+    nose_radius = np.sqrt(Util.galileo_ref_area / np.pi)
+else:
+    nose_radius = np.sqrt(Util.vehicle_reference_area / np.pi)
+convective_hf, radiative_hf, radiative_hf_w_blockage = Util.atmospheric_entry_heat_loads(atmospheric_density, airspeed, nose_radius=nose_radius)
+
+if plot_heatfluxes_in_dep_var_plots:
+    axs_f[6].plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv')
+    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
+    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage')
+
+    axs_f[6].set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
+    axs_f[6].legend()
+
+ax_hf.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv')
+ax_hf.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
+ax_hf.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage', linestyle='-.')
+
+ax_hf.set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
+ax_hf.legend()
+
+
 Fig_vh, axs_vh = plt.subplots(figsize = (6,5))
 axs_vh.plot(airspeed[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, altitude[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3)
 axs_vh.set(xlabel='airspeed [km/s]', ylabel='altitude [km]')
+
+
+## HEAT FLUXES COMPARISON
+total_heat_flux = convective_hf+radiative_hf # W/m2
+total_heat_flux_w_blockage = convective_hf+radiative_hf_w_blockage # W/m2
+only_rad_w_blockage = radiative_hf_w_blockage
+
+peak_heat_flux = max(total_heat_flux)  # W/m^2
+peak_heat_flux_w_blockage = max(total_heat_flux_w_blockage)  # W/m^2
+peak_heat_flux_only_rad = max(only_rad_w_blockage)  # W/m^2
+
+integrated_heat_load = np.trapz(total_heat_flux, epochs_vector) # J/m^2
+integrated_heat_load_w_blockage = np.trapz(total_heat_flux_w_blockage, epochs_vector) # J/m^2
+integrated_heat_load_only_rad = np.trapz(only_rad_w_blockage, epochs_vector) # J/m^2
+
+
+# integrated_heat_load = 0
+# for i in range(1, len(epochs_vector)):
+#     delta_t = epochs_vector[i] - epochs_vector[i-1]
+#     integrated_heat_load = integrated_heat_load + (total_heat_flux[i] + total_heat_flux[i-1]) * delta_t / 2
+# print(integrated_heat_load)
+
+tps_mass_fraction = (0.091 * (integrated_heat_load/1e4) ** 0.51575)/100
+tps_mass_fraction_w_blockage = (0.091 * (integrated_heat_load_w_blockage/1e4) ** 0.51575)/100
+tps_mass_fraction_only_rad = (0.091 * (integrated_heat_load_only_rad/1e4) ** 0.51575)/100
+
+
+if show_galileo_flight:
+    tps_mass = Util.galileo_mass * tps_mass_fraction
+    tps_mass_w_blockage = Util.galileo_mass * tps_mass_fraction_w_blockage
+    tps_mass_only_rad = Util.galileo_mass * tps_mass_fraction_only_rad
+else:
+    tps_mass = Util.vehicle_mass * tps_mass_fraction
+    tps_mass_w_blockage = Util.vehicle_mass * tps_mass_fraction_w_blockage
+    tps_mass_only_rad = Util.vehicle_mass * tps_mass_fraction_only_rad
+
+print('WITHOUT RADIATION BLOCKAGE')
+print(f'The heat load is of {integrated_heat_load:.3f} J/m^2  or  {integrated_heat_load/1e4:.3f} J/cm^2')
+print(f'TPS mass fraction is {tps_mass_fraction:.5f}, which corresponds to a mass of {tps_mass:.3f} kg')
+print(f'Peak heat flux is {peak_heat_flux/1e3:.3f} kw/m^2')
+
+print('\nWITH RADIATION BLOCKAGE')
+print(f'The heat load is of {integrated_heat_load_w_blockage:.3f} J/m^2  or  {integrated_heat_load_w_blockage/1e4:.3f} J/cm^2')
+print(f'TPS mass fraction is {tps_mass_fraction_w_blockage:.5f}, which corresponds to a mass of {tps_mass_w_blockage:.3f} kg')
+print(f'Peak heat flux is {peak_heat_flux_w_blockage/1e3:.3f} kw/m^2')
+
+print('\nWITH JUST RADIATION BLOCKAGE')
+print(f'The heat load is of {integrated_heat_load_only_rad:.3f} J/m^2  or  {integrated_heat_load_only_rad/1e4:.3f} J/cm^2')
+print(f'TPS mass fraction is {tps_mass_fraction_only_rad:.5f}, which corresponds to a mass of {tps_mass_only_rad:.3f} kg')
+print(f'Peak heat flux is {peak_heat_flux_only_rad/1e3:.3f} kw/m^2')
+
 
 
 ########################################################################################################################
@@ -170,7 +262,7 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
         conjug = ','
 
     states_dict[states_names[i]] = curr_orbital_energy
-    print(f'The {states_names[i]} orbit has eccentricity {curr_eccentricity:.5f}{conjug} specific energy {curr_orbital_energy / 1e3:.3f} kJ/m' + add_string)
+    print(f'The {states_names[i]} orbit has eccentricity {curr_eccentricity:.5f}{conjug} specific energy {curr_orbital_energy / 1e3:.3f} kJ/kg' + add_string)
 
     if current_state_to_eval == 0:
         initial_orbit_pericenter = curr_orbit_sma * (1-curr_eccentricity)
@@ -183,11 +275,19 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
         print(f'Target pericenter velocity: {target_velocity / 1e3:.3f} km/s   (target orbit eccentricity: 0.98)')
         print(f'The required delta v to impart at pericenter to have eccentricity of 0.98 is of: {delta_v/1e3:.3f} km/s')
 
+        test_specific_impulse = 318  # s
+        g_0 = 9.80665  # m/s^2
+        mass_fraction_mf_mi = np.exp(-delta_v/(g_0*test_specific_impulse))
+        vehicle_mass = Util.vehicle_mass
+        final_mass = mass_fraction_mf_mi * vehicle_mass
+        propellant_mass = vehicle_mass - final_mass
+        print(f'Which corresponds to a propellant mass of {propellant_mass:.3f} kg, for a propellant mass fraction of {propellant_mass/vehicle_mass:.5f}')
+
 v_initial = Util.velocity_from_energy(states_dict['initial'], initial_orbit_pericenter)
 v_final = Util.velocity_from_energy(states_dict['final'], initial_orbit_pericenter)
 delta_v2 = v_initial - v_final
 delta_E = states_dict['final'] - states_dict['initial']
-print(f'\nThe difference in orbital specific energy is {abs(delta_E/1e3):.3f} kJ/m')
+print(f'\nThe difference in orbital specific energy is {abs(delta_E/1e3):.3f} kJ/kg')
 print(f'The delta v of the aerocapture is {delta_v2/1e3:.3f} km/s')
 
 ########################################################################################################################
@@ -351,5 +451,102 @@ ax3[1].plot(epochs_plot, altitude)
 # ax4.plot(bench_error[:,0], bench_position_error)
 # ax4.set_yscale('log')
 # ax4.set_title('Benchmark error')
+
+########################################################################################################################
+# GALILEO TABULATED DATA ###############################################################################################
+########################################################################################################################
+
+if plot_galileo_tabulated_data:
+    galileo_flight_data = np.loadtxt(current_dir +'/galileo_flight_data.txt')
+    upper_atmosphere_data = np.loadtxt(current_dir + '/galileo_flight_data_2.txt')
+
+
+    flight_epoch = galileo_flight_data[:,0]
+    flight_altitude = galileo_flight_data[:,1] *1e3
+    flight_velocity = galileo_flight_data[:,2] * 1e3
+    flight_fpa = galileo_flight_data[:,3]
+    flight_mach_no = galileo_flight_data[:,6]
+    flight_cd = galileo_flight_data[:,9]
+
+    entry_altitudes = altitude[entry_epochs_cells].reshape(len(drag_acc_mod))
+    flight_heat_fluxes = Util.galileo_heat_fluxes_park(entry_altitudes)
+
+    flight_density = Util.jupiter_atmosphere_density_model(flight_altitude)
+
+    flight_drag = 0.5 * flight_cd * flight_density * Util.galileo_ref_area * (flight_velocity)**2 / Util.galileo_mass
+
+    # epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(len(drag_acc_mod))
+    # epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
+
+    starting_cell = 15
+    time_offset = 1.137
+
+    flight_epochs_plot = flight_epoch[starting_cell:] - flight_epoch[starting_cell] + time_offset
+    linestyle_string='--'
+
+    axs_f[0].plot(flight_epochs_plot, flight_drag[starting_cell:], color='grey', label='galileo drag', linestyle=linestyle_string)
+    axs_f[0].legend()
+
+    axs_f[1].plot(flight_epochs_plot, flight_altitude[starting_cell:] / 1e3, color='grey', linestyle=linestyle_string)
+    # axs_f[1].axhline(y=atmosphere_altitude_interfaces[0] / 1e3, color='grey', linestyle='dotted')
+    # axs_f[1].axhline(y=atmosphere_altitude_interfaces[1] / 1e3, color='grey', linestyle='dotted')
+    # axs_f[1].set(ylabel='altitude [km]')
+
+    axs_f[2].plot(flight_epochs_plot, flight_fpa[starting_cell:], color='grey', linestyle=linestyle_string)
+    # axs_f[2].set(ylabel='f.p.a. [deg]')
+
+    axs_f[3].plot(flight_epochs_plot, flight_mach_no[starting_cell:], color='grey', linestyle=linestyle_string)
+    # axs_f[3].set(ylabel='Mach number [-]')
+
+    axs_f[4].plot(flight_epochs_plot, flight_density[starting_cell:], color='grey', linestyle=linestyle_string)
+    # axs_f[4].set(ylabel='Density [kg/m^3]', yscale='log')
+
+    axs_f[5].plot(flight_epochs_plot, flight_velocity[starting_cell:] / 1e3, color='grey', linestyle=linestyle_string)
+    # axs_f[5].set(xlabel='elapsed time [s]', ylabel='Airspeed [km/s]')
+
+    if plot_heatfluxes_in_dep_var_plots:
+        axs_f[6].plot(epochs_plot_ae_phase, flight_heat_fluxes[:,0] / 1e3, label='rad_bl_e_gal')
+        axs_f[6].plot(epochs_plot_ae_phase, flight_heat_fluxes[:,1] / 1e3, label='rad_w_gal')
+        axs_f[6].plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 2] / 1e3, label='conv_gal')
+        # axs_f[6].set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
+        axs_f[6].legend()
+
+    ax_hf.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 0] / 1e3, label='rad_bl_e_gal')
+    ax_hf.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 1] / 1e3, label='rad_w_gal')
+    ax_hf.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 2] / 1e3, label='conv_gal')
+    # axs_f[6].set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
+    ax_hf.legend()
+
+    # fig_hf, ax_hf = plt.subplots(figsize=(6,5))
+    # ax_hf = copy(axs_f[6])
+
+
+    Fig_gm, ax_gm = plt.subplots(3, 1, figsize=(6,8), sharex='col')
+    # epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
+
+    flight_data_list = [flight_velocity[starting_cell:], flight_altitude[starting_cell:], np.deg2rad(flight_fpa[starting_cell:])]
+    dep_var_data = [airspeed, altitude, flight_path_angle]
+    y_labels = ['velocity error [km/s]', 'altitude error [km]', 'fpa error [deg]']
+    data_error_scaling_factor = [1e-3, 1e-3, 180/np.pi]
+
+    for k, data_to_interpolate in enumerate(dep_var_data):
+        interpolator_settings = interpolators.lagrange_interpolation(
+            8, )
+
+        entries_number = len(data_to_interpolate)
+        data_to_interpolate_vector = np.array(list(data_to_interpolate)).reshape((entries_number, 1))
+        data_to_interpolate_dict = dict(zip(epochs_plot_ae_phase, data_to_interpolate_vector))
+        data_to_interpolate_interpolator = interpolators.create_one_dimensional_vector_interpolator(data_to_interpolate_dict,
+                                                                                                    interpolator_settings)
+
+        data_to_interpolate_interpolated = np.zeros(len(flight_epochs_plot))
+        for i in range(len(flight_epochs_plot)):
+            data_to_interpolate_interpolated[i] = data_to_interpolate_interpolator.interpolate(flight_epochs_plot[i])
+        data_error = abs(data_to_interpolate_interpolated - flight_data_list[k])
+
+        processed_data_error = data_error * data_error_scaling_factor[k]
+        ax_gm[k].plot(flight_epochs_plot, processed_data_error)
+        ax_gm[k].set_ylabel(y_labels[k])
+    ax_gm[-1].set_xlabel('elapsed time [s]')
 
 plt.show()

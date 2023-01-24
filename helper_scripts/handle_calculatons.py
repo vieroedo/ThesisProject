@@ -2,7 +2,7 @@ import numpy as np
 from tudatpy.kernel import constants
 from tudatpy.kernel.interface import spice_interface
 from handle_functions import *
-
+import os
 
 #### r_SOI calculation ####################################################
 r_SOI = dict()
@@ -34,3 +34,27 @@ surface_gravity = central_body_gravitational_parameter / jupiter_radius**2
 average_temperature = scale_height * surface_gravity / gas_constant
 
 print(f'Jupiter atmosphere avg temp: {average_temperature} K')
+
+current_dir = os.path.dirname(__file__)
+
+
+lol = np.loadtxt(current_dir + '/galileo_flight_data.txt')
+
+print(jupiter_atmosphere_density_model(460e3))
+print('lol')
+
+altitude_lol = np.linspace(0,1e4*1e3,10000)
+density_lol = jupiter_atmosphere_density_model(altitude_lol)
+plt.plot(altitude_lol/1e3,density_lol)
+plt.yscale('log')
+plt.xscale('log')
+plt.show()
+
+convective_hf, radiative_hf, radiative_hf_w_blockage = atmospheric_entry_heat_loads(density_lol, galileo_velocity_from_altitude(altitude_lol), nose_radius=galileo_radius)
+
+plt.plot(altitude_lol/1e3,convective_hf, label='conv')
+plt.plot(altitude_lol/1e3,radiative_hf, label='rad')
+plt.plot(altitude_lol/1e3,radiative_hf_w_blockage, label='rad_w_blockage')
+plt.yscale('log')
+plt.legend()
+plt.show()

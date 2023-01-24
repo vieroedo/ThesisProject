@@ -24,14 +24,15 @@ import CapsuleEntryUtilities as Util
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
+fly_galileo = True
+choose_model = 0
 
-use_benchmark = True
+
+use_benchmark = False
 # if use_benchmark is True ####################################################
 generate_benchmarks = True
 
-
 silence_benchmark_related_plots = True
-
 
 # Set dedicated step sizes for case 3
 dedicated_step_sizes = [8e3, 4, 8e3]
@@ -44,6 +45,9 @@ global_truncation_error_power = 8  # 7
 
 current_dir = os.path.dirname(__file__)
 
+if fly_galileo:
+    current_dir = current_dir + '/GalileoMission'
+
 # Load spice kernels
 spice_interface.load_standard_kernels()
 
@@ -55,8 +59,8 @@ spice_interface.load_standard_kernels()
 #                     0.4559143679738996]
 
 # Atmospheric entry conditions
-atmospheric_entry_interface_altitude = 400e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -2.1  # degrees
+atmospheric_entry_interface_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+flight_path_angle_at_atmosphere_entry = -3 # degrees
 
 
 ###########################################################################
@@ -89,11 +93,30 @@ body_settings = environment_setup.get_default_body_settings(
     global_frame_orientation)
 
 # Add Jupiter exponential atmosphere
-jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
-jupiter_1bar_density = 0.16  # kg/m^3
-density_scale_height = jupiter_scale_height
-density_at_zero_altitude = jupiter_1bar_density
-body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.exponential(
+density_scale_height = Util.jupiter_scale_height
+density_at_zero_altitude = Util.jupiter_1bar_density
+
+molecular_weight = 2.22  # kg/kmol
+gas_constant = 8314.32 / molecular_weight
+g_0 = Util.central_body_gravitational_parameter / Util.jupiter_radius ** 2
+constant_temperature = density_scale_height * g_0 / gas_constant
+
+
+# def density_function(h):
+#     b_curv = 2/Util.jupiter_radius
+#     density = Util.atmospheric_pressure_given_altitude(h, g_0,b_curv, gas_constant,Util.jupiter_atmosphere_model,input_density=False)
+#     return density
+# print(density_function(450e3))
+
+specific_heats_ratio = 1.5
+if choose_model == 3 or choose_model == 0:
+    body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.custom_constant_temperature(
+        Util.jupiter_atmosphere_density_model,
+        constant_temperature,
+        gas_constant,
+        specific_heats_ratio )
+else:
+    body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.exponential(
         density_scale_height, density_at_zero_altitude)
 
 # Maybe add it, yes, but later, cs now jupiter's already rotating
@@ -116,12 +139,20 @@ bodies = environment_setup.create_system_of_bodies(body_settings)
 bodies.create_empty_body('Capsule')
 
 # Set mass of vehicle
-bodies.get_body('Capsule').mass = 2000  # kg
+if fly_galileo:
+    bodies.get_body('Capsule').mass = Util.galileo_mass  # kg
+else:
+    bodies.get_body('Capsule').mass = Util.vehicle_mass  # kg
 
 # Create aerodynamic coefficients interface (drag and lift only)
-reference_area = 5.  # m^2
-drag_coefficient = 1.2
-lift_coefficient = 0.6
+if fly_galileo:
+    reference_area = Util.galileo_ref_area  # m^2
+    drag_coefficient = Util.galileo_cd
+    lift_coefficient = Util.galileo_cl
+else:
+    reference_area = Util.vehicle_reference_area  # m^2
+    drag_coefficient = Util.vehicle_cd
+    lift_coefficient = Util.vehicle_cl
 aero_coefficient_settings = environment_setup.aerodynamic_coefficients.constant(
         reference_area, [drag_coefficient, 0.0, lift_coefficient])  # [Drag, Side-force, Lift]
 environment_setup.add_aerodynamic_coefficient_interface(
@@ -135,6 +166,7 @@ environment_setup.add_aerodynamic_coefficient_interface(
 # Retrieve termination settings
 termination_settings = Util.get_termination_settings(simulation_start_epoch,
                                                      maximum_duration,
+                                                     galileo_termination_settings=fly_galileo
                                                      )
 # Retrieve dependent variables to save
 dependent_variables_to_save = Util.get_dependent_variable_save_settings()
@@ -153,7 +185,9 @@ current_propagator = propagation_setup.propagator.unified_state_model_quaternion
 settings_index = -4
 # Create integrator settings
 current_integrator_settings = Util.get_integrator_settings(settings_index,
-                                                           simulation_start_epoch)
+                                                           simulation_start_epoch,
+                                                           galileo_integration_settings=fly_galileo,
+                                                           galileo_step_size=0.1)
 
 
 if use_benchmark:
@@ -173,16 +207,20 @@ if use_benchmark:
 
     benchmark_info = dict()
 
-
     benchmark_step_size = dedicated_step_sizes
+
+    if fly_galileo:
+        benchmark_step_size = 0.01
 
     t0 = pt()
     propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
                                                        atmospheric_entry_interface_altitude,
                                                        bodies,
-                                                       Util.get_termination_settings(simulation_start_epoch),
+                                                       Util.get_termination_settings(simulation_start_epoch, galileo_termination_settings=fly_galileo),
                                                        dependent_variables_to_save,
-                                                       current_propagator)
+                                                       current_propagator,
+                                                       galileo_propagator_settings=fly_galileo,
+                                                       model_choice=choose_model)
 
     if generate_benchmarks:
 
@@ -192,7 +230,8 @@ if use_benchmark:
                                                                             bodies,
                                                                             propagator_settings,
                                                                             are_dependent_variables_to_save,
-                                                                            benchmark_output_path)
+                                                                            benchmark_output_path,
+                                                                            galileo_mission=fly_galileo)
         benchmark_info['step_sizes'] = benchmark_step_size
 
     else:
@@ -269,9 +308,10 @@ if use_benchmark:
 current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
                                                            atmospheric_entry_interface_altitude,
                                                            bodies,
-                                                           Util.get_termination_settings(simulation_start_epoch),
+                                                           Util.get_termination_settings(simulation_start_epoch, galileo_termination_settings=fly_galileo),
                                                            dependent_variables_to_save,
-                                                           current_propagator)
+                                                           current_propagator,
+                                                           galileo_propagator_settings=fly_galileo)
 
 # Create Shape Optimization Problem object
 dynamics_simulator = numerical_simulation.SingleArcSimulator(
