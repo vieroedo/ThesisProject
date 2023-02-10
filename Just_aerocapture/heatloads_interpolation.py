@@ -34,7 +34,7 @@ if use_rarefield_data:
 if use_rarefield_data:
     #nose_rad, density, velocity, heatflux
     # scaling_values = np.array([1e2, 1e10, 1e0, 1e0])
-    scaling_values = np.array([1e0, 1e0, 1e0, 1e0])
+    # scaling_values = np.array([1e0, 1e0, 1e0, 1e0])
     rarefield_heatflux = rarefield_heatloads_data[:, 3] / 1e3 # kW/m^2
     rarefield_density = rarefield_flight_data[:, 6]  # kg/m^3
     rarefield_altitude = rarefield_flight_data[:, 1]  # km
