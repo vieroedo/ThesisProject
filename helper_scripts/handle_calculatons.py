@@ -50,11 +50,24 @@ plt.yscale('log')
 plt.xscale('log')
 plt.show()
 
-convective_hf, radiative_hf, radiative_hf_w_blockage = atmospheric_entry_heat_loads(density_lol, galileo_velocity_from_altitude(altitude_lol), nose_radius=galileo_radius)
+convective_hf, radiative_hf, radiative_hf_w_blockage = atmospheric_entry_heat_loads_correlations(density_lol,
+                                                                                                 galileo_velocity_from_altitude(
+                                                                                                     altitude_lol),
+                                                                                                 nose_radius=galileo_radius)
 
 plt.plot(altitude_lol/1e3,convective_hf, label='conv')
 plt.plot(altitude_lol/1e3,radiative_hf, label='rad')
 plt.plot(altitude_lol/1e3,radiative_hf_w_blockage, label='rad_w_blockage')
 plt.yscale('log')
 plt.legend()
+plt.show()
+
+
+x_data = np.linspace(-2,8,1000)
+
+# y_data = 1 - 0.72 * x_data + 0.13 * x_data**2
+y_data = ( 2.344/x_data * (np.sqrt(x_data+1)-1) ) **1.063
+
+plt.plot(x_data, y_data)
+plt.title('parabola B')
 plt.show()
