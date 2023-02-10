@@ -4,6 +4,7 @@ import scipy as sp
 from handle_functions import *
 current_dir = os.path.dirname(__file__)
 
+
 def calculate_heat_flux(independent_variables, c1, m, n):
     # independent_variables = [nose_radius, density, velocity]
     nose_radius = independent_variables[0]
@@ -12,6 +13,9 @@ def calculate_heat_flux(independent_variables, c1, m, n):
     heat_flux = c1 * (nose_radius**-0.5) * density**m * velocity**n
     # hot wall correction can be neglected in hypersonic flow
     return heat_flux
+
+
+remove_values = -7  # Used -7 for writing the thesis report!!
 
 rarefield_flight_data = np.loadtxt(current_dir + '/GalileoMission/rarefield_simulation_data/galileo_rarefield_entry_rarefield_data.txt')
 rarefield_heatloads_data = np.loadtxt(current_dir + '/GalileoMission/rarefield_simulation_data/galileo_rarefield_entry_simulation_heatloads.txt')
@@ -40,6 +44,7 @@ total_qc_data = np.concatenate((rarefield_heatflux, simulated_qc))  # kW/m^2
 nose_radius = galileo_radius * np.ones(len(total_qc_data))  # m
 
 scaling_vector = np.array([1/nose_radius[0], 1/total_densities_data.max(), 1/total_velocities_data.max(), 1/total_qc_data.max()])
+# scaling_vector = np.ones(4)
 
 x_values_unscaled = np.vstack((nose_radius, total_densities_data, total_velocities_data))
 x_values = (x_values_unscaled.T * scaling_vector[0:3]).T
@@ -49,7 +54,7 @@ data_x = total_altitudes_data
 data_y = total_qc_data
 
 
-solution = sp.optimize.curve_fit(calculate_heat_flux, x_values, y_values)
+solution = sp.optimize.curve_fit(calculate_heat_flux, x_values[:,:remove_values], y_values[:remove_values])
 
 parameters = solution[0]
 
@@ -65,10 +70,21 @@ for i in range(len(altitudes)):
 calc_heatflux = calc_heatflux / scaling_vector[3]
 
 print(parameters)
-plt.plot(data_x, data_y, label='nominal', linestyle='--')
-plt.scatter(data_x, data_y, label='nominal', linestyle='--')
-plt.plot(altitudes, calc_heatflux, label='calculated')
-plt.yscale('log')
-plt.ylabel('q_c [kW/m^2]')
+print(scaling_vector)
+fig, ax = plt.subplots(figsize=(6,5), )
+data_y = data_y/1e3
+calc_heatflux = calc_heatflux/1e3
+
+# ax.plot(data_x[:remove_values], data_y[:remove_values], label='nominal', linestyle='--')
+ax.scatter(data_x[:remove_values], data_y[:remove_values], label='data points', color='steelblue')
+if not remove_values == None:
+    ax.scatter(data_x[remove_values:], data_y[remove_values:], label='unused data', facecolors='none', edgecolors='grey', linestyle='--')
+    ax.axvline(x=150, color='grey', linestyle='--', linewidth=1.2, label='altitude limit of validity')
+ax.plot(altitudes, calc_heatflux, label='curve fit', color='orange')
+# ax.set_yscale('log')
+ax.set_ylabel(r'$q_c$ [MW/m$^2$]')
+ax.set_xlabel('Altitude [km]')
 plt.legend()
+plt.tight_layout()
 plt.show()
+
