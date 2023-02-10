@@ -22,6 +22,9 @@ from tudatpy.kernel.math import interpolators
 import CapsuleEntryUtilities as Util
 # import handle_functions as hanfun
 
+# Make everything big
+plt.rc('font', size=15)
+
 show_galileo_flight = True
 plot_galileo_tabulated_data = True
 plot_heatfluxes_in_dep_var_plots = False
@@ -148,26 +151,55 @@ axs_f[4].plot(epochs_plot_ae_phase, atmospheric_density[entry_epochs_cells].resh
 axs_f[4].set(ylabel='Density [kg/m^3]', yscale='log')
 
 axs_f[5].plot(epochs_plot_ae_phase, airspeed[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3)
-axs_f[5].set(xlabel='elapsed time [s]', ylabel='Airspeed [km/s]')
+axs_f[5].set(ylabel='Airspeed [km/s]')
+
+if not plot_heatfluxes_in_dep_var_plots:
+    axs_f[5].set(xlabel='elapsed time [s]')
 
 
 if show_galileo_flight:
     nose_radius = np.sqrt(Util.galileo_ref_area / np.pi)
 else:
     nose_radius = np.sqrt(Util.vehicle_reference_area / np.pi)
-convective_hf, radiative_hf, radiative_hf_w_blockage = Util.atmospheric_entry_heat_loads(atmospheric_density, airspeed, nose_radius=nose_radius)
+convective_hf, radiative_hf, radiative_hf_w_blockage = Util.atmospheric_entry_heat_loads_correlations(
+    atmospheric_density, airspeed, nose_radius=nose_radius)
+
+
+# convective_hf_w_blockage = Util.heat_flux_with_blockage_from_blowing(radiative_hf_w_blockage+convective_hf, convective_hf, atmospheric_density, airspeed, )
+convective_hf_w_blockage = Util.convective_heat_flux_with_blockage(convective_hf, atmospheric_density, airspeed)#), total_wall_hfx=convective_hf+radiative_hf)
+radiative_hf_wall = Util.convective_heat_flux_with_blockage(radiative_hf_w_blockage, atmospheric_density, airspeed)
+
+
+# radius, density, velocity, heat_flux
+scaling_vector = np.array([1.58227848e+00, 4.92610837e+02, 2.09863589e-02, 6.49350649e-06])
+
+custom_convective_hf = Util.custom_atm_convective_hfx_correlation(
+    atmospheric_density*scaling_vector[1], airspeed*scaling_vector[2]/1e3, radius=nose_radius*scaling_vector[0])
+custom_convective_hf = custom_convective_hf/scaling_vector[3] # kW/m^2
+custom_convective_hf = custom_convective_hf*1e3  # W/m^2
+
 
 if plot_heatfluxes_in_dep_var_plots:
     axs_f[6].plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv')
+    axs_f[6].plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_w_blockage')
     axs_f[6].plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
     axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage')
+    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_wall_hfx')
+
+    axs_f[6].plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_custom')
+
 
     axs_f[6].set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
     axs_f[6].legend()
 
 ax_hf.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv')
+ax_hf.plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_w_blockage')
 ax_hf.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
 ax_hf.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage', linestyle='-.')
+ax_hf.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_wall_hfx')
+
+ax_hf.plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_custom', linestyle='-')
+
 
 ax_hf.set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
 ax_hf.legend()
@@ -180,8 +212,8 @@ axs_vh.set(xlabel='airspeed [km/s]', ylabel='altitude [km]')
 
 ## HEAT FLUXES COMPARISON
 total_heat_flux = convective_hf+radiative_hf # W/m2
-total_heat_flux_w_blockage = convective_hf+radiative_hf_w_blockage # W/m2
-only_rad_w_blockage = radiative_hf_w_blockage
+total_heat_flux_w_blockage = convective_hf_w_blockage+radiative_hf_wall # W/m2
+only_rad_w_blockage = radiative_hf_wall
 
 peak_heat_flux = max(total_heat_flux)  # W/m^2
 peak_heat_flux_w_blockage = max(total_heat_flux_w_blockage)  # W/m^2
@@ -217,12 +249,12 @@ print(f'The heat load is of {integrated_heat_load:.3f} J/m^2  or  {integrated_he
 print(f'TPS mass fraction is {tps_mass_fraction:.5f}, which corresponds to a mass of {tps_mass:.3f} kg')
 print(f'Peak heat flux is {peak_heat_flux/1e3:.3f} kw/m^2')
 
-print('\nWITH RADIATION BLOCKAGE')
+print('\nWITH RADIATION BLOCKAGE AND BLOWING (WALL CONDITIONS)')
 print(f'The heat load is of {integrated_heat_load_w_blockage:.3f} J/m^2  or  {integrated_heat_load_w_blockage/1e4:.3f} J/cm^2')
 print(f'TPS mass fraction is {tps_mass_fraction_w_blockage:.5f}, which corresponds to a mass of {tps_mass_w_blockage:.3f} kg')
 print(f'Peak heat flux is {peak_heat_flux_w_blockage/1e3:.3f} kw/m^2')
 
-print('\nWITH JUST RADIATION BLOCKAGE')
+print('\nWITH JUST RADIATION WALL COND')
 print(f'The heat load is of {integrated_heat_load_only_rad:.3f} J/m^2  or  {integrated_heat_load_only_rad/1e4:.3f} J/cm^2')
 print(f'TPS mass fraction is {tps_mass_fraction_only_rad:.5f}, which corresponds to a mass of {tps_mass_only_rad:.3f} kg')
 print(f'Peak heat flux is {peak_heat_flux_only_rad/1e3:.3f} kw/m^2')
@@ -517,8 +549,29 @@ if plot_galileo_tabulated_data:
     # axs_f[6].set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
     ax_hf.legend()
 
-    # fig_hf, ax_hf = plt.subplots(figsize=(6,5))
-    # ax_hf = copy(axs_f[6])
+    # PLOT PARK RESULTS
+    fig_park, ax_park = plt.subplots()
+    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 0] / (1e3*1e4), label=r'$q_{R_e}$')
+    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 1] / (1e3*1e4), label=r'$q_{R_w}$')
+    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 2] / (1e3*1e4), label=r'$q_{C_w}$')
+    ax_park.set(xlabel='Flight time [s]', ylabel=r'Heat fluxes [kW/cm$^2$]')
+    ax_park.set(xlim=[40.6,58.5])
+    plt.tight_layout()
+    ax_park.legend()
+
+
+    # park heat load:
+    total_heat_flux_park = flight_heat_fluxes[:, 1] + flight_heat_fluxes[:, 2]  # W/m2
+    peak_heat_flux_park = max(total_heat_flux_park)  # W/m^2
+    integrated_heat_load_park = np.trapz(total_heat_flux_park, epochs_plot_ae_phase)  # J/m^2
+    tps_mass_fraction_park = (0.091 * (integrated_heat_load_park / 1e4) ** 0.51575) / 100
+    tps_mass_park = Util.galileo_mass * tps_mass_fraction_park
+
+    print('\nPARK RESULTS')
+    print(f'The heat load is of {integrated_heat_load_park:.3f} J/m^2  or  {integrated_heat_load_park / 1e4:.3f} J/cm^2')
+    print(f'TPS mass fraction is {tps_mass_fraction_park:.5f}, which corresponds to a mass of {tps_mass_park:.3f} kg')
+    print(f'Peak heat flux is {peak_heat_flux_park / 1e3:.3f} kw/m^2')
+
 
 
     Fig_gm, ax_gm = plt.subplots(3, 1, figsize=(6,8), sharex='col')
