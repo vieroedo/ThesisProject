@@ -88,7 +88,7 @@ vehicle_cl = 0.6
 galileo_mass = 339.  # kg
 galileo_radius = 0.632  # m
 galileo_ref_area = galileo_radius**2 * np.pi  # m^2
-galileo_cd = 1.02
+galileo_cd = 1.05 #1.02
 galileo_cl = 0.
 
 
@@ -873,7 +873,9 @@ def atmospheric_pressure_given_altitude(altitude,
     return pressure
 
 
-def atmospheric_entry_heat_loads(density, velocity, nose_radius):
+def atmospheric_entry_heat_loads_correlations(density, velocity, nose_radius):
+    '''obtained from https://adsabs.harvard.edu/pdf/2006ESASP.631E...6R'''
+
     convective_heat_flux = 2004.2526 * 1/(np.sqrt(2*nose_radius/0.6091)) * (density/1.22522)**(0.4334341) * (velocity/3048) ** (2.9978867)
     # convective_heat_flux = 3.6380163716698004e-08 / np.sqrt(nose_radius) * density**0.4334341 * velocity ** 2.9978867
 
@@ -885,6 +887,53 @@ def atmospheric_entry_heat_loads(density, velocity, nose_radius):
     radiation_with_blockage = radiative_heat_flux*1e3 / (1 + 3 * gamma_factor**0.7)
     radiation_with_blockage[zero_cells] = 0
     return convective_heat_flux*1e3, radiative_heat_flux*1e3, radiation_with_blockage
+
+
+def heat_flux_with_blockage_from_blowing(total_wall_hfx, single_hf, density, velocity):
+    # chapter 5.1.1 of https://doi.org/10.1016/j.actaastro.2012.06.016
+
+    k = 2.7659985259098415e-28 # from interpolation
+    dm_dt = k * density * velocity ** 6.9
+
+    # hot wall correction can be neglected in hypersonic flow (T_inf >> T_wall)
+    B = dm_dt * velocity**2 / (2 * total_wall_hfx)
+
+    investigated_hfx_w_blockage = (1 - 0.72 * B + 0.13 * B**2) * single_hf
+    return investigated_hfx_w_blockage
+
+
+def convective_heat_flux_with_blockage(convective_hfx, density, velocity, total_wall_hfx=None):
+    # chapter 2 of https://doi.org/10.1016/j.actaastro.2012.06.016
+
+    k = 2.7659985259098415e-28 # from interpolation
+    dm_dt = k * density * velocity ** 6.9
+
+    # hot wall correction can be neglected in hypersonic flow (T_inf >> T_wall)
+    if type(total_wall_hfx) == np.ndarray:
+        zero_cells = np.where(total_wall_hfx == 0)
+        blowing_coefficient = dm_dt * velocity ** 2 / (2 * total_wall_hfx)
+    else:
+        zero_cells = np.where(convective_hfx == 0)
+        blowing_coefficient = dm_dt * velocity ** 2 / (2 * convective_hfx)
+    blowing_coefficient[zero_cells] = 0
+
+    b_coeff_null_cells = np.where(blowing_coefficient == 0)
+    blockage_factor = ( 2.344/blowing_coefficient * (np.sqrt(blowing_coefficient+1)-1) ) **1.063
+    blockage_factor[b_coeff_null_cells] = 1.18378  # value of the function for blowing_coefficient = 0
+    conv_hfx_w_blockage = blockage_factor * convective_hfx
+    return conv_hfx_w_blockage
+
+
+def custom_atm_convective_hfx_correlation(density, velocity, radius, return_scaling_vector = False):
+    # correlation obtained by interpolation of rarefield and low altitudes heat flux data
+    c1, m, n = [4.13377754, 0.51467325, 5.66475942]
+    scaling_vector = np.array([1.58227848e+00, 4.92610837e+02, 2.09863589e-02, 6.49350649e-06])
+
+    heat_flux = c1 * (radius ** -0.5) * density ** m * velocity ** n
+    # hot wall correction can be neglected in hypersonic flow (T_inf >> T_wall)
+    if return_scaling_vector:
+        return heat_flux, scaling_vector
+    return heat_flux
 
 
 def galileo_heat_fluxes_park(entry_altitudes):
