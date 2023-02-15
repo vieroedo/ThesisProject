@@ -268,11 +268,11 @@ beta_parameter = 1 / scale_height
 density_at_atmosphere_entry = reference_density * np.exp(-atmospheric_entry_altitude*beta_parameter) # assumed exp model
 
 # Capsule properties and coefficients
-lift_coefficient = 0.6  # set to 0.6 to make L/D = 0.5 -> https://www.researchgate.net/publication/238790363_Aerodynamic_Control_on_a_Lunar_Return_Capsule_using_Trim-Flaps
-drag_coefficient = 1.2
+lift_coefficient = vehicle_cl  # set to 0.6 to make L/D = 0.5 -> https://www.researchgate.net/publication/238790363_Aerodynamic_Control_on_a_Lunar_Return_Capsule_using_Trim-Flaps
+drag_coefficient = vehicle_cd
 lift_over_drag_ratio = lift_coefficient/drag_coefficient
-capsule_mass = 2000  # kg
-capsule_surface = 2  #12.5  # m^2
+capsule_mass = vehicle_mass  # kg
+capsule_surface = vehicle_reference_area  #12.5  # m^2
 
 capsule_weight = capsule_mass * atmospheric_entry_g_acc
 
@@ -647,7 +647,19 @@ ax.set_ylabel('y (m)')
 ax.set_zlabel('z (m)')
 ax.set_title('Jupiter full arrival trajectory')
 
-xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
+lines = ax.get_lines()
+last_line = lines[-1]
+
+# Get the data for the last line
+line_data = last_line.get_data_3d()
+
+# Get the data limits for the last line
+x_data_limits = line_data[0].min(), line_data[0].max()
+y_data_limits = line_data[1].min(), line_data[1].max()
+z_data_limits = line_data[2].min(), line_data[2].max()
+
+xyzlim = np.array([x_data_limits, y_data_limits, z_data_limits]).T
+# xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
 XYZlim = np.asarray([min(xyzlim[0]), max(xyzlim[1])])
 ax.set_xlim3d(XYZlim)
 ax.set_ylim3d(XYZlim)
