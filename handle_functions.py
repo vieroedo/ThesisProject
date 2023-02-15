@@ -1,7 +1,9 @@
+import numpy
 import numpy as np
 import math
 import numpy.linalg as LA
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import warnings
 import os
 from typing import Callable
@@ -81,6 +83,7 @@ jupiter_1bar_density = 0.16  # kg/m^3
 # Vehicle properties
 vehicle_mass = 3000  # kg
 vehicle_reference_area = 5.  # m^2
+vehicle_radius = np.sqrt(vehicle_reference_area/np.pi)
 vehicle_cd = 1.2
 vehicle_cl = 0.6
 
@@ -769,6 +772,12 @@ def galileo_velocity_from_altitude(h):
             velocities[i] = velocity_value_interpolator.interpolate(h[i])
     return velocities
 
+
+def jupiter_atmosphere_exponential(altitude):
+    density = jupiter_1bar_density * np.exp(-altitude/jupiter_scale_height)
+    return density
+
+
 def jupiter_atmosphere_density_model(h: np.ndarray):
     selected_altitude_km = h/1e3  # km
 
@@ -902,26 +911,26 @@ def heat_flux_with_blockage_from_blowing(total_wall_hfx, single_hf, density, vel
     return investigated_hfx_w_blockage
 
 
-def convective_heat_flux_with_blockage(convective_hfx, density, velocity, total_wall_hfx=None):
+def ablation_blockage(incident_hfx, density, velocity, total_wall_hfx):
     # chapter 2 of https://doi.org/10.1016/j.actaastro.2012.06.016
 
     k = 2.7659985259098415e-28 # from interpolation
     dm_dt = k * density * velocity ** 6.9
 
     # hot wall correction can be neglected in hypersonic flow (T_inf >> T_wall)
-    if type(total_wall_hfx) == np.ndarray:
-        zero_cells = np.where(total_wall_hfx == 0)
-        blowing_coefficient = dm_dt * velocity ** 2 / (2 * total_wall_hfx)
-    else:
-        zero_cells = np.where(convective_hfx == 0)
-        blowing_coefficient = dm_dt * velocity ** 2 / (2 * convective_hfx)
+    # if type(total_wall_hfx) == np.ndarray:
+    zero_cells = np.where(total_wall_hfx == 0)
+    blowing_coefficient = dm_dt * velocity ** 2 / (2 * total_wall_hfx)
+    # else:
+    #     zero_cells = np.where(convective_hfx == 0)
+    #     blowing_coefficient = dm_dt * velocity ** 2 / (2 * convective_hfx)
     blowing_coefficient[zero_cells] = 0
 
     b_coeff_null_cells = np.where(blowing_coefficient == 0)
     blockage_factor = ( 2.344/blowing_coefficient * (np.sqrt(blowing_coefficient+1)-1) ) **1.063
     blockage_factor[b_coeff_null_cells] = 1.18378  # value of the function for blowing_coefficient = 0
-    conv_hfx_w_blockage = blockage_factor * convective_hfx
-    return conv_hfx_w_blockage
+    incident_hfx_w_blockage = blockage_factor * incident_hfx
+    return incident_hfx_w_blockage, blowing_coefficient
 
 
 def custom_atm_convective_hfx_correlation(density, velocity, radius, return_scaling_vector = False):
@@ -938,6 +947,12 @@ def custom_atm_convective_hfx_correlation(density, velocity, radius, return_scal
 
 def galileo_heat_fluxes_park(entry_altitudes):
     # Data from https://arc-aiaa-org.tudelft.idm.oclc.org/doi/pdf/10.2514/1.38712
+    '''
+
+    :param entry_altitudes:
+    :return:
+    q_r boundary-layer edge, q_r wall, q_c wall
+    '''
     galileo_heat_fluxes = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/heat_fluxes_galileo_low_altitudes.txt')
     qr_boundary_layer_edge = galileo_heat_fluxes[:, 4] * 1e7  # W/m^2
     qr_wall = galileo_heat_fluxes[:, 5] * 1e7  # W/m^2
@@ -960,6 +975,12 @@ def galileo_heat_fluxes_park(entry_altitudes):
             flight_heat_fluxes[i, :] = heatflux_value_interpolator.interpolate(curr_altitude)
 
     return flight_heat_fluxes
+
+def convective_heat_flux_girija(density, velocity, radius):
+    # from https://arc.aiaa.org/doi/pdf/10.2514/1.A35214?src=getftr
+    k_constant = 0.6556E-8
+    convective_hfx = k_constant * (density/radius)**0.5 * velocity**3
+    return convective_hfx
 
 ########################################################################################################################
 # ZERO-FINDING METHODS #################################################################################################
@@ -1025,3 +1046,31 @@ def regula_falsi_illinois(interval_boundaries: tuple,
     return c_point, f_c, i
 
 # add secant method
+def secant_method(function: Callable,
+                  x_1: float,
+                  x_2: float,
+                  zero_value: float = 0.,
+                  tolerance: float = 1e-15,
+                  max_iter: int = 1000,
+                  **kwargs
+                  ) -> tuple:
+    i = 0
+    f__x_1 = -1
+
+    for i in range(max_iter):
+
+        f__x_1 = function(x_1, **kwargs) - zero_value
+        f__x_2 = function(x_2, **kwargs) - zero_value
+
+        if abs(f__x_1) < tolerance:
+            # Root found
+            break
+
+        x_temp = x_1
+        x_1 = x_1 - (x_1 - x_2) * f__x_1 / (f__x_1 - f__x_2)
+        x_2 = x_temp
+
+    if i == max_iter:
+        raise Warning('Secant method has not converged: max number of iterations reached.')
+
+    return x_1, f__x_1, i
