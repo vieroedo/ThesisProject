@@ -29,6 +29,8 @@ show_galileo_flight = True
 plot_galileo_tabulated_data = True
 plot_heatfluxes_in_dep_var_plots = False
 
+plot_figures_for_thesis = False
+
 current_dir = os.path.dirname(__file__)
 if show_galileo_flight:
     current_dir = current_dir + '/GalileoMission'
@@ -164,11 +166,19 @@ else:
 convective_hf, radiative_hf, radiative_hf_w_blockage = Util.atmospheric_entry_heat_loads_correlations(
     atmospheric_density, airspeed, nose_radius=nose_radius)
 
+convective_hf_girija = Util.convective_heat_flux_girija(atmospheric_density, airspeed, nose_radius) *1e4
+
 
 # convective_hf_w_blockage = Util.heat_flux_with_blockage_from_blowing(radiative_hf_w_blockage+convective_hf, convective_hf, atmospheric_density, airspeed, )
-convective_hf_w_blockage = Util.convective_heat_flux_with_blockage(convective_hf, atmospheric_density, airspeed)#), total_wall_hfx=convective_hf+radiative_hf)
-radiative_hf_wall = Util.convective_heat_flux_with_blockage(radiative_hf_w_blockage, atmospheric_density, airspeed)
+convective_hf_w_blockage, blowing_coefficient_conv = Util.ablation_blockage(convective_hf, atmospheric_density, airspeed,
+                                                  total_wall_hfx=convective_hf)
+radiative_hf_wall, blowing_coefficient_rad = Util.ablation_blockage(radiative_hf_w_blockage, atmospheric_density, airspeed,
+                                           total_wall_hfx=radiative_hf_w_blockage)
 
+fig_bl, ax_bl = plt.subplots()
+ax_bl.plot(epochs_plot_ae_phase, blowing_coefficient_conv[entry_epochs_cells].reshape(len(drag_acc_mod)), label='convection blowing')
+ax_bl.plot(epochs_plot_ae_phase, blowing_coefficient_rad[entry_epochs_cells].reshape(len(drag_acc_mod)), label='radiation blowing')
+ax_bl.legend()
 
 # radius, density, velocity, heat_flux
 scaling_vector = np.array([1.58227848e+00, 4.92610837e+02, 2.09863589e-02, 6.49350649e-06])
@@ -197,13 +207,100 @@ ax_hf.plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].re
 ax_hf.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
 ax_hf.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage', linestyle='-.')
 ax_hf.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_wall_hfx')
-
 ax_hf.plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_custom', linestyle='-')
-
+ax_hf.plot(epochs_plot_ae_phase, convective_hf_girija[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_girija', linestyle=':')
 
 ax_hf.set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
 ax_hf.legend()
 
+
+if plot_figures_for_thesis:
+
+    # radiative at boundary layer, radiative at wall, convective at wall
+    park_heat_fluxes = Util.galileo_heat_fluxes_park(altitude[entry_epochs_cells].reshape(len(drag_acc_mod)))
+    park_convective_hfx_wall = park_heat_fluxes[:,2]
+    park_radiative_hfx_ble = park_heat_fluxes[:,0]
+    park_radiative_hfx_wall = park_heat_fluxes[:,1]
+    park_hfx_non_zero_cells = np.where(park_convective_hfx_wall != 0)
+
+    cmap = plt.get_cmap('tab10')
+    # Set a gray color for arrow lines
+    arrow_line_color = 'gray'
+    arrow_style = '->'
+
+    fig_th_conv, ax_th_conv = plt.subplots(figsize=(8, 5), tight_layout=True)
+    # Plot the data and assign the resulting Line2D objects to named variables
+    convcurve1 = ax_th_conv.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                                  label='$q_{C_{B=0}}$ Ritter et al.', color=cmap(0), linestyle='--')
+    convcurve2 = ax_th_conv.plot(epochs_plot_ae_phase,
+                                  convective_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                                  label='$q_{C}$ Ritter et al.', color=cmap(1))
+    convcurve3 = ax_th_conv.plot(epochs_plot_ae_phase,
+                                  custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                                  label='$q_{C_{B=0}}$ data interp.', color=cmap(2), linestyle='--')
+    convcurve4 = ax_th_conv.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
+                                  park_convective_hfx_wall[park_hfx_non_zero_cells] / 1e6,
+                                  label=r'$q_C$ Park', linestyle='-', color=cmap(3))
+
+    # Add annotations to each curve
+    ax_th_conv.annotate('$q_{C_{B=0}}$ Ritter et al.', xy=convcurve1[0].get_xydata()[600], xytext=(70, 100),
+                        arrowprops=dict(color=arrow_line_color, arrowstyle=arrow_style))
+    ax_th_conv.annotate('$q_{C}$ Ritter et al.', xy=convcurve2[0].get_xydata()[400], xytext=(5, 40),
+                        arrowprops=dict(color=arrow_line_color, arrowstyle=arrow_style))
+    ax_th_conv.annotate('$q_{C_{B=0}}$ data interp.', xy=convcurve3[0].get_xydata()[400], xytext=(10, 100),
+                        arrowprops=dict(color=arrow_line_color, arrowstyle=arrow_style))
+    ax_th_conv.annotate(r'$q_C$ Park', xy=convcurve4[0].get_xydata()[80], xytext=(80, 60),
+                        arrowprops=dict(color=arrow_line_color, arrowstyle=arrow_style))
+    # Set x and y labels and limits
+    ax_th_conv.set(xlabel=r'Flight time [s]', ylabel=r'Heat flux [MW/m$^2$]', xlim=[0, 100])
+
+    # fig_th_rad, ax_th_rad = plt.subplots(figsize=(8, 5), tight_layout=True)
+    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    #                label=r'$q_{R,AD_{B=0}}$', linestyle=':', color=cmap(0))
+    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    #            label='$q_{R_{B=0}}$', linestyle='-', color=cmap(1))
+    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    #            label='$q_{R}$', color=cmap(2))
+    # ax_th_rad.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
+    #                park_radiative_hfx_ble[park_hfx_non_zero_cells] / 1e6,
+    #                label=r'$q_{R, e}$ Park', linestyle='--', color=cmap(3))
+    # ax_th_rad.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
+    #                 park_radiative_hfx_wall[park_hfx_non_zero_cells] / 1e6,
+    #                 label=r'$q_{R, w}$ Park', linestyle='--', color=cmap(4))
+    #
+    # ax_th_rad.set(xlabel=r'Flight time [s]', ylabel=r'Heat flux [MW/m$^2$]', xlim=[20, 80])
+
+    fig_th_rad, ax_th_rad = plt.subplots(figsize=(8, 5), tight_layout=True)
+    # cmap = plt.get_cmap('tab10')
+
+    radcurve1 = ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                               label=r'$q_{R,AD_{B=0}}$', linestyle=':', color=cmap(0))
+    radcurve2 = ax_th_rad.plot(epochs_plot_ae_phase,
+                               radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                               label='$q_{R_{B=0}}$', linestyle='-', color=cmap(1))
+    radcurve3 = ax_th_rad.plot(epochs_plot_ae_phase,
+                               radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6, label='$q_{R}$',
+                               color=cmap(2))
+    radcurve4 = ax_th_rad.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
+                               park_radiative_hfx_ble[park_hfx_non_zero_cells] / 1e6, label=r'$q_{R, e}$ Park',
+                               linestyle='--', color=cmap(3))
+    radcurve5 = ax_th_rad.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
+                               park_radiative_hfx_wall[park_hfx_non_zero_cells] / 1e6, label=r'$q_{R, w}$ Park',
+                               linestyle='--', color=cmap(4))
+
+    # for line, label in zip([radcurve2[0], radcurve3[0]], ['$q_{R_{B=0}}$', '$q_{R}$']):
+    ax_th_rad.annotate('$q_{R_{B=0}}$', xy=radcurve2[0].get_xydata()[500], xytext=(40, 400),
+                       arrowprops=dict(color=arrow_line_color, arrowstyle=arrow_style))
+    ax_th_rad.annotate('$q_{R}$', xy=radcurve3[0].get_xydata()[470], xytext=(35, 130),
+                       arrowprops=dict(color=arrow_line_color, arrowstyle=arrow_style))
+
+
+    ax_th_rad.legend(handles=[radcurve1[0], radcurve4[0], radcurve5[0]], loc='upper right')
+
+    ax_th_rad.set(xlabel=r'Flight time [s]', ylabel=r'Heat flux [MW/m$^2$]', xlim=[20, 80])
+
+    # Show the plot
+    plt.show()
 
 Fig_vh, axs_vh = plt.subplots(figsize = (6,5))
 axs_vh.plot(airspeed[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, altitude[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3)
@@ -551,9 +648,9 @@ if plot_galileo_tabulated_data:
 
     # PLOT PARK RESULTS
     fig_park, ax_park = plt.subplots()
-    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 0] / (1e3*1e4), label=r'$q_{R_e}$')
-    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 1] / (1e3*1e4), label=r'$q_{R_w}$')
-    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 2] / (1e3*1e4), label=r'$q_{C_w}$')
+    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 0] / (1e3*1e4), label=r'$q_{R, e}$')
+    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 1] / (1e3*1e4), label=r'$q_{R, w}$')
+    ax_park.plot(epochs_plot_ae_phase, flight_heat_fluxes[:, 2] / (1e3*1e4), label=r'$q_{C, w}$')
     ax_park.set(xlabel='Flight time [s]', ylabel=r'Heat fluxes [kW/cm$^2$]')
     ax_park.set(xlim=[40.6,58.5])
     plt.tight_layout()
