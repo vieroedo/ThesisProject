@@ -65,9 +65,11 @@ plt.show()
 
 x_data = np.linspace(-2,8,1000)
 
-# y_data = 1 - 0.72 * x_data + 0.13 * x_data**2
+y_data2 = 1 - 0.72 * x_data + 0.13 * x_data**2
 y_data = ( 2.344/x_data * (np.sqrt(x_data+1)-1) ) **1.063
 
-plt.plot(x_data, y_data)
-plt.title('parabola B')
+plt.plot(x_data, y_data, label='other one')
+plt.plot(x_data, y_data2, label='quadratic')
+plt.title('B equations')
+plt.legend()
 plt.show()
