@@ -17,7 +17,7 @@ do_regula_falsi_function_debugging = False
 
 # Atmospheric entry conditions
 arrival_pericenter_altitude = 400e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -0.2  # degrees
+flight_path_angle_at_atmosphere_entry = -1  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600  # m/s
@@ -64,10 +64,10 @@ angle_between_departure_position_and_velocity = np.pi - delta_angle_from_hohmann
 first_arc_arrival_radius = LA.norm(moon_flyby_state[0:3])
 
 # Calculate first arc orbital energy
-first_arc_orbital_energy = first_arc_departure_velocity_norm ** 2 / 2 - central_body_gravitational_parameter / first_arc_departure_radius
+first_arc_orbital_energy = first_arc_departure_velocity_norm ** 2 / 2 - jupiter_gravitational_parameter / first_arc_departure_radius
 
 # Calculate max allowed delta_hoh based on chosen initial velocity
-frac_numerator = np.sqrt(2*first_arc_arrival_radius*(first_arc_orbital_energy*first_arc_arrival_radius + central_body_gravitational_parameter))
+frac_numerator = np.sqrt(2 * first_arc_arrival_radius * (first_arc_orbital_energy * first_arc_arrival_radius + jupiter_gravitational_parameter))
 max_allowed_delta_hoh = np.arcsin(frac_numerator / (first_arc_departure_radius * first_arc_departure_velocity_norm))
 
 # End script if the angle exceeds the max value
@@ -79,14 +79,14 @@ first_arc_angular_momentum_norm = first_arc_departure_radius * first_arc_departu
 first_arc_angular_momentum = first_arc_angular_momentum_norm * first_arc_angular_momentum_cap
 
 # Calculate p, sma, and e of the first arc
-first_arc_semilatus_rectum = first_arc_angular_momentum_norm ** 2 / central_body_gravitational_parameter
-first_arc_semimajor_axis = - central_body_gravitational_parameter / (2 * first_arc_orbital_energy)
+first_arc_semilatus_rectum = first_arc_angular_momentum_norm ** 2 / jupiter_gravitational_parameter
+first_arc_semimajor_axis = - jupiter_gravitational_parameter / (2 * first_arc_orbital_energy)
 first_arc_eccentricity = np.sqrt(1 - first_arc_semilatus_rectum/ first_arc_semimajor_axis)
 
 
 # ASSUMPTION: Arrival position is set to the moon's center, from that arrival velocity is determined
 first_arc_arrival_position = moon_flyby_state[0:3]
-first_arc_arrival_velocity_norm = np.sqrt(2 * (first_arc_orbital_energy + central_body_gravitational_parameter / first_arc_arrival_radius))
+first_arc_arrival_velocity_norm = np.sqrt(2 * (first_arc_orbital_energy + jupiter_gravitational_parameter / first_arc_arrival_radius))
 
 # Calculate arrival fpa of the first arc. It's negative since the trajectory is counterclockwise.
 first_arc_arrival_fpa = -np.arccos(np.clip(first_arc_angular_momentum_norm / (first_arc_arrival_radius * first_arc_arrival_velocity_norm), -1, 1))
@@ -199,7 +199,7 @@ second_arc_departure_velocity = flyby_final_velocity + moon_velocity
 second_arc_departure_velocity_norm = LA.norm(second_arc_departure_velocity)
 
 # Calculate the orbital energy of the second arc
-second_arc_orbital_energy = second_arc_departure_velocity_norm ** 2 / 2 - central_body_gravitational_parameter / second_arc_departure_radius
+second_arc_orbital_energy = second_arc_departure_velocity_norm ** 2 / 2 - jupiter_gravitational_parameter / second_arc_departure_radius
 
 # Calculate the departure flight path angel of the second arc
 second_arc_departure_fpa = np.arcsin(np.dot(unit_vector(second_arc_departure_position), unit_vector(second_arc_departure_velocity)))
@@ -208,7 +208,7 @@ second_arc_departure_fpa = np.arcsin(np.dot(unit_vector(second_arc_departure_pos
 # second_arc_arrival_radius -> set above
 
 # Calculate arrival velocity at Jupiter atmospheric entry
-second_arc_arrival_velocity_norm = np.sqrt(2 * (second_arc_orbital_energy + central_body_gravitational_parameter / second_arc_arrival_radius))
+second_arc_arrival_velocity_norm = np.sqrt(2 * (second_arc_orbital_energy + jupiter_gravitational_parameter / second_arc_arrival_radius))
 
 # Pre-calculation for second arc arrival flight path angle
 arccos_arg = second_arc_departure_radius / second_arc_arrival_radius * second_arc_departure_velocity_norm * np.cos(second_arc_departure_fpa) / second_arc_arrival_velocity_norm
@@ -221,8 +221,8 @@ second_arc_angular_momentum_norm = second_arc_arrival_radius * second_arc_arriva
 second_arc_angular_momentum = np.cross(second_arc_departure_position, second_arc_departure_velocity)
 
 # Calculate other orbital parameters of the second arc
-second_arc_semilatus_rectum = second_arc_angular_momentum_norm ** 2 / central_body_gravitational_parameter
-second_arc_semimajor_axis = - central_body_gravitational_parameter / (2*second_arc_orbital_energy)
+second_arc_semilatus_rectum = second_arc_angular_momentum_norm ** 2 / jupiter_gravitational_parameter
+second_arc_semimajor_axis = - jupiter_gravitational_parameter / (2 * second_arc_orbital_energy)
 second_arc_eccentricity = np.sqrt(1-second_arc_semilatus_rectum/second_arc_semimajor_axis)
 
 # Plot problem parameters
@@ -259,7 +259,7 @@ second_arc_arrival_position = rotate_vectors_by_given_matrix(rotation_matrix(sec
 atmospheric_entry_fpa = second_arc_arrival_fpa
 atmospheric_entry_velocity_norm = second_arc_arrival_velocity_norm
 atmospheric_entry_altitude = arrival_pericenter_altitude
-atmospheric_entry_g_acc = central_body_gravitational_parameter / (second_arc_arrival_radius ** 2)
+atmospheric_entry_g_acc = jupiter_gravitational_parameter / (second_arc_arrival_radius ** 2)
 
 # Atmosphere model coefficients (exponential atmosphere)
 reference_density = jupiter_1bar_density
@@ -363,8 +363,8 @@ third_arc_angular_momentum = np.cross(third_arc_departure_position, third_arc_de
 third_arc_angular_momentum_norm = LA.norm(third_arc_angular_momentum)
 
 # Calculate other orbital parameters of the second arc
-third_arc_semilatus_rectum = third_arc_angular_momentum_norm ** 2 / central_body_gravitational_parameter
-third_arc_semimajor_axis = - central_body_gravitational_parameter / (2*third_arc_orbital_energy)
+third_arc_semilatus_rectum = third_arc_angular_momentum_norm ** 2 / jupiter_gravitational_parameter
+third_arc_semimajor_axis = - jupiter_gravitational_parameter / (2 * third_arc_orbital_energy)
 third_arc_eccentricity = np.sqrt(1-third_arc_semilatus_rectum/third_arc_semimajor_axis)
 
 
@@ -383,7 +383,7 @@ print('\nAtmospheric exit (/third arc initial) conditions:\n'
 
 
 p_ae_moon_fb_sma = galilean_moons_data[p_ae_moon_fb_name]['SMA']
-p_ae_moon_fb_velocity_norm = np.sqrt(central_body_gravitational_parameter/p_ae_moon_fb_sma)
+p_ae_moon_fb_velocity_norm = np.sqrt(jupiter_gravitational_parameter / p_ae_moon_fb_sma)
 # p_ae_moon_fb_position = rotate_vectors_by_given_matrix(rotation_matrix(third_arc_orbital_axis, p_ae_moon_fb_phase_angle), unit_vector(third_arc_departure_position)) * p_ae_moon_fb_sma
 # p_ae_moon_fb_velocity = rotate_vectors_by_given_matrix(rotation_matrix(third_arc_orbital_axis, np.pi/2), unit_vector(p_ae_moon_fb_position)) * p_ae_moon_fb_velocity_norm
 
@@ -398,7 +398,7 @@ if p_ae_moon_fb_sma > third_arc_apocenter:
 
 # third_arc_arrival_position = p_ae_moon_fb_position
 third_arc_arrival_radius = p_ae_moon_fb_sma
-third_arc_arrival_velocity_norm = np.sqrt(2 * (third_arc_orbital_energy + central_body_gravitational_parameter / third_arc_arrival_radius))
+third_arc_arrival_velocity_norm = np.sqrt(2 * (third_arc_orbital_energy + jupiter_gravitational_parameter / third_arc_arrival_radius))
 third_arc_arrival_fpa = np.arccos(third_arc_angular_momentum_norm/(third_arc_arrival_radius*third_arc_arrival_velocity_norm))
 # third_arc_arrival_fpa_s = (third_arc_arrival_fpa_sol, -third_arc_arrival_fpa_sol) # we check both options
 
@@ -515,15 +515,15 @@ fourth_arc_departure_fpa = np.arcsin(
 
 # Calculate post-flyby arc orbital energy
 fourth_arc_orbital_energy = fourth_arc_departure_velocity_norm ** 2 / 2 - \
-                            central_body_gravitational_parameter / fourth_arc_departure_radius
+                            jupiter_gravitational_parameter / fourth_arc_departure_radius
 
 fourth_arc_angular_momentum = fourth_arc_departure_radius * fourth_arc_departure_velocity_norm * np.cos(fourth_arc_departure_fpa)
 
-fourth_arc_semilatus_rectum = fourth_arc_angular_momentum ** 2 / central_body_gravitational_parameter
-fourth_arc_semimajor_axis = - central_body_gravitational_parameter / (2 * fourth_arc_orbital_energy)
+fourth_arc_semilatus_rectum = fourth_arc_angular_momentum ** 2 / jupiter_gravitational_parameter
+fourth_arc_semimajor_axis = - jupiter_gravitational_parameter / (2 * fourth_arc_orbital_energy)
 fourth_arc_eccentricity = np.sqrt(1 - fourth_arc_semilatus_rectum / fourth_arc_semimajor_axis)
 
-fourth_arc_orbital_period = 2* np.pi * np.sqrt(fourth_arc_semimajor_axis**3/central_body_gravitational_parameter)
+fourth_arc_orbital_period = 2* np.pi * np.sqrt(fourth_arc_semimajor_axis ** 3 / jupiter_gravitational_parameter)
 
 # Print fourth arc quantities for debugging
 print(f'\n\nPost-aerocapture flyby moon: {p_ae_moon_fb_name}')
@@ -617,9 +617,9 @@ final_orbit_semimajor_axis = fourth_arc_semimajor_axis
 final_orbit_reference_position = fourth_arc_departure_position
 final_orbit_reference_velocity = fourth_arc_departure_velocity
 
-position_multiplier = LA.norm(final_orbit_reference_velocity) **2 - central_body_gravitational_parameter/LA.norm(final_orbit_reference_position)
+position_multiplier = LA.norm(final_orbit_reference_velocity) ** 2 - jupiter_gravitational_parameter / LA.norm(final_orbit_reference_position)
 velocity_multiplier = np.dot(final_orbit_reference_position, final_orbit_reference_velocity)
-eccentricity_vector = 1/central_body_gravitational_parameter * (position_multiplier * final_orbit_reference_position - velocity_multiplier * final_orbit_reference_velocity)
+eccentricity_vector = 1 / jupiter_gravitational_parameter * (position_multiplier * final_orbit_reference_position - velocity_multiplier * final_orbit_reference_velocity)
 
 
 final_orbit_pericenter_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(eccentricity_vector), x_axis))
