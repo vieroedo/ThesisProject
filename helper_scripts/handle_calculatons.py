@@ -30,7 +30,7 @@ ref_density = 0.16  # kg/m^3
 scale_height = 27e3
 molecular_weight = 2.22  # kg/kmol
 gas_constant = 8314.32 / molecular_weight
-surface_gravity = central_body_gravitational_parameter / jupiter_radius**2
+surface_gravity = jupiter_gravitational_parameter / jupiter_radius ** 2
 average_temperature = scale_height * surface_gravity / gas_constant
 
 print(f'Jupiter atmosphere avg temp: {average_temperature} K')

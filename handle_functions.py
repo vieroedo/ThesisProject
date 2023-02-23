@@ -16,83 +16,14 @@ from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.astro import element_conversion
 from tudatpy.kernel.math import interpolators
 
+from JupiterTrajectory_GlobalParameters import *
+
 handle_functions_directory = os.path.dirname(__file__)
 
-
-# Load spice kernels
-spice_interface.load_standard_kernels()
-# spice_interface.get_average_radius('Jupiter')
 # Ref system axes
 x_axis = np.array([1., 0., 0.])
 y_axis = np.array([0., 1., 0.])
 z_axis = np.array([0., 0., 1.])
-
-# Global values of the problem
-jupiter_mass = 1898.6e24  # kg
-jupiter_radius = spice_interface.get_average_radius('Jupiter')  #69911e3  # m
-jupiter_SOI_radius = 48.2e9  # m
-central_body_gravitational_parameter = spice_interface.get_body_gravitational_parameter('Jupiter')
-global_frame_orientation = 'ECLIPJ2000'
-
-# orbital and physical data of galilean moons in SI units
-# (entries: 'SMA' 'Mass' 'Radius' 'Orbital_Period' 'SOI_Radius' 'mu' 'g_0')
-galilean_moons_data = {
-                       'Io': {'SMA': 421.77e6,
-                              'Mass': 893.3e20,
-                              'Radius': 1821.3e3,
-                              'Orbital_Period': 1.769138 * constants.JULIAN_DAY,
-                              'SOI_Radius': 7836e3,
-                              'mu': 893.3e20 * constants.GRAVITATIONAL_CONSTANT,
-                              'g_0': 893.3e20 * constants.GRAVITATIONAL_CONSTANT / (1821.3e3**2)},
-                       'Europa': {'SMA': 671.08e6,
-                                  'Mass': 479.7e20,
-                                  'Radius': 1565e3,
-                                  'Orbital_Period': 3.551810 * constants.JULIAN_DAY,
-                                  'SOI_Radius': 9723e3,
-                                  'mu': 479.7e20 * constants.GRAVITATIONAL_CONSTANT,
-                                  'g_0': 479.7e20 * constants.GRAVITATIONAL_CONSTANT / (1565e3**2)},
-                       'Ganymede': {'SMA': 1070.4e6,
-                                    'Mass': 1482e20,
-                                    'Radius': 2634e3,
-                                    'Orbital_Period': 7.154553 * constants.JULIAN_DAY,
-                                    'SOI_Radius': 24351e3,
-                                    'mu': 1482e20 * constants.GRAVITATIONAL_CONSTANT,
-                                    'g_0': 1482e20 * constants.GRAVITATIONAL_CONSTANT / (2634e3**2)},
-                       'Callisto': {'SMA': 1882.8e6,
-                                    'Mass': 1076e20,
-                                    'Radius': 2403e3,
-                                    'Orbital_Period': 16.689018 * constants.JULIAN_DAY,
-                                    'SOI_Radius': 37684e3,
-                                    'mu': 1076e20 * constants.GRAVITATIONAL_CONSTANT,
-                                    'g_0': 1076e20 * constants.GRAVITATIONAL_CONSTANT / (2403e3**2)}
-                       }
-
-# Jupiter atmosphere exponential layered model
-# (T_0, h_0, rho_0, alpha) from lower to higher
-jupiter_atmosphere_model = {
-    'layer_1': [425.0, -132e3, 1.5, -0.56e3],
-    'layer_2': [100.0,   50e3, 2e-2, 2.7e3],
-    'layer_3': [200.0,  320e3, 2e-7, 0.9067e3],
-    'layer_4': [950.0, 1000e3, 3e-11, np.inf]
-}
-
-# Jupiter atmosphere exponential model
-jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
-jupiter_1bar_density = 0.16  # kg/m^3
-
-# Vehicle properties
-vehicle_mass = 3000  # kg
-vehicle_reference_area = 5.  # m^2
-vehicle_radius = np.sqrt(vehicle_reference_area/np.pi)
-vehicle_cd = 1.2
-vehicle_cl = 0.6
-
-# Galileo probe data
-galileo_mass = 339.  # kg
-galileo_radius = 0.632  # m
-galileo_ref_area = galileo_radius**2 * np.pi  # m^2
-galileo_cd = 1.05 #1.02
-galileo_cl = 0.
 
 
 def unit_vector(vector):
@@ -173,11 +104,11 @@ def cartesian_3d_from_polar(r, latitude, longitude):
 
 
 def orbital_energy(radius: float, velocity: float):
-    return velocity**2/2 - central_body_gravitational_parameter/radius
+    return velocity ** 2 / 2 - jupiter_gravitational_parameter / radius
 
 
 def velocity_from_energy(energy: float, radius: float):
-    return np.sqrt(2*(energy + central_body_gravitational_parameter/radius))
+    return np.sqrt(2 * (energy + jupiter_gravitational_parameter / radius))
 
 
 def true_anomaly_from_radius(radius,eccentricity,sma):
@@ -244,7 +175,7 @@ def moon_circular_2d_state(epoch: float, choose_moon: str) -> np.ndarray((6,)):
     x_pos, y_pos = cartesian_2d_from_polar(orbital_radius, true_anomaly)
     z_pos = 0.
 
-    moon_velocity = np.sqrt(central_body_gravitational_parameter/orbital_radius)
+    moon_velocity = np.sqrt(jupiter_gravitational_parameter / orbital_radius)
 
     x_vel, y_vel = cartesian_2d_from_polar(moon_velocity, true_anomaly+np.pi/2)
     z_vel = 0.
@@ -257,7 +188,7 @@ def compute_lambert_targeter_state_history(
         final_state,
         departure_epoch,
         arrival_epoch,
-        central_body_grav_parameter=central_body_gravitational_parameter,
+        central_body_grav_parameter=jupiter_gravitational_parameter,
         number_of_epochs: int = 200):
     """
     Computes the lambert problem and returns the history of states
@@ -282,12 +213,12 @@ def compute_lambert_targeter_state_history(
 
     # Compute Keplerian state of Lambert arc
     lambert_arc_keplerian_elements = element_conversion.cartesian_to_keplerian(lambert_arc_initial_state,
-                                                                               central_body_gravitational_parameter)
+                                                                               jupiter_gravitational_parameter)
 
     # Setup Keplerian ephemeris model that describes the Lambert arc
     lambert_arc_ephemeris = environment_setup.create_body_ephemeris(
         environment_setup.ephemeris.keplerian(lambert_arc_keplerian_elements, departure_epoch,
-                                              central_body_gravitational_parameter), "")
+                                              jupiter_gravitational_parameter), "")
 
     # Selected epochs to plot
     epoch_list = np.linspace(departure_epoch, arrival_epoch, number_of_epochs)
@@ -355,11 +286,11 @@ def calculate_fpa_from_flyby_pericenter(flyby_rp: float,
 
     # Calculate post-flyby arc orbital energy
     arc_orbital_energy = arc_departure_velocity ** 2 / 2 - \
-        central_body_gravitational_parameter / arc_departure_radius
+                         jupiter_gravitational_parameter / arc_departure_radius
 
     # Calculate post-flyby arc arrival velocity
     arc_arrival_velocity = np.sqrt(
-        2 * (arc_orbital_energy + central_body_gravitational_parameter / arc_arrival_radius))
+        2 * (arc_orbital_energy + jupiter_gravitational_parameter / arc_arrival_radius))
 
     # Pre-calculation for post-flyby arc arrival flight path angle
     # (arccos argument will be clipped at [-1,1] for cases where orbit doesn't intersect Jup atmosphere)
@@ -394,11 +325,11 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     flyby_initial_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, -sigma_angle), unit_vector(moon_velocity)) * moon_SOI
 
     h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
-    energy_arc_1 = arc_1_initial_velocity**2/2 - central_body_gravitational_parameter / arc_1_initial_radius
+    energy_arc_1 = arc_1_initial_velocity ** 2 / 2 - jupiter_gravitational_parameter / arc_1_initial_radius
 
     arc_1_final_position = moon_position + flyby_initial_position
     arc_1_final_radius = LA.norm(arc_1_final_position)
-    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + central_body_gravitational_parameter/arc_1_final_radius))
+    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + jupiter_gravitational_parameter / arc_1_final_radius))
 
     arc_1_final_fpa = - np.arccos(h_arc_1/(arc_1_final_radius*arc_1_final_velocity))
     arc_1_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, np.pi / 2 - arc_1_final_fpa), unit_vector(arc_1_final_position)) * arc_1_final_velocity
@@ -454,9 +385,9 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     arc_2_departure_velocity = LA.norm(arc_2_departure_velocity_vector)
 
     arc_2_h = LA.norm(np.cross(arc_2_departure_position, arc_2_departure_velocity_vector))
-    arc_2_energy = arc_2_departure_velocity**2/2 - central_body_gravitational_parameter / arc_2_departure_radius
+    arc_2_energy = arc_2_departure_velocity ** 2 / 2 - jupiter_gravitational_parameter / arc_2_departure_radius
 
-    arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + central_body_gravitational_parameter / arc_2_final_radius))
+    arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + jupiter_gravitational_parameter / arc_2_final_radius))
 
     arc_2_final_fpa = - np.arccos(np.clip(arc_2_h/(arc_2_final_radius * arc_2_arrival_velocity), -1, 1))
 
@@ -532,11 +463,11 @@ def calculate_fpa_from_flyby_geometry_simplified(pericenter_radius: float,
     flyby_pericenter_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, beta_angle), unit_vector(-moon_velocity)) * pericenter_radius
 
     h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
-    energy_arc_1 = arc_1_initial_velocity**2/2 - central_body_gravitational_parameter / arc_1_initial_radius
+    energy_arc_1 = arc_1_initial_velocity ** 2 / 2 - jupiter_gravitational_parameter / arc_1_initial_radius
 
     arc_1_final_position = moon_position + flyby_pericenter_position
     arc_1_final_radius = LA.norm(arc_1_final_position)
-    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + central_body_gravitational_parameter/arc_1_final_radius))
+    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + jupiter_gravitational_parameter / arc_1_final_radius))
 
     arc_1_final_fpa = - np.arccos(h_arc_1/(arc_1_final_radius*arc_1_final_velocity))
     arc_1_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, np.pi / 2 - arc_1_final_fpa), unit_vector(arc_1_final_position)) * arc_1_final_velocity
@@ -591,9 +522,9 @@ def calculate_fpa_from_flyby_geometry_simplified(pericenter_radius: float,
     arc_2_departure_velocity = LA.norm(arc_2_departure_velocity_vector)
 
     arc_2_h = LA.norm(np.cross(arc_2_departure_position, arc_2_departure_velocity_vector))
-    arc_2_energy = arc_2_departure_velocity**2/2 - central_body_gravitational_parameter / arc_2_departure_radius
+    arc_2_energy = arc_2_departure_velocity ** 2 / 2 - jupiter_gravitational_parameter / arc_2_departure_radius
 
-    arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + central_body_gravitational_parameter / arc_2_final_radius))
+    arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + jupiter_gravitational_parameter / arc_2_final_radius))
 
     arc_2_final_fpa = - np.arccos(np.clip(arc_2_h/(arc_2_final_radius * arc_2_arrival_velocity), -1, 1))
 
@@ -624,11 +555,11 @@ def beta_angle_function(beta_angle_guess: float,
                                                                unit_vector(-moon_velocity)) * pericenter_radius
 
     h_arc_1 = arc_1_initial_radius * arc_1_initial_velocity * np.sin(delta_hoh)
-    energy_arc_1 = arc_1_initial_velocity ** 2 / 2 - central_body_gravitational_parameter / arc_1_initial_radius
+    energy_arc_1 = arc_1_initial_velocity ** 2 / 2 - jupiter_gravitational_parameter / arc_1_initial_radius
 
     arc_1_final_position = moon_position + flyby_pericenter_position
     arc_1_final_radius = LA.norm(arc_1_final_position)
-    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + central_body_gravitational_parameter / arc_1_final_radius))
+    arc_1_final_velocity = np.sqrt(2 * (energy_arc_1 + jupiter_gravitational_parameter / arc_1_final_radius))
 
     arc_1_final_fpa = - np.arccos(h_arc_1 / (arc_1_final_radius * arc_1_final_velocity))
     arc_1_final_velocity_vector = rotate_vectors_by_given_matrix(
@@ -709,12 +640,12 @@ def calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp: float,
 
     # Calculate post-flyby arc orbital energy
     arc_orbital_energy = arc_departure_velocity ** 2 / 2 - \
-        central_body_gravitational_parameter / arc_departure_radius
+                         jupiter_gravitational_parameter / arc_departure_radius
 
     arc_angular_momentum = arc_departure_radius * arc_departure_velocity * np.cos(arc_departure_fpa)
 
-    arc_semilatus_rectum = arc_angular_momentum ** 2 / central_body_gravitational_parameter
-    arc_semimajor_axis = - central_body_gravitational_parameter / (2 * arc_orbital_energy)
+    arc_semilatus_rectum = arc_angular_momentum ** 2 / jupiter_gravitational_parameter
+    arc_semimajor_axis = - jupiter_gravitational_parameter / (2 * arc_orbital_energy)
     arc_eccentricity = np.sqrt(1 - arc_semilatus_rectum / arc_semimajor_axis)
 
     arc_pericenter_radius = arc_semimajor_axis * (1-arc_eccentricity)
@@ -726,50 +657,25 @@ def calculate_orbit_pericenter_from_flyby_pericenter(flyby_rp: float,
 # ATMOSPHERIC ENTRY HELPER FUNCTIONS ###################################################################################
 ########################################################################################################################
 
-galileo_flight_data = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/galileo_flight_data.txt')
-flight_epoch = galileo_flight_data[:,0]
-flight_altitude = galileo_flight_data[:,1] * 1e3
-flight_velocity = galileo_flight_data[:,2] * 1e3
-flight_fpa = galileo_flight_data[:,3]
-flight_mach_no = galileo_flight_data[:,6]
-flight_cd = galileo_flight_data[:,9]
-flight_altitude_boundaries = [flight_altitude[-1], flight_altitude[0]]
+# Define some global objects for data interpolation in functions
+jup_atm_number_of_entries = len(jupiter_altitude_atmosphere_values_seiff1998)
+jup_atm_density_values_reshaped = np.array(list(jupiter_density_atmosphere_values_seiff1998)).reshape((jup_atm_number_of_entries, 1))
+handle_density_altitude_dictionary = dict(zip(jupiter_altitude_atmosphere_values_seiff1998, jup_atm_density_values_reshaped))
+handle_density_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(handle_density_altitude_dictionary,
+                                                                                             global_interpolator_settings)
 
-
-upper_atmosphere_data = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/galileo_flight_data_2.txt')
-lower_atmosphere_data = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/galileo_lower_atm_flight_data_2.txt')
-
-altitude1 = upper_atmosphere_data[:,0]
-density1 = upper_atmosphere_data[:,3]
-
-altitude2 = lower_atmosphere_data[:,1]
-density2 = lower_atmosphere_data[:,3]
-
-altitude_atmosph = np.concatenate((altitude1, altitude2))
-density_atmosph = np.concatenate((density1, density2))
-interpolation_boundaries = [altitude_atmosph[-1], altitude_atmosph[0]]  # 0=1000km  -1=-135km
-
-entries_number = len(altitude_atmosph)
-density_vector = np.array(list(density_atmosph)).reshape((entries_number,1))
-
-interpolator_settings = interpolators.lagrange_interpolation(
-    8, boundary_interpolation=interpolators.extrapolate_at_boundary)
-
-density_altitude_dictionary = dict(zip(altitude_atmosph, density_vector))
-density_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(density_altitude_dictionary,
-                                                                                          interpolator_settings)
-velocity_vector = np.array(list(flight_velocity)).reshape((len(flight_velocity),1))
-velocity_altitude_dictionary = dict(zip(flight_altitude, velocity_vector))
-velocity_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(velocity_altitude_dictionary,
-                                                                                          interpolator_settings)
+galileo_velocity_values_reshaped = np.array(list(galileo_flight_velocity)).reshape((len(galileo_flight_velocity), 1))
+handle_velocity_altitude_dictionary = dict(zip(galileo_flight_altitude, galileo_velocity_values_reshaped))
+handle_velocity_value_interpolator = interpolators.create_one_dimensional_vector_interpolator(handle_velocity_altitude_dictionary,
+                                                                                              global_interpolator_settings)
 
 
 def galileo_velocity_from_altitude(h):
     # h in meters
     velocities = np.zeros(len(h))
     for i in range(len(h)):
-        if flight_altitude_boundaries[0] < h[i] < flight_altitude_boundaries[1]:
-            velocities[i] = velocity_value_interpolator.interpolate(h[i])
+        if galileo_flight_altitude_boundaries[0] < h[i] < galileo_flight_altitude_boundaries[1]:
+            velocities[i] = handle_velocity_value_interpolator.interpolate(h[i])
     return velocities
 
 
@@ -787,16 +693,16 @@ def jupiter_atmosphere_density_model(h: np.ndarray):
     #     ...  # exponential
 
     if type(selected_altitude_km) == np.float64 or type(selected_altitude_km) == float:
-        if not interpolation_boundaries[0] < selected_altitude_km < interpolation_boundaries[1]:
+        if not atmosphere_altitude_values_boundaries[0] < selected_altitude_km < atmosphere_altitude_values_boundaries[1]:
             # use altitude in meters since scale height is in meters too
             return jupiter_1bar_density * np.exp(-h/jupiter_scale_height)
-        density_interpolated = density_value_interpolator.interpolate(selected_altitude_km)
+        density_interpolated = handle_density_value_interpolator.interpolate(selected_altitude_km)
         return density_interpolated
     elif type(selected_altitude_km) == np.ndarray:
         density_values = np.zeros(len(h))
         for i in range(len(h)):
-            if interpolation_boundaries[0] < selected_altitude_km[i] < interpolation_boundaries[1]:
-                density_values[i] = density_value_interpolator.interpolate(selected_altitude_km[i])
+            if atmosphere_altitude_values_boundaries[0] < selected_altitude_km[i] < atmosphere_altitude_values_boundaries[1]:
+                density_values[i] = handle_density_value_interpolator.interpolate(selected_altitude_km[i])
             else:
                 density_values[i] = jupiter_1bar_density * np.exp(-h[i] / jupiter_scale_height)
         return density_values
@@ -993,8 +899,8 @@ def regula_falsi_illinois(interval_boundaries: tuple,
                           tolerance: float = 1e-15,
                           max_iter: int = 1000,
                           **kwargs) -> tuple:
-    a_int = interval_boundaries[0]
-    b_int = interval_boundaries[1]
+
+    a_int, b_int = interval_boundaries[0], interval_boundaries[1]
 
     f_a = function(a_int, **kwargs) - zero_value
     f_b = function(b_int, **kwargs) - zero_value
@@ -1002,16 +908,12 @@ def regula_falsi_illinois(interval_boundaries: tuple,
     if f_a * f_b > 0:
         raise Exception('The selected interval has either none or multiple zeroes.')
 
-    ass_a = False
-    ass_b = False
-    i = 0
-    c_point = -1
-    f_c = -1
+    ass_a, ass_b = False, False
+    i, c_point, f_c = 0, -1, -1
 
     for i in range(max_iter):
 
         c_point = (a_int * f_b - b_int * f_a) / (f_b - f_a)
-
         f_c = function(c_point, **kwargs) - zero_value
 
         if abs(f_c) < tolerance:
@@ -1026,8 +928,7 @@ def regula_falsi_illinois(interval_boundaries: tuple,
                 f_b = f_b * m_ab
             a_int = c_point
             f_a = f_c
-            ass_a = True
-            ass_b = False
+            ass_a, ass_b = True, False
 
         if f_c > 0:
             if ass_b:
@@ -1037,23 +938,21 @@ def regula_falsi_illinois(interval_boundaries: tuple,
                 f_a = f_a * m_ab
             b_int = c_point
             f_b = f_c
-            ass_a = False
-            ass_b = True
+            ass_a, ass_b = False, True
 
     if i == max_iter:
         raise Warning('Regula falsi hasn\'t converged: max number of iterations reached.')
 
     return c_point, f_c, i
 
-# add secant method
+
 def secant_method(function: Callable,
                   x_1: float,
                   x_2: float,
                   zero_value: float = 0.,
                   tolerance: float = 1e-15,
                   max_iter: int = 1000,
-                  **kwargs
-                  ) -> tuple:
+                  **kwargs) -> tuple:
     i = 0
     f__x_1 = -1
 

@@ -12,7 +12,7 @@ This module defines useful functions that will be called by the main script, whe
 
 # Problem-specific imports
 import numpy as np
-import LowThrustUtilities as Util
+import CapsuleEntryUtilities as Util
 
 # Tudatpy imports
 import tudatpy
@@ -33,11 +33,9 @@ import numpy.linalg as LA
 
 class JupiterArrivalProblem:
     """
-    Class to initialize, simulate and optimize the Low Thrust trajectory.
+    Class to initialize, simulate and optimize the Jupiter aerocapture trajectory.
     The class is created specifically for this problem. This is done to provide better integration with Pagmo/Pygmo,
-    where the optimization process (assignment 3) will be done. For the first two assignments, the presence of this
-    class is not strictly needed, but it was chosen to create the code so that the same version could be used for all
-    three assignments.
+    where the optimization process (assignment 3) will be done.
 
     Attributes
     ----------

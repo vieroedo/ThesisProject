@@ -372,21 +372,24 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
     curr_position = curr_state[0:3]
     curr_velocity = curr_state[3:6]
 
-    term1 = LA.norm(curr_velocity) ** 2 - Util.central_body_gravitational_parameter / LA.norm(curr_position)
+    term1 = LA.norm(curr_velocity) ** 2 - Util.jupiter_gravitational_parameter / LA.norm(curr_position)
     term2 = np.dot(curr_position, curr_velocity)
-    curr_eccentricity_vector = (term1 * curr_position - term2 * curr_velocity) / Util.central_body_gravitational_parameter
+    curr_eccentricity_vector = (term1 * curr_position - term2 * curr_velocity) / Util.jupiter_gravitational_parameter
     curr_eccentricity = LA.norm(curr_eccentricity_vector)
 
     curr_angular_momentum = LA.norm(np.cross(curr_position, curr_velocity))
     curr_orbital_energy = Util.orbital_energy(LA.norm(curr_position), LA.norm(curr_velocity))
 
-    curr_orbit_sma = - Util.central_body_gravitational_parameter / (2 * curr_orbital_energy)
+    curr_orbit_sma = - Util.jupiter_gravitational_parameter / (2 * curr_orbital_energy)
 
     add_string = ''
     conjug = ' and'
 
     if current_state_to_eval == -1:
-        final_orbit_orbital_period = 2*np.pi * np.sqrt(curr_orbit_sma**3/Util.central_body_gravitational_parameter)
+        if curr_orbit_sma < 0:
+            final_orbit_orbital_period = np.inf
+        else:
+            final_orbit_orbital_period = 2*np.pi * np.sqrt(curr_orbit_sma ** 3 / Util.jupiter_gravitational_parameter)
         add_string = f' and orbital period {final_orbit_orbital_period/constants.JULIAN_DAY:.3f} days'
         conjug = ','
 
@@ -397,7 +400,7 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
         initial_orbit_pericenter = curr_orbit_sma * (1-curr_eccentricity)
         initial_orbit_pericenter_velocity = curr_angular_momentum / initial_orbit_pericenter
         target_sma = initial_orbit_pericenter / (1-0.98)
-        target_energy = - Util.central_body_gravitational_parameter / (2 * target_sma)
+        target_energy = - Util.jupiter_gravitational_parameter / (2 * target_sma)
         target_velocity = Util.velocity_from_energy(target_energy,initial_orbit_pericenter)
         delta_v = initial_orbit_pericenter_velocity - target_velocity
         print(f'Initial pericenter velocity: {initial_orbit_pericenter_velocity/1e3:.3f} km/s')

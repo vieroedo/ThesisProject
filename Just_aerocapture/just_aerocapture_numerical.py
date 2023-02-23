@@ -24,7 +24,7 @@ import CapsuleEntryUtilities as Util
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
-fly_galileo = True
+fly_galileo = False
 choose_model = 0
 
 
@@ -60,7 +60,7 @@ spice_interface.load_standard_kernels()
 
 # Atmospheric entry conditions
 atmospheric_entry_interface_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -3 # degrees
+flight_path_angle_at_atmosphere_entry = -2.5 # degrees
 
 
 ###########################################################################
@@ -96,9 +96,8 @@ body_settings = environment_setup.get_default_body_settings(
 density_scale_height = Util.jupiter_scale_height
 density_at_zero_altitude = Util.jupiter_1bar_density
 
-molecular_weight = 2.22  # kg/kmol
-gas_constant = 8314.32 / molecular_weight
-g_0 = Util.central_body_gravitational_parameter / Util.jupiter_radius ** 2
+
+g_0 = Util.jupiter_gravitational_parameter / Util.jupiter_radius ** 2
 constant_temperature = density_scale_height * g_0 / gas_constant
 
 

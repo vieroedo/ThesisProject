@@ -68,12 +68,12 @@ def get_galileo_initial_state() -> np.ndarray:
 
     # Galileo atmospheric entry data (obtained from https://adsabs.harvard.edu/pdf/2006ESASP.631E...6R)
 
-    entry_velocity = 59.92e3  # m/s  # galileo entry velocity wrt atmosphere: 47.4054 km/s     59.6e3
-    entry_fpa = np.deg2rad(-6.64)  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg   -6.69
-    latitude = np.deg2rad(6.57)  # rad
-    longitude = np.deg2rad(4.88)  # rad
-    heading = np.deg2rad(-2.6111)  # rad
-    altitude = 450e3  # m
+    entry_velocity = galileo_entry_velocity  # m/s
+    entry_fpa = galileo_entry_fpa  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg   -6.69
+    latitude = galileo_entry_latitude  # rad
+    longitude = galileo_entry_longitude  # rad
+    heading = galileo_entry_heading  # rad
+    altitude = galileo_entry_altitude  # m
     radius = jupiter_radius + altitude
 
     # Calculate Galileo probe positon
@@ -149,15 +149,15 @@ def get_initial_state(atmosphere_entry_fpa: float,
     # angular_momentum = z_axis * angular_momentum_norm
 
     # Calculate other orbit elements
-    semilatus_rectum = angular_momentum_norm ** 2 / central_body_gravitational_parameter
-    semimajor_axis = - central_body_gravitational_parameter / (2 * initial_orbital_energy)
+    semilatus_rectum = angular_momentum_norm ** 2 / jupiter_gravitational_parameter
+    semimajor_axis = - jupiter_gravitational_parameter / (2 * initial_orbital_energy)
     eccentricity = np.sqrt(1 - semilatus_rectum / semimajor_axis)
 
     # Set arrival position on x axis
     arrival_position = x_axis * arrival_radius
 
     circ_vel_at_atm_entry = np.sqrt(
-        central_body_gravitational_parameter / (jupiter_radius + atmosphere_entry_altitude))
+        jupiter_gravitational_parameter / (jupiter_radius + atmosphere_entry_altitude))
 
     # Prints for debugging
     if verbose:
@@ -387,7 +387,7 @@ def get_propagator_settings(atm_entry_fpa: float,
                             bodies,
                             termination_settings,
                             dependent_variables_to_save,
-                            current_propagator=propagation_setup.propagator.cowell,
+                            current_propagator=propagation_setup.propagator.unified_state_model_quaternions,
                             jupiter_interpl_excees_vel: float = 5600.,
                             initial_state_perturbation=np.zeros(6),
                             galileo_propagator_settings: bool = False,

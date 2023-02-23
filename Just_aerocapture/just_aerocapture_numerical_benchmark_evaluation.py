@@ -536,9 +536,9 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
     curr_position = curr_state[0:3]
     curr_velocity = curr_state[3:6]
 
-    term1 = LA.norm(curr_velocity) ** 2 - Util.central_body_gravitational_parameter / LA.norm(curr_position)
+    term1 = LA.norm(curr_velocity) ** 2 - Util.jupiter_gravitational_parameter / LA.norm(curr_position)
     term2 = np.dot(curr_position, curr_velocity)
-    curr_eccentricity_vector = (term1 * curr_position - term2 * curr_velocity) / Util.central_body_gravitational_parameter
+    curr_eccentricity_vector = (term1 * curr_position - term2 * curr_velocity) / Util.jupiter_gravitational_parameter
     curr_eccentricity = LA.norm(curr_eccentricity_vector)
 
     curr_orbital_energy = Util.orbital_energy(LA.norm(curr_position), LA.norm(curr_velocity))
@@ -547,8 +547,8 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
     conjug = ' and'
 
     if current_state_to_eval == -1:
-        final_orbit_sma = - Util.central_body_gravitational_parameter / (2 * curr_orbital_energy)
-        final_orbit_orbital_period = 2*np.pi * np.sqrt(final_orbit_sma**3/Util.central_body_gravitational_parameter)
+        final_orbit_sma = - Util.jupiter_gravitational_parameter / (2 * curr_orbital_energy)
+        final_orbit_orbital_period = 2*np.pi * np.sqrt(final_orbit_sma ** 3 / Util.jupiter_gravitational_parameter)
         add_string = f' and orbital period {final_orbit_orbital_period/constants.JULIAN_DAY:.3f} days'
         conjug = ','
 

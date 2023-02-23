@@ -12,7 +12,7 @@ do_regula_falsi_function_debugging = False
 # (Consider moving to related script in case other ones using this library need different parameters)
 
 # Atmospheric entry conditions
-arrival_pericenter_altitude = 400e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+arrival_pericenter_altitude = atmospheric_entry_altitude  # m
 flight_path_angle_at_atmosphere_entry = -1.5  # degrees
 
 # Jupiter arrival conditions
@@ -49,15 +49,15 @@ pre_ae_arrival_fpa = flight_path_angle_at_atmosphere_entry
 pre_ae_angular_momentum_norm = pre_ae_arrival_radius * pre_ae_arrival_velocity_norm * np.cos(pre_ae_arrival_fpa)
 pre_ae_angular_momentum = z_axis * pre_ae_angular_momentum_norm
 
-pre_ae_semilatus_rectum = pre_ae_angular_momentum_norm ** 2 / central_body_gravitational_parameter
-pre_ae_semimajor_axis = - central_body_gravitational_parameter / (2 * pre_ae_orbital_energy)
+pre_ae_semilatus_rectum = pre_ae_angular_momentum_norm ** 2 / jupiter_gravitational_parameter
+pre_ae_semimajor_axis = - jupiter_gravitational_parameter / (2 * pre_ae_orbital_energy)
 pre_ae_eccentricity = np.sqrt(1 - pre_ae_semilatus_rectum / pre_ae_semimajor_axis)
 
 # pre_ae_arrival_radius = jupiter_radius + arrival_pericenter_altitude
 
 pre_ae_arrival_position = x_axis * pre_ae_arrival_radius
 
-circ_vel_at_atm_entry = np.sqrt(central_body_gravitational_parameter/(jupiter_radius+arrival_pericenter_altitude))
+circ_vel_at_atm_entry = np.sqrt(jupiter_gravitational_parameter / (jupiter_radius + arrival_pericenter_altitude))
 
 print('\nAtmospheric entry (pre-aerocapture) conditions:\n'
       f'- altitude: {arrival_pericenter_altitude/1e3} km\n'
@@ -87,7 +87,7 @@ print(f'{list(np.concatenate((pre_ae_departure_position, pre_ae_departure_veloci
 atmospheric_entry_fpa = pre_ae_arrival_fpa
 atmospheric_entry_velocity_norm = pre_ae_arrival_velocity_norm
 atmospheric_entry_altitude = arrival_pericenter_altitude
-atmospheric_entry_g_acc = central_body_gravitational_parameter / (pre_ae_arrival_radius ** 2)
+atmospheric_entry_g_acc = jupiter_gravitational_parameter / (pre_ae_arrival_radius ** 2)
 
 # Atmosphere model coefficients (exponential atmosphere)
 reference_density = jupiter_1bar_density
@@ -116,9 +116,9 @@ atmospheric_exit_velocity_norm = atmospheric_entry_velocity_norm * np.exp(expone
 b_curv = 2/jupiter_radius
 molecular_weight = 2.22  # kg/kmol
 gas_constant = 8314.32 / molecular_weight
-surface_acceleration = central_body_gravitational_parameter / jupiter_radius**2
+surface_acceleration = jupiter_gravitational_parameter / jupiter_radius ** 2
 
-pressure = atmospheric_pressure_given_altitude(1000e3, surface_acceleration, b_curv, gas_constant, jupiter_atmosphere_model, True)
+pressure = atmospheric_pressure_given_altitude(1000e3, surface_acceleration, b_curv, gas_constant, jupiter_atmosphere_exponential_layered_model, True)
 
 
 # Check vehicle doesn't go too deep into Jupiter atmosphere (not below zero-level altitude)
@@ -148,8 +148,8 @@ mid_range_energy = orbital_energy(jupiter_radius + minimum_altitude, mid_range_v
 
 R_asterisk = (jupiter_radius + (arrival_pericenter_altitude+minimum_altitude)/2)
 final_downrange = 2 * lift_over_drag_ratio * R_asterisk * 0.5 * \
-                  np.log( (2*R_asterisk*mid_range_energy + central_body_gravitational_parameter)/
-                          (2*R_asterisk*pre_ae_orbital_energy + central_body_gravitational_parameter) )
+                  np.log((2 * R_asterisk * mid_range_energy + jupiter_gravitational_parameter) /
+                         (2 * R_asterisk * pre_ae_orbital_energy + jupiter_gravitational_parameter))
 
 atmospheric_entry_phase_angle = final_distance_travelled / jupiter_radius
 
@@ -193,13 +193,13 @@ p_ae_angular_momentum = np.cross(p_ae_departure_position, p_ae_departure_velocit
 p_ae_angular_momentum_norm = LA.norm(p_ae_angular_momentum)
 
 # Calculate other orbital parameters of the second arc
-p_ae_semilatus_rectum = p_ae_angular_momentum_norm ** 2 / central_body_gravitational_parameter
-p_ae_semimajor_axis = - central_body_gravitational_parameter / (2 * p_ae_orbital_energy)
+p_ae_semilatus_rectum = p_ae_angular_momentum_norm ** 2 / jupiter_gravitational_parameter
+p_ae_semimajor_axis = - jupiter_gravitational_parameter / (2 * p_ae_orbital_energy)
 p_ae_eccentricity = np.sqrt(1 - p_ae_semilatus_rectum / p_ae_semimajor_axis)
 
 
 p_ae_moon_fb_sma = galilean_moons_data[p_ae_flyby_moon]['SMA']
-p_ae_moon_fb_velocity_norm = np.sqrt(central_body_gravitational_parameter/p_ae_moon_fb_sma)
+p_ae_moon_fb_velocity_norm = np.sqrt(jupiter_gravitational_parameter / p_ae_moon_fb_sma)
 
 p_ae_apocenter = p_ae_semimajor_axis * (1 + p_ae_eccentricity)
 p_ae_pericenter = p_ae_semimajor_axis * (1 - p_ae_eccentricity)
@@ -211,7 +211,7 @@ if p_ae_moon_fb_sma > p_ae_apocenter:
 else:
     # third_arc_arrival_position = p_ae_moon_fb_position
     p_ae_arrival_radius = p_ae_moon_fb_sma
-    p_ae_arrival_velocity_norm = np.sqrt(2 * (p_ae_orbital_energy + central_body_gravitational_parameter / p_ae_arrival_radius))
+    p_ae_arrival_velocity_norm = np.sqrt(2 * (p_ae_orbital_energy + jupiter_gravitational_parameter / p_ae_arrival_radius))
     p_ae_arrival_fpa = np.arccos(p_ae_angular_momentum_norm / (p_ae_arrival_radius * p_ae_arrival_velocity_norm))
     # third_arc_arrival_fpa_s = (third_arc_arrival_fpa_sol, -third_arc_arrival_fpa_sol) # we check both options
 
@@ -324,15 +324,15 @@ final_orbit_departure_fpa = np.arcsin(
 
 # Calculate post-flyby arc orbital energy
 final_orbit_orbital_energy = final_orbit_departure_velocity_norm ** 2 / 2 - \
-                             central_body_gravitational_parameter / final_orbit_departure_radius
+                             jupiter_gravitational_parameter / final_orbit_departure_radius
 
 final_orbit_angular_momentum = final_orbit_departure_radius * final_orbit_departure_velocity_norm * np.cos(final_orbit_departure_fpa)
 
-final_orbit_semilatus_rectum = final_orbit_angular_momentum ** 2 / central_body_gravitational_parameter
-final_orbit_semimajor_axis = - central_body_gravitational_parameter / (2 * final_orbit_orbital_energy)
+final_orbit_semilatus_rectum = final_orbit_angular_momentum ** 2 / jupiter_gravitational_parameter
+final_orbit_semimajor_axis = - jupiter_gravitational_parameter / (2 * final_orbit_orbital_energy)
 final_orbit_eccentricity = np.sqrt(1 - final_orbit_semilatus_rectum / final_orbit_semimajor_axis)
 
-final_orbit_orbital_period = 2 * np.pi * np.sqrt(final_orbit_semimajor_axis ** 3 / central_body_gravitational_parameter)
+final_orbit_orbital_period = 2 * np.pi * np.sqrt(final_orbit_semimajor_axis ** 3 / jupiter_gravitational_parameter)
 
 # atm entry prints
 print('\nAtmospheric entry trajectory parameters:')
@@ -445,9 +445,9 @@ final_orbit_number_of_points = 2*number_of_epochs_to_plot
 final_orbit_reference_position = final_orbit_departure_position
 final_orbit_reference_velocity = final_orbit_departure_velocity
 
-position_multiplier = LA.norm(final_orbit_reference_velocity) **2 - central_body_gravitational_parameter/LA.norm(final_orbit_reference_position)
+position_multiplier = LA.norm(final_orbit_reference_velocity) ** 2 - jupiter_gravitational_parameter / LA.norm(final_orbit_reference_position)
 velocity_multiplier = np.dot(final_orbit_reference_position, final_orbit_reference_velocity)
-eccentricity_vector = 1/central_body_gravitational_parameter * (position_multiplier * final_orbit_reference_position - velocity_multiplier * final_orbit_reference_velocity)
+eccentricity_vector = 1 / jupiter_gravitational_parameter * (position_multiplier * final_orbit_reference_position - velocity_multiplier * final_orbit_reference_velocity)
 
 
 final_orbit_pericenter_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(eccentricity_vector), x_axis))

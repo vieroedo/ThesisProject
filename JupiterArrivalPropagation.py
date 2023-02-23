@@ -358,7 +358,6 @@ for random_seed in seeds_to_try:
                                                       decision_variable_range,
                                                       initial_propagation_time,
                                                       True)
-
         # NOTE: Propagator settings, termination settings, and initial_propagation_time are defined in the fitness function
         fitness = current_jupiter_arrival_problem.fitness(trajectory_parameters)
         objectives_and_constraints[simulation_index] = fitness

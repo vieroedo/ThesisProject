@@ -105,7 +105,7 @@ final_state = np.concatenate((moon_cartesian_state_at_arrival[0:3] + arrival_ran
 
 # Lambert targeter initialisation
 lambertTargeter = two_body_dynamics.LambertTargeterIzzo(
-    initial_state[:3], final_state[:3], arrival_epoch - departure_epoch, central_body_gravitational_parameter)
+    initial_state[:3], final_state[:3], arrival_epoch - departure_epoch, jupiter_gravitational_parameter)
 
 # lambertTargeter = two_body_dynamics.LambertTargeterGooding(
 #     initial_state[:3], final_state[:3], arrival_epoch - departure_epoch, central_body_gravitational_parameter)
@@ -116,12 +116,12 @@ lambert_arc_initial_state[3:] = lambertTargeter.get_departure_velocity()
 
 # Compute Keplerian state of Lambert arc
 lambert_arc_keplerian_elements = element_conversion.cartesian_to_keplerian(lambert_arc_initial_state,
-                                                                   central_body_gravitational_parameter)
+                                                                           jupiter_gravitational_parameter)
 
 # Setup Keplerian ephemeris model that describes the Lambert arc
 lambert_arc_ephemeris = environment_setup.create_body_ephemeris(
     environment_setup.ephemeris.keplerian(lambert_arc_keplerian_elements, departure_epoch,
-                                          central_body_gravitational_parameter), "")
+                                          jupiter_gravitational_parameter), "")
 
 # Selected epochs to plot
 epoch_list = np.linspace(departure_epoch, arrival_epoch, number_of_epochs_to_plot)
