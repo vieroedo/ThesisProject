@@ -59,7 +59,7 @@ spice_interface.load_standard_kernels()
 #                     0.4559143679738996]
 
 # Atmospheric entry conditions
-atmospheric_entry_interface_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+atmospheric_entry_interface_altitude = Util.atmospheric_entry_altitude  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -2.5 # degrees
 
 
@@ -98,7 +98,7 @@ density_at_zero_altitude = Util.jupiter_1bar_density
 
 
 g_0 = Util.jupiter_gravitational_parameter / Util.jupiter_radius ** 2
-constant_temperature = density_scale_height * g_0 / gas_constant
+constant_temperature = density_scale_height * g_0 / Util.jupiter_gas_constant
 
 
 # def density_function(h):
@@ -112,7 +112,7 @@ if choose_model == 3 or choose_model == 0:
     body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.custom_constant_temperature(
         Util.jupiter_atmosphere_density_model,
         constant_temperature,
-        gas_constant,
+        Util.jupiter_gas_constant,
         specific_heats_ratio )
 else:
     body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.exponential(
