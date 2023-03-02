@@ -2,8 +2,8 @@ import numpy as np
 from JupiterTrajectory_GlobalParameters import *
 from handle_functions import *
 import CapsuleEntryUtilities as Util
-import second_order_equations_aerocapture as ae_second_order
-import first_order_equations_aerocapture as ae_first_order
+import Just_aerocapture.Analytical_approach.second_order_equations_aerocapture as ae_second_order
+import Just_aerocapture.Analytical_approach.first_order_equations_aerocapture as ae_first_order
 
 # Tudatpy imports
 import tudatpy

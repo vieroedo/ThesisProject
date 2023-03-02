@@ -1,7 +1,3 @@
-import warnings
-
-from handle_functions import *
-import CapsuleEntryUtilities as Util
 from class_AerocaptureSemianalyticalModel import *
 """
 The orbit is planar and flybys occur at the center of mass of the moons
@@ -68,27 +64,20 @@ atmospheric_entry_initial_position = pre_ae_arrival_position
 
 
 aerocapture_analytical_problem = AerocaptureSemianalyticalModel([0,1000],atmospheric_entry_initial_position,number_of_epochs_to_plot,choose_equations_order)
-
 aerocapture_analytical_problem.fitness([interplanetary_arrival_velocity_in_jupiter_frame, atmospheric_entry_fpa])
 
 # aerocapture_parameters:
 # [atmospheric_exit_fpa, atmospheric_exit_velocity_norm, final_distance_travelled, minimum_altitude, atmospheric_entry_final_position]
-
 aerocapture_problem_parameters = aerocapture_analytical_problem.aerocapture_parameters_function()
 
 # Atmosphere exit fpa
 atmospheric_exit_fpa = aerocapture_problem_parameters[0]
-
 # Atmosphere exit velocity
 atmospheric_exit_velocity_norm = aerocapture_problem_parameters[1]
-
 # Minimum altitude
 minimum_altitude = aerocapture_problem_parameters[3]
-
-
 # Travelled distance (assumed at surface)
 final_distance_travelled = aerocapture_problem_parameters[2]
-
 # Final position after aerocapture
 atmospheric_entry_final_position = aerocapture_problem_parameters[4]
 
@@ -96,10 +85,6 @@ atmospheric_entry_final_position = aerocapture_problem_parameters[4]
 entry_cartesian_states = np.vstack(list(aerocapture_analytical_problem.get_cartesian_state_history().values()))
 dependent_variables = np.vstack(list(aerocapture_analytical_problem.get_dependent_variables_hystory().values()))
 # [ae_fpas, ae_velocities, ae_radii, ae_densities, ae_drag, ae_lift, ae_wall_hfx, ae_range_angles]
-
-# Calculate loads on the spacecraft
-a_total_max_over_g = np.nan
-
 ae_fpas = dependent_variables[:,0]
 ae_velocities = dependent_variables[:,1]
 ae_radii = dependent_variables[:,2]
@@ -108,6 +93,7 @@ ae_drag = dependent_variables[:,4]
 ae_lift = dependent_variables[:,5]
 ae_wall_hfx = dependent_variables[:,6]
 ae_range_angles = dependent_variables[:,7]
+
 
 print('\n Atmosphere exit conditions:\n'
       f'- exit velocity: {atmospheric_exit_velocity_norm/1e3:.3f} km/s')
@@ -272,7 +258,7 @@ final_orbit_orbital_period = 2 * np.pi * np.sqrt(final_orbit_semimajor_axis ** 3
 
 # atm entry prints
 print('\nAtmospheric entry trajectory parameters:')
-print(f'- Max acceleration on the spacecraft: {a_total_max_over_g:.3f} g  (1g = 9.81 m/s^2)')
+print(f'- Max acceleration on the spacecraft: {0.000:.3f} g  (1g = 9.81 m/s^2)')
 print(f'- Stagnation point peak heat flux: {max(ae_wall_hfx)}')
 print('- Integrated heat load: ...')
 print(f'- Minimum altitude: {minimum_altitude/1e3:.3f} km')
