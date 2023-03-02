@@ -1,6 +1,4 @@
-import numpy as np
-from matplotlib import pyplot as plt
-from second_order_equations_aerocapture import *
+from Just_aerocapture.Analytical_approach.second_order_equations_aerocapture import *
 
 tau_enter = 0.
 tau_exit = 3.5399430153600635

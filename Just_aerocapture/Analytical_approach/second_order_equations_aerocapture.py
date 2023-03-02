@@ -197,6 +197,10 @@ def second_order_approximation_aerocapture(tau, tau_x1, a1, a2, a3, entry_radius
 
     wall_heat_flux = 0.6556E-8 * (entry_density/nose_radius)**0.5 * entry_velocity**3 * np.exp(0.5*x_tau - 3/2*eta_constant*nu__velocity_dep_var)
 
-    return_values = (radius, velocity, flight_path_angle, density, drag, lift, wall_heat_flux)
-    return return_values
+    range_angle = tau * np.sqrt(
+        jupiter_scale_height / (atmospheric_entry_altitude + jupiter_radius))
+
+    return_values = (radius, velocity, flight_path_angle, density, drag, lift, wall_heat_flux, range_angle)
+    additional_values = []
+    return return_values, additional_values
 

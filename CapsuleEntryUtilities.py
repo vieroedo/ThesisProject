@@ -26,7 +26,6 @@ import numpy as np
 
 from handle_functions import *
 
-
 # Tudatpy imports
 import tudatpy
 from tudatpy.io import save2txt
@@ -253,6 +252,14 @@ def get_termination_settings(simulation_start_epoch: float,
         terminate_exactly_on_final_condition=False
     )
 
+    # Minimum altitude
+    minimum_altitude_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+        dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
+        limit_value=0.,
+        use_as_lower_limit=True,
+        terminate_exactly_on_final_condition=False
+    )
+
     # Minimum apoapsis (if greater than zero te orbit is closed)
     minimum_apoapsis_termination_settings = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.apoapsis_altitude('Capsule', 'Jupiter'),
@@ -289,6 +296,7 @@ def get_termination_settings(simulation_start_epoch: float,
     # List of all settings that terminate the propagation
     termination_list = [nominal_termination_settings,
                         maximum_altitude_termination_settings,
+                        minimum_altitude_termination_settings,
                         time_termination_settings]
 
     # Create termination settings object that terminates when either nominal or non-nominal conditions are reached
@@ -402,9 +410,12 @@ def get_propagator_settings(atm_entry_fpa: float,
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
                                                         propagation_setup.acceleration.aerodynamic()]}
     elif model_choice == 1:
+        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
+                                                        propagation_setup.acceleration.aerodynamic()]}
+    elif model_choice == 2:
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(2, 0),
                                                         propagation_setup.acceleration.aerodynamic()]}
-    elif model_choice == 2 or model_choice == 3:
+    elif model_choice == 3 or model_choice == 4:
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(8, 0),
                                                         propagation_setup.acceleration.aerodynamic()]}
     else:
@@ -601,7 +612,7 @@ def generate_benchmarks(benchmark_step_size,
                         simulation_start_epoch: float,
                         bodies: tudatpy.kernel.numerical_simulation.environment.SystemOfBodies,
                         benchmark_propagator_settings: tudatpy.kernel.numerical_simulation.propagation_setup.propagator.TranslationalStatePropagatorSettings,
-                        are_dependent_variables_present: bool,
+                        are_dependent_variables_present: bool = True,
                         output_path: str = None,
                         step_size_name: str = '',
                         benchmark_case: int = 3,

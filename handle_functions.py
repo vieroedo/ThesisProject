@@ -57,7 +57,10 @@ def rotation_matrix(axis, theta):
 
 
 def rotate_vectors_by_given_matrix(rot_matrix: np.ndarray, vector: np.ndarray):
-    """Returns a vector (or array of vectors) rotated according to the chosen rotation matrix"""
+    """
+    Returns a vector (or array of vectors) rotated according to the chosen rotation matrix.
+    In case of an array of vectors, the shape of the object is (n,3), where n is the number of vectors.
+    """
 
     vector_shape = np.shape(vector)
 
@@ -67,7 +70,8 @@ def rotate_vectors_by_given_matrix(rot_matrix: np.ndarray, vector: np.ndarray):
         return (rot_matrix @ vector.reshape(3, 1)).reshape(3)
 
     elif len(vector_shape) == 2:
-        vector = vector.T  # makes the vector with shape (3,n)
+        if vector_shape[0] != 3:
+            vector = vector.T  # makes the vector with shape (3,n)
         if len(vector[:, 0]) != 3:
             raise Exception('Vector for rotation must have three components!')
 
@@ -680,6 +684,13 @@ def galileo_velocity_from_altitude(h):
 
 
 def jupiter_atmosphere_exponential(altitude):
+    """
+
+    :param altitude:
+        entry altitude in metres
+    :return:
+        atmospheric density in kg/m^3
+    """
     density = jupiter_1bar_density * np.exp(-altitude/jupiter_scale_height)
     return density
 
@@ -693,7 +704,7 @@ def jupiter_atmosphere_density_model(h: np.ndarray):
     #     ...  # exponential
 
     if type(selected_altitude_km) == np.float64 or type(selected_altitude_km) == float:
-        if not atmosphere_altitude_values_boundaries[0] < selected_altitude_km < atmosphere_altitude_values_boundaries[1]:
+        if not atmosphere_altitude_values_boundaries_seiff1998[0] < selected_altitude_km < atmosphere_altitude_values_boundaries_seiff1998[1]:
             # use altitude in meters since scale height is in meters too
             return jupiter_1bar_density * np.exp(-h/jupiter_scale_height)
         density_interpolated = handle_density_value_interpolator.interpolate(selected_altitude_km)
@@ -701,7 +712,7 @@ def jupiter_atmosphere_density_model(h: np.ndarray):
     elif type(selected_altitude_km) == np.ndarray:
         density_values = np.zeros(len(h))
         for i in range(len(h)):
-            if atmosphere_altitude_values_boundaries[0] < selected_altitude_km[i] < atmosphere_altitude_values_boundaries[1]:
+            if atmosphere_altitude_values_boundaries_seiff1998[0] < selected_altitude_km[i] < atmosphere_altitude_values_boundaries_seiff1998[1]:
                 density_values[i] = handle_density_value_interpolator.interpolate(selected_altitude_km[i])
             else:
                 density_values[i] = jupiter_1bar_density * np.exp(-h[i] / jupiter_scale_height)
@@ -733,11 +744,11 @@ def atmospheric_entry_trajectory_altitude(fpa_angle: np.ndarray,
                                           fpa_entry: float,
                                           density_entry: float,
                                           density_0: float,
-                                          weight_over_surface_cl_coeff: float,
+                                          ballistic_coefficient_times_g_acc: float,
                                           g_acceleration: float,
                                           beta_parameter: float,
                                           ) -> np.ndarray:
-    current_density = (np.cos(fpa_angle) - np.cos(fpa_entry)) * 2*beta_parameter/g_acceleration * weight_over_surface_cl_coeff + density_entry
+    current_density = (np.cos(fpa_angle) - np.cos(fpa_entry)) * 2 * beta_parameter / g_acceleration * ballistic_coefficient_times_g_acc + density_entry
     current_altitude = - 1/beta_parameter * np.log(current_density/density_0)
 
     return current_altitude

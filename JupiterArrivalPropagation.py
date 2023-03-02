@@ -17,20 +17,15 @@ import random
 
 import numpy as np
 import os
-from scipy.stats.qmc import Sobol
 
 # Tudatpy imports
 from tudatpy.io import save2txt
-from tudatpy.kernel import constants
 from tudatpy.kernel.interface import spice_interface
-from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.numerical_simulation import environment_setup
-from tudatpy.kernel.numerical_simulation import propagation_setup
-from tudatpy.kernel.math import interpolators
 
 # Problem-specific imports
-import JupiterArrivalUtilities as Util
-from JupiterArrivalProblem import JupiterArrivalProblem
+from legacy_scripts import JupiterArrivalUtilities as Util
+from legacy_scripts.JupiterArrivalProblem import JupiterArrivalProblem
 
 ###########################################################################
 # DEFINE GLOBAL SETTINGS ##################################################

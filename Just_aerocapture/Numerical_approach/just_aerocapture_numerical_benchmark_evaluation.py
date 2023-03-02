@@ -192,8 +192,8 @@ current_integrator_settings = Util.get_integrator_settings(settings_index,
     #         bodies, current_integrator_settings, current_propagator_settings, print_dependent_variable_data=False)
     #     state_history = dynamics_simulator.state_history
     #     simulation_result = np.vstack(list(state_history.values()))
-    #     position_states = simulation_result[:,0:3]
-    #     norm_of_position_states = LA.norm(position_states, axis=1)
+    #     entry_position_states = simulation_result[:,0:3]
+    #     norm_of_position_states = LA.norm(entry_position_states, axis=1)
     #
     # subfolder = '/benchmarks/'
     # output_path = current_dir + subfolder

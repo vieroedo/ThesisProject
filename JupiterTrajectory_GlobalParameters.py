@@ -31,6 +31,7 @@ vehicle_radius = np.sqrt(vehicle_reference_area/np.pi)
 # vehicle_reference_area = np.pi * vehicle_radius**2    choose which one you want to use as parameter
 vehicle_cd = 1.2
 vehicle_cl = 0.6
+vehicle_hypersonic_K_parameter = 0.000315  # galileo probe aerodynamic -paper
 ########################################################################################################################
 
 
@@ -40,8 +41,10 @@ jupiter_mass = 1898.6e24  # kg
 jupiter_radius = spice_interface.get_average_radius('Jupiter') # m     legacy value: 69911e3
 jupiter_SOI_radius = 48.2e9  # m
 jupiter_gravitational_parameter = spice_interface.get_body_gravitational_parameter('Jupiter')
+jupiter_surface_acceleration = jupiter_gravitational_parameter / jupiter_radius ** 2
 jupiter_molecular_weight = 2.22  # kg/kmol
-jupiter_gas_constant = 8314.32 / jupiter_molecular_weight
+jupiter_gas_constant = constants.MOLAR_GAS_CONSTANT * 1e3 / jupiter_molecular_weight
+jupiter_specific_heats_ratio = 1.5
 
 # Jupiter atmosphere exponential model parameters
 jupiter_scale_height = 27e3  # m -> https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
@@ -109,8 +112,10 @@ galileo_entry_longitude = np.deg2rad(4.88)  # rad
 galileo_entry_heading = np.deg2rad(-2.6111)  # rad
 galileo_entry_altitude = 450e3  # m
 
+galileo_mission_directory = '/Just_aerocapture/Numerical_approach/GalileoMission/'
+
 # Galileo in-flight data taken from Table 6 of DOI: 10.1029/98JE01766
-galileo_flight_data_seiff1998 = np.loadtxt(global_parameters_file_directory + '/Just_aerocapture/GalileoMission/galileo_flight_data.txt')
+galileo_flight_data_seiff1998 = np.loadtxt(global_parameters_file_directory + galileo_mission_directory + 'galileo_flight_data.txt')
 galileo_flight_epoch = galileo_flight_data_seiff1998[:, 0]
 galileo_flight_altitude = galileo_flight_data_seiff1998[:, 1] * 1e3
 galileo_flight_velocity = galileo_flight_data_seiff1998[:, 2] * 1e3
@@ -121,15 +126,15 @@ galileo_flight_altitude_boundaries = [galileo_flight_altitude[-1], galileo_fligh
 
 # Galileo in-flight data taken from  DOI: 10.1029/98JE01766
 # Table 8
-jupiter_upper_atmosphere_data_seiff1998 = np.loadtxt(global_parameters_file_directory +
-                                   '/Just_aerocapture/GalileoMission/galileo_flight_data_2.txt')
+jupiter_upper_atmosphere_data_seiff1998 = np.loadtxt(global_parameters_file_directory + galileo_mission_directory +
+                                   'galileo_flight_data_2.txt')
 # Table 7
-jupiter_lower_atmosphere_data_seiff1998 = np.loadtxt(global_parameters_file_directory +
-                                   '/Just_aerocapture/GalileoMission/galileo_lower_atm_flight_data_2.txt')
+jupiter_lower_atmosphere_data_seiff1998 = np.loadtxt(global_parameters_file_directory + galileo_mission_directory +
+                                   'galileo_lower_atm_flight_data_2.txt')
 jupiter_altitude_atmosphere_values_seiff1998 = np.concatenate((jupiter_upper_atmosphere_data_seiff1998[:, 0],jupiter_lower_atmosphere_data_seiff1998[:, 1]))
 jupiter_density_atmosphere_values_seiff1998 = np.concatenate((jupiter_upper_atmosphere_data_seiff1998[:, 3],jupiter_lower_atmosphere_data_seiff1998[:, 3]))
-atmosphere_altitude_values_boundaries = [jupiter_altitude_atmosphere_values_seiff1998[-1],
-                                         jupiter_altitude_atmosphere_values_seiff1998[0]]  # 0=1000km  -1=-135km
+atmosphere_altitude_values_boundaries_seiff1998 = [jupiter_altitude_atmosphere_values_seiff1998[-1],
+                                                   jupiter_altitude_atmosphere_values_seiff1998[0]]  # 0=1000km  -1=-135km
 ########################################################################################################################
 
 

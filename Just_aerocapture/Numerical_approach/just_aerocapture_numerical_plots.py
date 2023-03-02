@@ -25,8 +25,8 @@ import CapsuleEntryUtilities as Util
 # Make everything big
 plt.rc('font', size=15)
 
-show_galileo_flight = True
-plot_galileo_tabulated_data = True
+show_galileo_flight = False
+plot_galileo_tabulated_data = False
 plot_heatfluxes_in_dep_var_plots = False
 
 plot_figures_for_thesis = False

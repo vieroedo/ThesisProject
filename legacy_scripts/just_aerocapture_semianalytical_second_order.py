@@ -2,6 +2,9 @@ import warnings
 
 from handle_functions import *
 
+from second_order_equations_aerocapture import *
+import CapsuleEntryUtilities as Util
+
 """
 The orbit is planar and flybys occur at the center of mass of the moons
 """
@@ -12,8 +15,8 @@ do_regula_falsi_function_debugging = False
 # (Consider moving to related script in case other ones using this library need different parameters)
 
 # Atmospheric entry conditions
-arrival_pericenter_altitude = atmospheric_entry_altitude  # m
-flight_path_angle_at_atmosphere_entry = -1.5  # degrees
+arrival_pericenter_altitude = atmospheric_entry_altitude  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+flight_path_angle_at_atmosphere_entry = -3  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600  # m/s
@@ -33,9 +36,7 @@ first_arc_number_of_points = number_of_epochs_to_plot
 second_arc_number_of_points = number_of_epochs_to_plot
 ########################################################################################################################
 
-
-moon_flyby_state = moon_circular_2d_state(epoch=213, choose_moon=p_ae_flyby_moon)
-
+# Calculate first arc quantities and the initial state vector
 pre_ae_departure_radius = jupiter_SOI_radius
 pre_ae_departure_velocity_norm = interplanetary_arrival_velocity_in_jupiter_frame
 
@@ -44,134 +45,98 @@ pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure
 pre_ae_arrival_radius = jupiter_radius + arrival_pericenter_altitude
 pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius)
 
-pre_ae_arrival_fpa = flight_path_angle_at_atmosphere_entry
-
-pre_ae_angular_momentum_norm = pre_ae_arrival_radius * pre_ae_arrival_velocity_norm * np.cos(pre_ae_arrival_fpa)
+pre_ae_angular_momentum_norm = pre_ae_arrival_radius * pre_ae_arrival_velocity_norm * np.cos(flight_path_angle_at_atmosphere_entry)
 pre_ae_angular_momentum = z_axis * pre_ae_angular_momentum_norm
 
 pre_ae_semilatus_rectum = pre_ae_angular_momentum_norm ** 2 / jupiter_gravitational_parameter
 pre_ae_semimajor_axis = - jupiter_gravitational_parameter / (2 * pre_ae_orbital_energy)
 pre_ae_eccentricity = np.sqrt(1 - pre_ae_semilatus_rectum / pre_ae_semimajor_axis)
 
-# pre_ae_arrival_radius = jupiter_radius + arrival_pericenter_altitude
-
 pre_ae_arrival_position = x_axis * pre_ae_arrival_radius
 
-circ_vel_at_atm_entry = np.sqrt(jupiter_gravitational_parameter / (jupiter_radius + arrival_pericenter_altitude))
+initial_state_vector = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
+                                              interplanetary_arrival_velocity_in_jupiter_frame,True)
 
-print('\nAtmospheric entry (pre-aerocapture) conditions:\n'
-      f'- altitude: {arrival_pericenter_altitude/1e3} km\n'
-      f'- velocity: {pre_ae_arrival_velocity_norm / 1e3:.3f} km/s\n'
-      f'- ref circular velocity: {circ_vel_at_atm_entry/1e3:.3f} km/s\n'
-      f'- flight path angle: {pre_ae_arrival_fpa*180/np.pi:.3f} deg\n'
-      f'- eccentricity: {pre_ae_eccentricity:.10f} ')
-
-# Calculate initial state vector
-pre_ae_departure_true_anomaly = true_anomaly_from_radius(pre_ae_departure_radius, pre_ae_eccentricity, pre_ae_semimajor_axis)
-pre_ae_arrival_true_anomaly = true_anomaly_from_radius(pre_ae_arrival_radius, pre_ae_eccentricity, pre_ae_semimajor_axis)
-
-delta_true_anomaly = pre_ae_arrival_true_anomaly - pre_ae_departure_true_anomaly
-
-pos_rotation_matrix = rotation_matrix(z_axis, -delta_true_anomaly)
-pre_ae_departure_position = rotate_vectors_by_given_matrix(pos_rotation_matrix, unit_vector(pre_ae_arrival_position)) * pre_ae_departure_radius
-
-pre_ae_departure_fpa = - np.arccos(pre_ae_angular_momentum_norm / (pre_ae_departure_radius * pre_ae_departure_velocity_norm))
-
-vel_rotation_matrix = rotation_matrix(z_axis, np.pi/2 - pre_ae_departure_fpa)
-pre_ae_departure_velocity = rotate_vectors_by_given_matrix(vel_rotation_matrix, unit_vector(pre_ae_departure_position)) * pre_ae_departure_velocity_norm
-
-print('\nDeparture state:')
-print(f'{list(np.concatenate((pre_ae_departure_position, pre_ae_departure_velocity)))}')
+# AEROCAPTURE ##########################################################################################################
 
 # Entry conditions (from arcs 1 and 2)
-atmospheric_entry_fpa = pre_ae_arrival_fpa
+atmospheric_entry_fpa = flight_path_angle_at_atmosphere_entry
 atmospheric_entry_velocity_norm = pre_ae_arrival_velocity_norm
 atmospheric_entry_altitude = arrival_pericenter_altitude
-atmospheric_entry_g_acc = jupiter_gravitational_parameter / (pre_ae_arrival_radius ** 2)
+# atmospheric_entry_g_acc = jupiter_gravitational_parameter / (pre_ae_arrival_radius ** 2)
+atmospheric_entry_initial_position = pre_ae_arrival_position
 
-# Atmosphere model coefficients (exponential atmosphere)
-reference_density = jupiter_1bar_density
-scale_height = jupiter_scale_height
-beta_parameter = 1 / scale_height
-density_at_atmosphere_entry = reference_density * np.exp(-atmospheric_entry_altitude*beta_parameter) # assumed exp model
+tau_entry, tau_minimum_altitude, tau_exit, a1, a2, a3 = calculate_tau_boundaries_second_order_equations(
+                                                             atmospheric_entry_altitude+jupiter_radius,
+                                                             atmospheric_entry_velocity_norm, atmospheric_entry_fpa,
+                                                             K_hypersonic=Util.vehicle_hypersonic_K_parameter)
 
+tau_linspace = np.linspace(tau_entry, tau_exit, 100)
 
-# Capsule properties and coefficients
-lift_coefficient = 0.6  # set to 0.6 to make L/D = 0.5 -> https://www.researchgate.net/publication/238790363_Aerodynamic_Control_on_a_Lunar_Return_Capsule_using_Trim-Flaps
-drag_coefficient = 1.2
-lift_over_drag_ratio = lift_coefficient/drag_coefficient
-capsule_mass = 2000  # kg
-capsule_surface = 5#12.5  # m^2
-capsule_weight = capsule_mass * atmospheric_entry_g_acc
+# (radius, velocity, flight_path_angle, density, drag, lift, wall_heat_flux)
+aerocapture_quantities = second_order_approximation_aerocapture(tau_linspace,tau_minimum_altitude, a1, a2, a3,
+                                                                atmospheric_entry_altitude+jupiter_radius,
+                                                                atmospheric_entry_velocity_norm, atmospheric_entry_fpa,
+                                                                K_hypersonic=Util.vehicle_hypersonic_K_parameter)
+
+ae_range_angles = tau_linspace * np.sqrt(
+            jupiter_scale_height / (atmospheric_entry_altitude + jupiter_radius))
+ae_radii = aerocapture_quantities[0]
+ae_velocities = aerocapture_quantities[1]
+ae_fpas = aerocapture_quantities[2]
+ae_densities = aerocapture_quantities[3]
+ae_drag = aerocapture_quantities[4]
+ae_lift = aerocapture_quantities[5]
+ae_wall_hfx =  aerocapture_quantities[6]
 
 # Atmosphere exit fpa
-atmospheric_exit_fpa = - atmospheric_entry_fpa
+atmospheric_exit_fpa = ae_fpas[-1]
 
 # Atmosphere exit velocity
-exponential_argument = 2 * atmospheric_entry_fpa / lift_over_drag_ratio
-atmospheric_exit_velocity_norm = atmospheric_entry_velocity_norm * np.exp(exponential_argument)
+atmospheric_exit_velocity_norm = ae_velocities[-1]
 
-# here try to use atmosph layered model
+# Minimum altitude
+x_tau_min_alt = x_tau_function(tau_minimum_altitude, a1, a2, a3)
+minimum_altitude = - jupiter_scale_height * x_tau_min_alt + atmospheric_entry_altitude
 
-b_curv = 2/jupiter_radius
-molecular_weight = 2.22  # kg/kmol
-gas_constant = 8314.32 / molecular_weight
-surface_acceleration = jupiter_gravitational_parameter / jupiter_radius ** 2
-
-pressure = atmospheric_pressure_given_altitude(1000e3, surface_acceleration, b_curv, gas_constant, jupiter_atmosphere_exponential_layered_model, True)
-
-
-# Check vehicle doesn't go too deep into Jupiter atmosphere (not below zero-level altitude)
-weight_over_surface_cl_coefficient = capsule_weight / (capsule_surface * lift_coefficient)
-minimum_altitude_condition_value = atmospheric_entry_g_acc * reference_density \
-                                   / (4 * beta_parameter * np.sin(atmospheric_entry_fpa/2)**2)
-if weight_over_surface_cl_coefficient > minimum_altitude_condition_value:
-    raise Warning('Minimum altitude is below zero!! Trajectory is theoretically possible, but heat loads can be prohibitive.')
-
-# # Angle at a certain time idk
-# gamma_angle = ...
-
-effective_entry_fpa = - np.arccos(np.cos(atmospheric_entry_fpa) - density_at_atmosphere_entry * atmospheric_entry_g_acc / (2*beta_parameter) * 1 / weight_over_surface_cl_coefficient)
-
-minimum_altitude = atmospheric_entry_trajectory_altitude(0., atmospheric_entry_fpa, density_at_atmosphere_entry,
-                                                         reference_density, weight_over_surface_cl_coefficient,
-                                                         atmospheric_entry_g_acc, beta_parameter)
-# pressure_at_minimum_altitude = ...
 
 # Travelled distance (assumed at surface)
-final_distance_travelled = atmospheric_entry_trajectory_distance_travelled(atmospheric_exit_fpa, atmospheric_entry_fpa,
-                                                                           effective_entry_fpa, scale_height)
-
-mid_range_velocity = atmospheric_entry_velocity_norm * np.exp(atmospheric_entry_fpa/lift_over_drag_ratio)
-
-mid_range_energy = orbital_energy(jupiter_radius + minimum_altitude, mid_range_velocity)
-
-R_asterisk = (jupiter_radius + (arrival_pericenter_altitude+minimum_altitude)/2)
-final_downrange = 2 * lift_over_drag_ratio * R_asterisk * 0.5 * \
-                  np.log((2 * R_asterisk * mid_range_energy + jupiter_gravitational_parameter) /
-                         (2 * R_asterisk * pre_ae_orbital_energy + jupiter_gravitational_parameter))
-
-atmospheric_entry_phase_angle = final_distance_travelled / jupiter_radius
+atmospheric_entry_phase_angle = ae_range_angles[-1]
+final_distance_travelled = atmospheric_entry_phase_angle * jupiter_radius
 
 atmosph_entry_rot_matrix = rotation_matrix(pre_ae_angular_momentum, atmospheric_entry_phase_angle)
 atmospheric_entry_final_position = rotate_vectors_by_given_matrix(atmosph_entry_rot_matrix, pre_ae_arrival_position)
 
+
+x_unal, y_unal, z_unal = cartesian_3d_from_polar(ae_radii,np.zeros(len(ae_radii)),ae_range_angles)
+
+entry_position_states_unaligned = np.vstack((x_unal, y_unal, z_unal))
+
+atmospheric_entry_reference_angle = np.arcsin(LA.norm(np.cross(x_axis, atmospheric_entry_initial_position))/LA.norm(atmospheric_entry_initial_position))
+if np.dot(z_axis, np.cross(x_axis, atmospheric_entry_initial_position)) < 0:
+    atmospheric_entry_reference_angle = atmospheric_entry_reference_angle + np.pi
+
+entry_positions_rot_matrix = rotation_matrix(pre_ae_angular_momentum, atmospheric_entry_reference_angle)
+entry_position_states = rotate_vectors_by_given_matrix(entry_positions_rot_matrix,
+                                                       entry_position_states_unaligned)
+
+
+entry_velocity_states =np.zeros(np.shape(entry_position_states))
+if max(np.shape(entry_velocity_states)) <= 3:
+    raise Exception('too few instances of the reentry trajectory (less or equal than 3)')
+for i in range(max(np.shape(entry_velocity_states))):
+    entry_velocities_rot_matrix = rotation_matrix(pre_ae_angular_momentum, np.pi/2 - ae_fpas[i])
+    entry_velocity_states[i, :] = rotate_vectors_by_given_matrix(entry_velocities_rot_matrix, entry_position_states[i, :])
+
+entry_cartesian_states = np.concatenate((entry_position_states, entry_velocity_states), axis=1)
+dependent_variables = np.vstack((ae_fpas,ae_velocities,ae_radii,ae_densities, ae_drag, ae_lift, ae_wall_hfx)).T
+
 # Calculate loads on the spacecraft
-term_1 = lift_over_drag_ratio / (2*(1 + np.cos(atmospheric_entry_fpa)))
-term_2 = 1 - np.sqrt(1 + (4 * np.sin(atmospheric_entry_fpa)**2)/(lift_over_drag_ratio**2))
-fpa_max_acceleration = 2 * np.arctan(term_1 * term_2)
-
-g_earth = 9.81  # m/s^2
-av_max_over_g = beta_parameter * atmospheric_entry_velocity_norm ** 2 / (g_earth * lift_over_drag_ratio) \
-                  * (np.cos(fpa_max_acceleration) - np.cos(atmospheric_entry_fpa)) \
-                  * np.exp(- 2 * (fpa_max_acceleration - atmospheric_entry_fpa) / lift_over_drag_ratio)
-
-a_total_max_over_g = av_max_over_g * np.sqrt(1 + lift_over_drag_ratio**2)
-
-
+a_total_max_over_g = np.nan
 # Heat loads
 stagnation_point_heat_flux = ...
 integrated_heat_load = ...
+
 
 print('\n Atmosphere exit conditions:\n'
       f'- exit velocity: {atmospheric_exit_velocity_norm/1e3:.3f} km/s')
@@ -204,7 +169,7 @@ p_ae_moon_fb_velocity_norm = np.sqrt(jupiter_gravitational_parameter / p_ae_moon
 p_ae_apocenter = p_ae_semimajor_axis * (1 + p_ae_eccentricity)
 p_ae_pericenter = p_ae_semimajor_axis * (1 - p_ae_eccentricity)
 
-if p_ae_moon_fb_sma > p_ae_apocenter:
+if p_ae_moon_fb_sma > abs(p_ae_apocenter):
     warnings.warn(f'orbit too low for post aerocapture flyby. apocenter - moon SMA: {(p_ae_apocenter-p_ae_moon_fb_sma)/1e3:.3f} km')
     p_ae_arrival_position = p_ae_departure_position
     final_orbit_dep_vel_w_fb = p_ae_departure_velocity
@@ -341,7 +306,6 @@ print('- Stagnation point heat flux: ...')
 print('- Integrated heat load: ...')
 print(f'- Minimum altitude: {minimum_altitude/1e3:.3f} km')
 print(f'- Horizontal distance travelled: {final_distance_travelled/1e3:.3f} km')
-print(f'- Horizontal distance travelled check for debug: {final_downrange/1e3:.3f} km')
 
 
 # Print fourth arc quantities for debugging
@@ -378,14 +342,14 @@ print(f'pre-post flyby delta orbital energy: {abs(p_ae_orbital_energy - final_or
 if p_ae_moon_fb_sma > p_ae_apocenter:
     arcs_dictionary = {
         'pre_ae': (pre_ae_departure_radius, pre_ae_arrival_position, pre_ae_eccentricity, pre_ae_semimajor_axis,
-                   pre_ae_arrival_fpa),
+                   flight_path_angle_at_atmosphere_entry),
         # 'post_ae': (
         # p_ae_departure_radius, p_ae_arrival_position, p_ae_eccentricity, p_ae_semimajor_axis, p_ae_arrival_fpa),
         # 'Third': (third_arc_departure_radius, third_arc_arrival_position, third_arc_eccentricity, third_arc_semimajor_axis, third_arc_arrival_fpa),
     }
 else:
     arcs_dictionary = {
-        'pre_ae': (pre_ae_departure_radius, pre_ae_arrival_position, pre_ae_eccentricity, pre_ae_semimajor_axis, pre_ae_arrival_fpa),
+        'pre_ae': (pre_ae_departure_radius, pre_ae_arrival_position, pre_ae_eccentricity, pre_ae_semimajor_axis, flight_path_angle_at_atmosphere_entry),
         'post_ae': (p_ae_departure_radius, p_ae_arrival_position, p_ae_eccentricity, p_ae_semimajor_axis, p_ae_arrival_fpa),
         # 'Third': (third_arc_departure_radius, third_arc_arrival_position, third_arc_eccentricity, third_arc_semimajor_axis, third_arc_arrival_fpa),
     }
@@ -467,6 +431,9 @@ z_final_orbit = np.zeros(len(x_final_orbit))
 
 ax.plot3D(x_final_orbit, y_final_orbit, z_final_orbit, 'r')
 
+# Plot entry trajectory
+ax.plot3D(entry_cartesian_states[:,0], entry_cartesian_states[:,1], entry_cartesian_states[:,2])
+
 # PLOT FIGURE ARRANGEMENT ##############################################################################################
 
 ax.set_xlabel('x (m)')
@@ -474,7 +441,19 @@ ax.set_ylabel('y (m)')
 ax.set_zlabel('z (m)')
 ax.set_title('Jupiter full arrival trajectory')
 
-xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
+lines = ax.get_lines()
+last_line = lines[-1]
+
+# Get the data for the last line
+line_data = last_line.get_data_3d()
+
+# Get the data limits for the last line
+x_data_limits = line_data[0].min(), line_data[0].max()
+y_data_limits = line_data[1].min(), line_data[1].max()
+z_data_limits = line_data[2].min(), line_data[2].max()
+
+xyzlim = np.array([x_data_limits, y_data_limits, z_data_limits]).T
+# xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
 XYZlim = np.asarray([min(xyzlim[0]), max(xyzlim[1])])
 ax.set_xlim3d(XYZlim)
 ax.set_ylim3d(XYZlim)
@@ -507,5 +486,22 @@ else:
         y_m = moon_sma * np.sin(theta_angle)
         z_m = np.zeros(len(theta_angle))
         ax.plot3D(x_m, y_m, z_m, 'b')
+
+########################################################################################################################
+# RE-ENTRY PLOTS  ######################################################################################################
+########################################################################################################################
+
+fpa_vector = np.linspace(atmospheric_entry_fpa, atmospheric_exit_fpa, 200)
+
+altitude_vector = ae_radii-jupiter_radius
+    # atmospheric_entry_trajectory_altitude(fpa_vector, atmospheric_entry_fpa, density_at_atmosphere_entry,
+    #                                                     reference_density, ballistic_coefficient_times_g_acc,
+    #                                                     atmospheric_entry_g_acc, jupiter_beta_parameter)
+downrange_vector = tau_linspace * np.sqrt(jupiter_scale_height/(atmospheric_entry_altitude+jupiter_radius)) * jupiter_radius
+    # atmospheric_entry_trajectory_distance_travelled(fpa_vector, atmospheric_entry_fpa, effective_entry_fpa, scale_height)
+
+fig2, ax2 = plt.subplots(figsize=(5,6))
+ax2.plot(downrange_vector/1e3, altitude_vector/1e3)
+ax2.set(xlabel='downrange [km]', ylabel='altitude [km]')
 
 plt.show()

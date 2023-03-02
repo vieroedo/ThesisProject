@@ -1,7 +1,4 @@
-import numpy as np
-
-from handle_functions import *
-from second_order_equations_aerocapture import *
+from Just_aerocapture.Analytical_approach.second_order_equations_aerocapture import *
 
 """
 The orbit is planar and flybys occur at the center of mass of the moons
@@ -325,16 +322,16 @@ atmospheric_exit_fpa = ae_fpas[-1]
 atmospheric_exit_velocity_norm = ae_velocities[-1]
 
 # Check vehicle doesn't go too deep into Jupiter atmosphere (not below zero-level altitude)
-# weight_over_surface_cl_coefficient = capsule_weight / (capsule_surface * lift_coefficient)
+# ballistic_coefficient_times_g_acc = capsule_weight / (capsule_surface * lift_coefficient)
 # minimum_altitude_condition_value = atmospheric_entry_g_acc * reference_density \
-#                                    / (4 * beta_parameter * np.sin(atmospheric_entry_fpa/2)**2)
-# if weight_over_surface_cl_coefficient > minimum_altitude_condition_value:
+#                                    / (4 * jupiter_beta_parameter * np.sin(atmospheric_entry_fpa/2)**2)
+# if ballistic_coefficient_times_g_acc > minimum_altitude_condition_value:
 #     raise Warning('Minimum altitude is below zero!! Trajectory is theoretically possible, but heat loads can be prohibitive.')
 
 # # Angle at a certain time idk
 # gamma_angle = ...
 
-# effective_entry_fpa = - np.arccos(np.cos(atmospheric_entry_fpa) - density_at_atmosphere_entry * atmospheric_entry_g_acc / (2*beta_parameter) * 1 / weight_over_surface_cl_coefficient)
+# effective_entry_fpa = - np.arccos(np.cos(atmospheric_entry_fpa) - density_at_atmosphere_entry * atmospheric_entry_g_acc / (2*jupiter_beta_parameter) * 1 / ballistic_coefficient_times_g_acc)
 #
 
 x_tau_min_alt = x_tau_function(tau_minimum_altitude, a1, a2, a3)
@@ -774,8 +771,8 @@ fpa_vector = np.linspace(atmospheric_entry_fpa, atmospheric_exit_fpa, 200)
 
 altitude_vector = ae_radii-jupiter_radius
     # atmospheric_entry_trajectory_altitude(fpa_vector, atmospheric_entry_fpa, density_at_atmosphere_entry,
-    #                                                     reference_density, weight_over_surface_cl_coefficient,
-    #                                                     atmospheric_entry_g_acc, beta_parameter)
+    #                                                     reference_density, ballistic_coefficient_times_g_acc,
+    #                                                     atmospheric_entry_g_acc, jupiter_beta_parameter)
 downrange_vector = tau_linspace * np.sqrt(jupiter_scale_height/(atmospheric_entry_altitude+jupiter_radius)) * jupiter_radius
     # atmospheric_entry_trajectory_distance_travelled(fpa_vector, atmospheric_entry_fpa, effective_entry_fpa, scale_height)
 

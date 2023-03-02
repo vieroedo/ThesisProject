@@ -61,7 +61,7 @@ class JupiterArrivalProblem:
                  integrator_settings: tudatpy.kernel.numerical_simulation.propagation_setup.integrator.IntegratorSettings,
                  specific_impulse: float,
                  # minimum_mars_distance: float,
-                 time_buffer: float,
+                 # time_buffer: float,
                  vehicle_mass: float,
                  decision_variable_range,
                  epoch: float,
@@ -91,7 +91,7 @@ class JupiterArrivalProblem:
         self.integrator_settings_function = lambda : integrator_settings
         self.specific_impulse = specific_impulse
         # self.minimum_mars_distance = minimum_mars_distance
-        self.time_buffer = time_buffer
+        # self.time_buffer = time_buffer
         self.vehicle_mass = vehicle_mass
         self.decision_variable_range = decision_variable_range
         self.perform_propagation = perform_propagation
@@ -153,9 +153,8 @@ class JupiterArrivalProblem:
     def fitness(self,
                 trajectory_parameters) -> float:
         """
-        Propagate the trajectory using the hodographic method with the parameters given as argument.
-        This function uses the trajectory parameters to create a new hodographic shaping object, from which a new
-        thrust acceleration profile is extracted. Subsequently, the trajectory is propagated numerically, if desired.
+        Propagate the trajectory with the parameters given as argument.
+        This function uses the trajectory parameters to numerically propagate the trajectory.
         The fitness, currently set to zero, can be computed here: it will be used during the optimization process.
         Parameters
         ----------
@@ -164,33 +163,33 @@ class JupiterArrivalProblem:
         Returns
         -------
         fitness : list
-            min_earth_distance,
-            max_thrust,
-            max_angle_rate,
-            max_thrust_acceleration,
-            maximum_distance_sun,
-            minimum_distance_sun,
-            max_perturbations_acceleration,
-            low_thrust_delta_v,
-            earth_escape_delta_v,
-            mars_insertion_delta_v,
-            sc_propellant_consumed,
-            earth_departure_fuel_consumed,
-            time_of_flight
+            # min_earth_distance,
+            # max_thrust,
+            # max_angle_rate,
+            # max_thrust_acceleration,
+            # maximum_distance_sun,
+            # minimum_distance_sun,
+            # max_perturbations_acceleration,
+            # low_thrust_delta_v,
+            # earth_escape_delta_v,
+            # mars_insertion_delta_v,
+            # sc_propellant_consumed,
+            # earth_departure_fuel_consumed,
+            # time_of_flight
         """
+
         # Create hodographic shaping object
         bodies = self.bodies_function()
-        hodographic_shaping = Util.create_hodographic_shaping_object(trajectory_parameters,
-                                                                     bodies)
-        self.hodographic_shaping_function = lambda : hodographic_shaping
+        # hodographic_shaping = Util.create_hodographic_shaping_object(trajectory_parameters,
+        #                                                              bodies)
+        # self.hodographic_shaping_function = lambda : hodographic_shaping
 
         # Propagate trajectory only if required
         if self.perform_propagation:
 
             integrator_settings = self.integrator_settings_function( )
 
-            termination_settings = Util.get_termination_settings(trajectory_parameters, self.minimum_mars_distance,
-                                                                 self.time_buffer)
+            termination_settings = Util.get_termination_settings(self.epoch)
             initial_propagation_time = Util.get_trajectory_initial_time(trajectory_parameters,
                                                                         self.time_buffer)
             # initial_propagation_time = self.epoch
