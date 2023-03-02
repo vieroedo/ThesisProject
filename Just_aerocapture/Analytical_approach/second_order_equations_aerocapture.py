@@ -42,6 +42,7 @@ def phi_function_zero_second_order(x_tau, delta_parameter, c, k1, k_lower, alpha
     # tau__x_0, = secant_method(x_tau_function,5, 10, x_0, a1=a1, a2=a2, a3=a3)
     tau__x_0 = tau__x_0_sol[0]
 
+    # BECAUSE: phi_a becomes ZERO at x_0. We might experience numerical errors sooo we keep it like this hehe
     if a1 * x_0 ** 2 + a2 * x_0 + a3 < 0:
         phi_a__fpa_dep_var = 0
     else:
