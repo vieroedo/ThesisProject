@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from JupiterTrajectory_GlobalParameters import *
 from handle_functions import *
 import CapsuleEntryUtilities as Util
@@ -18,7 +19,9 @@ class AerocaptureNumericalProblem:
                  decision_variable_range,
                  environment_model: int = 0,
                  integrator_settings_index: int = -4,
-                 fly_galileo: bool = False
+                 fly_galileo: bool = False,
+                 stop_before_aerocapture: bool = False,
+                 initial_state_perturbation=np.zeros(6)
                  ):
         """
                 Constructor for the AerocaptureNumericalProblem class.
@@ -34,6 +37,8 @@ class AerocaptureNumericalProblem:
                     choose the preferred integrator settings
                 fly_galileo: bool
                     choose whether to fly the galileo mission or do aerocapture
+                initial_state_perturbation:
+                    perturbation of the initial state of the simulation
                 Returns
                 -------
                 none
@@ -43,10 +48,14 @@ class AerocaptureNumericalProblem:
         self.simulation_start_epoch = simulation_start_epoch
         self.decision_variable_range = decision_variable_range
         self.galileo_mission_case = fly_galileo
+        self.stop_before_aerocapture = stop_before_aerocapture
         self.environment_model = environment_model
         self.integrator_settings_index = integrator_settings_index
+        self.initial_state_perturbation = initial_state_perturbation
 
-        bodies = self.create_bodies_environment()
+        body_settings = self.create_body_settings_environment()
+        bodies = self.create_bodies_environment(body_settings)
+        bodies = self.add_aerodynamic_interface(bodies)
         self.bodies_function = lambda: bodies
 
         integrator_settings = self.create_integrator_settings()
@@ -109,8 +118,7 @@ class AerocaptureNumericalProblem:
         return self.dynamics_simulator_function( )
 
     def get_bodies(self):
-        bodies = self.bodies_function
-        return bodies
+        return self.bodies_function()
 
     def get_integrator_settings(self):
         integrator_settings = self.integrator_settings_function
@@ -124,12 +132,24 @@ class AerocaptureNumericalProblem:
         termination_settings = self.termination_settings_function
         return termination_settings
 
+    def get_initial_state_perturbation(self):
+        return self.initial_state_perturbation
+
+    def set_termination_settings(self, termination_settings):
+        self.termination_settings_function = lambda: termination_settings
+
     def set_environment_model(self, choose_model, verbose = True):
         self.environment_model = choose_model
         if verbose:
             print('Run the \'fitness\' function for the changes to be effective')
 
-    def create_bodies_environment(self):
+    def set_initial_state_perturbation(self, initial_state_perturbation):
+        self.initial_state_perturbation = initial_state_perturbation
+
+    def set_bodies(self, bodies):
+        self.bodies_function = lambda: bodies
+
+    def create_body_settings_environment(self):
         bodies_to_create = ['Jupiter']
         global_frame_origin = 'Jupiter'
         global_frame_orientation = 'ECLIPJ2000'
@@ -161,18 +181,21 @@ class AerocaptureNumericalProblem:
         # target_frame_spice = "IAU_Jupiter"
         # body_settings.get('Jupiter').rotation_model_settings = environment_setup.rotation_model.simple_from_spice(global_frame_orientation, target_frame, target_frame_spice,simulation_start_epoch)
 
+        return body_settings
+
+    def create_bodies_environment(self, body_settings):
         # Create bodies_env
         bodies_env = environment_setup.create_system_of_bodies(body_settings)
-
         # Create vehicle object
         bodies_env.create_empty_body('Capsule')
-
         # Set mass of vehicle
         if self.galileo_mission_case:
             bodies_env.get_body('Capsule').mass = Util.galileo_mass  # kg
         else:
             bodies_env.get_body('Capsule').mass = Util.vehicle_mass  # kg
+        return bodies_env
 
+    def add_aerodynamic_interface(self, bodies, coefficients_variation: np.ndarray = None):
         # Create aerodynamic coefficients interface (drag and lift only)
         if self.galileo_mission_case:
             reference_area = Util.galileo_ref_area  # m^2
@@ -182,12 +205,26 @@ class AerocaptureNumericalProblem:
             reference_area = Util.vehicle_reference_area  # m^2
             drag_coefficient = Util.vehicle_cd
             lift_coefficient = Util.vehicle_cl
+        aero_coefficients = np.array([drag_coefficient, lift_coefficient])
+
+        # For uncertainty propagation
+        if coefficients_variation is not None:
+            if len(coefficients_variation) == 2:
+                # coeff_variation = C_D, C_L
+                coeff_variation = coefficients_variation
+            else:
+                raise Exception('Wrong coefficients uncertainty given to the function')
+            aero_coefficients = aero_coefficients * coeff_variation
+
+        drag_coefficient = aero_coefficients[0]
+        lift_coefficient = aero_coefficients[1]
+
         aero_coefficient_settings = environment_setup.aerodynamic_coefficients.constant(
             reference_area, [drag_coefficient, 0.0, lift_coefficient])  # [Drag, Side-force, Lift]
         environment_setup.add_aerodynamic_coefficient_interface(
-            bodies_env, 'Capsule', aero_coefficient_settings)
+            bodies, 'Capsule', aero_coefficient_settings)
 
-        return bodies_env
+        return bodies
 
     def create_integrator_settings(self):
         integrator_settings = Util.get_integrator_settings(self.integrator_settings_index,
@@ -197,7 +234,10 @@ class AerocaptureNumericalProblem:
 
         return integrator_settings
 
-    def create_propagator_settings(self, entry_fpa, interplanetary_arrival_velocity):
+    def create_propagator_settings(self,
+                                   entry_fpa,
+                                   interplanetary_arrival_velocity,
+                                   initial_state_perturbation = np.zeros(6)):
         dependent_variables_to_save = Util.get_dependent_variable_save_settings()
         atm_entry_alt = Util.atmospheric_entry_altitude
         bodies = self.bodies_function()
@@ -208,14 +248,16 @@ class AerocaptureNumericalProblem:
                                                            termination_settings,
                                                            dependent_variables_to_save,
                                                            jupiter_interpl_excees_vel=interplanetary_arrival_velocity,
-                                                           initial_state_perturbation=np.zeros(6),
+                                                           initial_state_perturbation=initial_state_perturbation,
                                                            model_choice=self.environment_model,
                                                            galileo_propagator_settings=self.galileo_mission_case)
+
         return propagator_settings
 
     def create_termination_settings(self):
         termination_settings = Util.get_termination_settings(self.simulation_start_epoch,
-                                                             galileo_termination_settings=self.galileo_mission_case)
+                                                             galileo_termination_settings=self.galileo_mission_case,
+                                                             stop_before_aerocapture=self.stop_before_aerocapture)
         return termination_settings
 
     def fitness(self,
@@ -249,7 +291,8 @@ class AerocaptureNumericalProblem:
         atm_entry_fpa = orbital_parameters[1]
 
         # Create propagator settings
-        propagator_settings = self.create_propagator_settings(atm_entry_fpa,interplanetary_arrival_velocity)
+        propagator_settings = self.create_propagator_settings(atm_entry_fpa,interplanetary_arrival_velocity,
+                                                              self.initial_state_perturbation)
 
         # Create simulation object and propagate dynamics
         dynamics_simulator = numerical_simulation.SingleArcSimulator(

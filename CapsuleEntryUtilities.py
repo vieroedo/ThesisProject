@@ -106,7 +106,7 @@ def get_galileo_initial_state() -> np.ndarray:
 
 
 def get_initial_state(atmosphere_entry_fpa: float,
-                      atmosphere_entry_altitude: float = 400e3,
+                      atmosphere_entry_altitude: float = atmospheric_entry_altitude,
                       jupiter_arrival_v_inf: float = 5600,
                       verbose: bool = False) -> np.ndarray:
     """
@@ -199,7 +199,8 @@ def get_initial_state(atmosphere_entry_fpa: float,
 
 def get_termination_settings(simulation_start_epoch: float,
                              maximum_duration: float = 200*constants.JULIAN_DAY,
-                             galileo_termination_settings: bool = False) \
+                             galileo_termination_settings: bool = False,
+                             stop_before_aerocapture: bool = False) \
         -> tudatpy.kernel.numerical_simulation.propagation_setup.propagator.PropagationTerminationSettings:
     """
     Get the termination settings for the simulation.
@@ -298,6 +299,19 @@ def get_termination_settings(simulation_start_epoch: float,
                         maximum_altitude_termination_settings,
                         minimum_altitude_termination_settings,
                         time_termination_settings]
+
+    if stop_before_aerocapture:
+        maximum_aero_force_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+            dependent_variable_settings=propagation_setup.dependent_variable.single_acceleration_norm(
+                propagation_setup.acceleration.aerodynamic_type, 'Capsule', 'Jupiter'),
+            limit_value=1e-4,
+            use_as_lower_limit=False,
+            terminate_exactly_on_final_condition=False
+        )
+        termination_list = [maximum_aero_force_termination_settings,
+                            maximum_altitude_termination_settings,
+                            minimum_altitude_termination_settings,
+                            time_termination_settings]
 
     # Create termination settings object that terminates when either nominal or non-nominal conditions are reached
     termination_settings = propagation_setup.propagator.hybrid_termination(termination_list,
