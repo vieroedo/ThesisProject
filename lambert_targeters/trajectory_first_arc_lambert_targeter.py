@@ -158,13 +158,6 @@ ax.set_ylabel('y (m)')
 ax.set_zlabel('z (m)')
 ax.set_title(f'Lambert Trajectory from Jupiter SOI edge to {choose_arrival_moon}')
 
-xyzlim = np.array([ax.get_xlim3d(),ax.get_ylim3d(),ax.get_zlim3d()]).T
-XYZlim = np.asarray([min(xyzlim[0]),max(xyzlim[1])])
-ax.set_xlim3d(XYZlim)
-ax.set_ylim3d(XYZlim)
-ax.set_zlim3d(XYZlim * 0.75)
-ax.set_aspect('auto')
-
 
 # draw jupiter
 u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
@@ -172,6 +165,26 @@ x = jupiter_radius * np.cos(u)*np.sin(v)
 y = jupiter_radius * np.sin(u)*np.sin(v)
 z = jupiter_radius * np.cos(v)
 ax.plot_wireframe(x, y, z, color="r")
+
+
+lines = ax.get_lines()
+last_line = lines[-1]
+
+# Get the data for the last line
+line_data = last_line.get_data_3d()
+
+# Get the data limits for the last line
+x_data_limits = line_data[0].min(), line_data[0].max()
+y_data_limits = line_data[1].min(), line_data[1].max()
+z_data_limits = line_data[2].min(), line_data[2].max()
+
+xyzlim = np.array([x_data_limits, y_data_limits, z_data_limits]).T
+# xyzlim = np.array([ax.get_xlim3d(),ax.get_ylim3d(),ax.get_zlim3d()]).T
+XYZlim = np.asarray([min(xyzlim[0]),max(xyzlim[1])])
+ax.set_xlim3d(XYZlim)
+ax.set_ylim3d(XYZlim)
+ax.set_zlim3d(XYZlim * 0.75)
+ax.set_aspect('auto')
 
 # draw moon
 u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]

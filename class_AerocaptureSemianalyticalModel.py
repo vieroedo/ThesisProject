@@ -65,7 +65,7 @@ class AerocaptureSemianalyticalModel:
         """
         return self.state_history_function()
 
-    def get_dependent_variables_hystory(self) -> dict:
+    def get_dependent_variables_history(self) -> dict:
         """
         Returns the full history of the propagated dependent variables.
         Parameters
@@ -134,12 +134,12 @@ class AerocaptureSemianalyticalModel:
         elif self.equations_order == 1:
 
             fpa_entry, fpa_minimum_altitude, fpa_exit = ae_first_order.calculate_fpa_boundaries(atmospheric_entry_fpa)
-            fpa_linspace = np.linspace(fpa_entry,fpa_exit, self.orbit_datapoints)
+            fpa_linspace = np.linspace(fpa_entry, fpa_exit, self.orbit_datapoints)
 
             aerocapture_quantities, other_data = ae_first_order.first_order_approximation_aerocapture(
-                                                                           fpa_linspace,fpa_entry, fpa_minimum_altitude,
-                                                                           atmospheric_entry_altitude + jupiter_radius,
-                                                                           atmospheric_entry_velocity_norm)
+                                                                        fpa_linspace, fpa_entry, fpa_minimum_altitude,
+                                                                        atmospheric_entry_altitude + jupiter_radius,
+                                                                        atmospheric_entry_velocity_norm)
 
             # Minimum altitude
             minimum_altitude = other_data[0]

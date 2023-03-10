@@ -73,17 +73,21 @@ aero_acc = dependent_variables[:,0:3]
 grav_acc = dependent_variables[:,3]
 altitude = dependent_variables[:,4]
 flight_path_angle = dependent_variables[:,5]
-airspeed = dependent_variables[:, 6]
+airspeed = dependent_variables[:,6]
 mach_number = dependent_variables[:,7]
 atmospheric_density = dependent_variables[:,8]
 
-spacecraft_velocity_states = simulation_result[:,3:6]
+# spacecraft_velocity_states = simulation_result[:,3:6]
+state_position = simulation_result[:,:3]
+state_velocity = simulation_result[:,3:6]
+dot_product = np.sum(Util.unit_vector(state_position) * Util.unit_vector(state_velocity), axis=1)
+inertial_fpa = np.pi/2 - np.arccos(dot_product)
 
 ########################################################################################################################
 # DEPENDENT VARIABLES PLOT #############################################################################################
 ########################################################################################################################
 
-drag_direction = -Util.unit_vector(spacecraft_velocity_states)
+drag_direction = -Util.unit_vector(state_velocity)
 # to_fix here
 lift_direction = np.zeros((len(simulation_result[:,0]),3))
 for i in range(len(simulation_result[:,0])):
@@ -102,58 +106,75 @@ noise_level = 1e-6
 
 drag_acc = LA.norm(drag_acc, axis=1)
 lift_acc = LA.norm(lift_acc, axis=1)
-drag_acc_mod = np.delete(drag_acc, np.where(drag_acc <= noise_level))
+drag_acc_mod_to_check = np.delete(drag_acc, np.where(drag_acc <= noise_level))
 # lift_acc_mod = np.delete(lift_acc, np.where(lift_acc <= noise_level))
 
-entry_epochs_cells = list(np.where(drag_acc > noise_level)[0])
+atmospheric_entry_happened = True
+if drag_acc_mod_to_check.size == 0:
+    atmospheric_entry_happened = False
 
-lift_acc_mod = lift_acc[entry_epochs_cells].reshape(len(drag_acc_mod))
+if atmospheric_entry_happened:
+    entry_epochs_cells = list(np.where(drag_acc > noise_level)[0])
+    atm_entry_vector_length = len(entry_epochs_cells)
+else:
+    entry_epochs_cells = list(np.where(abs(inertial_fpa) < np.deg2rad(5))[0])
+    atm_entry_vector_length = len(entry_epochs_cells)
+
+drag_acc_mod = drag_acc[entry_epochs_cells].reshape(atm_entry_vector_length)
+lift_acc_mod = lift_acc[entry_epochs_cells].reshape(atm_entry_vector_length)
 
 # downrange = np.zeros(len(entry_epochs_cells))
 # for i, cell in enumerate(entry_epochs_cells):
 #     current_position = simulation_result[cell, 0:3]
-
-atmosphere_interfaces_cell_no = np.where(drag_acc > 1e-2)[0][[0,-1]]
+if atmospheric_entry_happened:
+    atmosphere_interfaces_cell_no = np.where(drag_acc > 1e-2)[0][[0,-1]]
+else:
+    atmosphere_interfaces_cell_no = np.where((-np.deg2rad(1) < inertial_fpa) & (inertial_fpa < np.deg2rad(1)))[0][[0,-1]]
 
 atmosphere_altitude_interfaces = altitude[atmosphere_interfaces_cell_no].reshape(2)
 atmosphere_fpa_interfaces = (flight_path_angle[atmosphere_interfaces_cell_no[0]], flight_path_angle[atmosphere_interfaces_cell_no[1]])
 
 if plot_heatfluxes_in_dep_var_plots:
-    plots_number = 7
+    plots_number = 7 + 1
 else:
-    plots_number = 6
+    plots_number = 6 + 1
 Fig_f, axs_f = plt.subplots(plots_number, 1, figsize=(7,9), sharex='col')
 
 fig_hf, ax_hf = plt.subplots(figsize=(5,6))
 
-epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(len(drag_acc_mod))
+epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(atm_entry_vector_length)
 epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
 
 
 axs_f[0].plot(epochs_plot_ae_phase, drag_acc_mod, label='drag')
 axs_f[0].plot(epochs_plot_ae_phase, lift_acc_mod, label='lift')
-axs_f[0].plot(epochs_plot_ae_phase, grav_acc[entry_epochs_cells].reshape(len(drag_acc_mod)), label='gravity')
+axs_f[0].plot(epochs_plot_ae_phase, grav_acc[entry_epochs_cells].reshape(atm_entry_vector_length), label='gravity')
 axs_f[0].set(ylabel='acceleration [m/s^2]')
 axs_f[0].legend()
 
-axs_f[1].plot(epochs_plot_ae_phase, altitude[entry_epochs_cells].reshape(len(drag_acc_mod))/1e3)
+axs_f[1].plot(epochs_plot_ae_phase, altitude[entry_epochs_cells].reshape(atm_entry_vector_length)/1e3)
 axs_f[1].axhline(y=atmosphere_altitude_interfaces[0]/1e3, color='grey', linestyle='dotted')
 axs_f[1].axhline(y=atmosphere_altitude_interfaces[1]/1e3, color='grey', linestyle='dotted')
 axs_f[1].set(ylabel='altitude [km]')
 
-axs_f[2].plot(epochs_plot_ae_phase, flight_path_angle[entry_epochs_cells].reshape(len(drag_acc_mod))*180/np.pi)
+axs_f[2].plot(epochs_plot_ae_phase, flight_path_angle[entry_epochs_cells].reshape(atm_entry_vector_length)*180/np.pi)
 axs_f[2].axhline(y=atmosphere_fpa_interfaces[0]*180/np.pi, color='grey', linestyle='dotted')
 axs_f[2].axhline(y=atmosphere_fpa_interfaces[1]*180/np.pi, color='grey', linestyle='dotted')
 axs_f[2].set( ylabel='f.p.a. [deg]')
 
-axs_f[3].plot(epochs_plot_ae_phase, mach_number[entry_epochs_cells].reshape(len(drag_acc_mod)))
+axs_f[3].plot(epochs_plot_ae_phase, mach_number[entry_epochs_cells].reshape(atm_entry_vector_length))
 axs_f[3].set(ylabel='Mach number [-]')
 
-axs_f[4].plot(epochs_plot_ae_phase, atmospheric_density[entry_epochs_cells].reshape(len(drag_acc_mod)))
+axs_f[4].plot(epochs_plot_ae_phase, atmospheric_density[entry_epochs_cells].reshape(atm_entry_vector_length))
 axs_f[4].set(ylabel='Density [kg/m^3]', yscale='log')
 
-axs_f[5].plot(epochs_plot_ae_phase, airspeed[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3)
+axs_f[5].plot(epochs_plot_ae_phase, airspeed[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
 axs_f[5].set(ylabel='Airspeed [km/s]')
+
+axs_f[6].plot(epochs_plot_ae_phase, inertial_fpa[entry_epochs_cells].reshape(atm_entry_vector_length)*180/np.pi)
+axs_f[6].axhline(y=atmosphere_fpa_interfaces[0]*180/np.pi, color='grey', linestyle='dotted')
+axs_f[6].axhline(y=atmosphere_fpa_interfaces[1]*180/np.pi, color='grey', linestyle='dotted')
+axs_f[6].set( ylabel='f.p.a. inertial [deg]')
 
 if not plot_heatfluxes_in_dep_var_plots:
     axs_f[5].set(xlabel='elapsed time [s]')
@@ -176,8 +197,8 @@ radiative_hf_wall, blowing_coefficient_rad = Util.ablation_blockage(radiative_hf
                                            total_wall_hfx=radiative_hf_w_blockage)
 
 fig_bl, ax_bl = plt.subplots()
-ax_bl.plot(epochs_plot_ae_phase, blowing_coefficient_conv[entry_epochs_cells].reshape(len(drag_acc_mod)), label='convection blowing')
-ax_bl.plot(epochs_plot_ae_phase, blowing_coefficient_rad[entry_epochs_cells].reshape(len(drag_acc_mod)), label='radiation blowing')
+ax_bl.plot(epochs_plot_ae_phase, blowing_coefficient_conv[entry_epochs_cells].reshape(atm_entry_vector_length), label='convection blowing')
+ax_bl.plot(epochs_plot_ae_phase, blowing_coefficient_rad[entry_epochs_cells].reshape(atm_entry_vector_length), label='radiation blowing')
 ax_bl.legend()
 
 # radius, density, velocity, heat_flux
@@ -190,25 +211,25 @@ custom_convective_hf = custom_convective_hf*1e3  # W/m^2
 
 
 if plot_heatfluxes_in_dep_var_plots:
-    axs_f[6].plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv')
-    axs_f[6].plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_w_blockage')
-    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
-    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage')
-    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_wall_hfx')
+    axs_f[6].plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv')
+    axs_f[6].plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv_w_blockage')
+    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='rad')
+    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='rad_w_blockage')
+    axs_f[6].plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='rad_wall_hfx')
 
-    axs_f[6].plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_custom')
+    axs_f[6].plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv_custom')
 
 
     axs_f[6].set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
     axs_f[6].legend()
 
-ax_hf.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv')
-ax_hf.plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_w_blockage')
-ax_hf.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad')
-ax_hf.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_w_blockage', linestyle='-.')
-ax_hf.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='rad_wall_hfx')
-ax_hf.plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_custom', linestyle='-')
-ax_hf.plot(epochs_plot_ae_phase, convective_hf_girija[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, label='conv_girija', linestyle=':')
+ax_hf.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv')
+ax_hf.plot(epochs_plot_ae_phase, convective_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv_w_blockage')
+ax_hf.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='rad')
+ax_hf.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='rad_w_blockage', linestyle='-.')
+ax_hf.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='rad_wall_hfx')
+ax_hf.plot(epochs_plot_ae_phase, custom_convective_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv_custom', linestyle='-')
+ax_hf.plot(epochs_plot_ae_phase, convective_hf_girija[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, label='conv_girija', linestyle=':')
 
 ax_hf.set(xlabel='elapsed time [s]', ylabel='Heat fluxes [kW/m^2]')
 ax_hf.legend()
@@ -217,7 +238,7 @@ ax_hf.legend()
 if plot_figures_for_thesis:
 
     # radiative at boundary layer, radiative at wall, convective at wall
-    park_heat_fluxes = Util.galileo_heat_fluxes_park(altitude[entry_epochs_cells].reshape(len(drag_acc_mod)))
+    park_heat_fluxes = Util.galileo_heat_fluxes_park(altitude[entry_epochs_cells].reshape(atm_entry_vector_length))
     park_convective_hfx_wall = park_heat_fluxes[:,2]
     park_radiative_hfx_ble = park_heat_fluxes[:,0]
     park_radiative_hfx_wall = park_heat_fluxes[:,1]
@@ -230,13 +251,13 @@ if plot_figures_for_thesis:
 
     fig_th_conv, ax_th_conv = plt.subplots(figsize=(8, 5), tight_layout=True)
     # Plot the data and assign the resulting Line2D objects to named variables
-    convcurve1 = ax_th_conv.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    convcurve1 = ax_th_conv.plot(epochs_plot_ae_phase, convective_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
                                   label='$q_{C_{B=0}}$ Ritter et al.', color=cmap(0), linestyle='--')
     convcurve2 = ax_th_conv.plot(epochs_plot_ae_phase,
-                                  convective_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                                  convective_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
                                   label='$q_{C}$ Ritter et al.', color=cmap(1))
     convcurve3 = ax_th_conv.plot(epochs_plot_ae_phase,
-                                  custom_convective_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                                  custom_convective_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
                                   label='$q_{C_{B=0}}$ data interp.', color=cmap(2), linestyle='--')
     convcurve4 = ax_th_conv.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
                                   park_convective_hfx_wall[park_hfx_non_zero_cells] / 1e6,
@@ -255,11 +276,11 @@ if plot_figures_for_thesis:
     ax_th_conv.set(xlabel=r'Flight time [s]', ylabel=r'Heat flux [MW/m$^2$]', xlim=[0, 100])
 
     # fig_th_rad, ax_th_rad = plt.subplots(figsize=(8, 5), tight_layout=True)
-    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
     #                label=r'$q_{R,AD_{B=0}}$', linestyle=':', color=cmap(0))
-    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
     #            label='$q_{R_{B=0}}$', linestyle='-', color=cmap(1))
-    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    # ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf_wall[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
     #            label='$q_{R}$', color=cmap(2))
     # ax_th_rad.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
     #                park_radiative_hfx_ble[park_hfx_non_zero_cells] / 1e6,
@@ -273,13 +294,13 @@ if plot_figures_for_thesis:
     fig_th_rad, ax_th_rad = plt.subplots(figsize=(8, 5), tight_layout=True)
     # cmap = plt.get_cmap('tab10')
 
-    radcurve1 = ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+    radcurve1 = ax_th_rad.plot(epochs_plot_ae_phase, radiative_hf[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
                                label=r'$q_{R,AD_{B=0}}$', linestyle=':', color=cmap(0))
     radcurve2 = ax_th_rad.plot(epochs_plot_ae_phase,
-                               radiative_hf_w_blockage[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6,
+                               radiative_hf_w_blockage[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6,
                                label='$q_{R_{B=0}}$', linestyle='-', color=cmap(1))
     radcurve3 = ax_th_rad.plot(epochs_plot_ae_phase,
-                               radiative_hf_wall[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e6, label='$q_{R}$',
+                               radiative_hf_wall[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e6, label='$q_{R}$',
                                color=cmap(2))
     radcurve4 = ax_th_rad.plot(epochs_plot_ae_phase[park_hfx_non_zero_cells],
                                park_radiative_hfx_ble[park_hfx_non_zero_cells] / 1e6, label=r'$q_{R, e}$ Park',
@@ -303,7 +324,7 @@ if plot_figures_for_thesis:
     plt.show()
 
 Fig_vh, axs_vh = plt.subplots(figsize = (6,5))
-axs_vh.plot(airspeed[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3, altitude[entry_epochs_cells].reshape(len(drag_acc_mod)) / 1e3)
+axs_vh.plot(airspeed[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, altitude[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
 axs_vh.set(xlabel='airspeed [km/s]', ylabel='altitude [km]')
 
 
@@ -600,14 +621,14 @@ if plot_galileo_tabulated_data:
     flight_mach_no = galileo_flight_data[:,6]
     flight_cd = galileo_flight_data[:,9]
 
-    entry_altitudes = altitude[entry_epochs_cells].reshape(len(drag_acc_mod))
+    entry_altitudes = altitude[entry_epochs_cells].reshape(atm_entry_vector_length)
     flight_heat_fluxes = Util.galileo_heat_fluxes_park(entry_altitudes)
 
     flight_density = Util.jupiter_atmosphere_density_model(flight_altitude)
 
     flight_drag = 0.5 * flight_cd * flight_density * Util.galileo_ref_area * (flight_velocity)**2 / Util.galileo_mass
 
-    # epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(len(drag_acc_mod))
+    # epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(atm_entry_vector_length)
     # epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
 
     starting_cell = 15

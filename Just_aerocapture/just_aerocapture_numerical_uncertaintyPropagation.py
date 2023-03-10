@@ -28,9 +28,10 @@ import class_AerocaptureNumericalProblem as ae_model
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
-stop_before_aerocapture = True
+# stop_before_aerocapture = True
+arc_to_compute = 0  # 0: from beginning to aerocapture.  1: from atm entry to end.  -1: everything
 fly_galileo = False
-choose_model = 0 # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
+choose_model = 0  # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
 integrator_settings_index = -4
 
 current_dir = os.path.dirname(__file__)
@@ -57,6 +58,12 @@ decision_variable_range = [[5000, -5],
 # * Entry ...:
 
 
+# Save trajectory parameters
+traj_paramteres_dict = {
+    arc_to_compute: np.array(trajectory_parameters)
+}
+save2txt(traj_paramteres_dict, 'trajectory_parameters.dat', current_dir + '/UncertaintyAnalysis/')
+
 ###########################################################################
 # DEFINE SIMULATION SETTINGS ##############################################
 ###########################################################################
@@ -71,10 +78,8 @@ simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
 # Set number of runs per uncertainty
 number_of_runs_per_uncertainty = 100
 
-all_results = dict()
-
 # Set the interpolation step at which different runs are compared
-output_interpolation_step = constants.JULIAN_DAY  # s
+output_interpolation_step = constants.JULIAN_DAY/2  # s
 
 random.seed(50)
 
@@ -92,12 +97,13 @@ if just_evaluate_some_uncertainties == True:
 else:
     uncertainties_to_run = uncertainties
 
+all_results = dict()
 for uncertainty in uncertainties_to_run:
 
     # Create aerocapture problem with model and integration settings of choice.
     aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch,decision_variable_range,
                                                                choose_model, integrator_settings_index,
-                                                               fly_galileo, stop_before_aerocapture)
+                                                               fly_galileo, arc_to_compute=arc_to_compute)
 
     # Initialize dictionary to store the results of the simulation
     simulation_results = dict()
@@ -107,6 +113,9 @@ for uncertainty in uncertainties_to_run:
         print(f'\nRun: {run}  ' + uncertainty)
         perturbation = 0.0
         initial_state_deviation_rsw = np.zeros(6)
+
+        if run == 3 and uncertainty == 'InitialVelocity':
+            ...
 
         # Initial position deviation in R, S, and W
         if run > 0 and uncertainty == uncertainties[0]:
@@ -199,7 +208,8 @@ for uncertainty in uncertainties_to_run:
         if run > 0 and (uncertainty == uncertainties[0] or uncertainty == uncertainties[1] or
                         uncertainty == uncertainties[2] or uncertainty == uncertainties[3]):
             initial_state_deviation_inertial[0:3] = rotation_matrix @ initial_state_deviation_rsw[0:3]
-        elif run > 0 and uncertainty == uncertainties[4]:
+        elif run > 0 and (uncertainty == uncertainties[4] or uncertainty == uncertainties[5] or
+                          uncertainty == uncertainties[6] or uncertainty == uncertainties[7]):
             initial_state_deviation_inertial[3:6] = rotation_matrix @ initial_state_deviation_rsw[3:6]
 
         # set initial state perturbation for the aerocapture problem
@@ -235,7 +245,7 @@ for uncertainty in uncertainties_to_run:
         # If desired, write output to a file
         if write_results_to_file:
             save2txt(state_history, 'state_history_' + str(run) + '.dat', output_path)
-            save2txt(dependent_variable_history, 'dependent_variable_history' + str(run) + '.dat', output_path)
+            save2txt(dependent_variable_history, 'dependent_variable_history_' + str(run) + '.dat', output_path)
 
     all_results[uncertainty] = simulation_results
     if write_results_to_file:
@@ -252,10 +262,13 @@ every case with respect to the "nominal" one.
 
 # uncertainties  are --> [] -- not really :/
 
+print('\n\nAll runs have been done, now comparing the models\n')
+
 for uncertainty in uncertainties_to_run:
     simulation_results = all_results[uncertainty]
     # Compare all the model settings with the nominal case
     for run in range(1, number_of_runs_per_uncertainty):
+        print(f'\nDifference evaluation for run: {run}  ' + uncertainty)
         # Get output path
         output_path = current_dir + '/UncertaintyAnalysis/' + uncertainty + '/'
 
@@ -270,11 +283,13 @@ for uncertainty in uncertainties_to_run:
         current_times = list(current_state_history.keys())
 
         # Get limit times at which both histories can be validly interpolated
-        interpolation_lower_limit = max(nominal_times[4],current_times[4])
-        interpolation_upper_limit = min(nominal_times[-4],current_times[-4])
+        limit_value = 4
+        interpolation_lower_limit = max(nominal_times[limit_value],current_times[limit_value])
+        interpolation_upper_limit = min(nominal_times[-limit_value],current_times[-limit_value])
 
         # Create vector of epochs to be compared (boundaries are referred to the first case)
         unfiltered_interpolation_epochs = np.arange(current_times[0], current_times[-1], output_interpolation_step)
+        # unfiltered_interpolation_epochs = np.array(current_times)
         unfiltered_interpolation_epochs = [n for n in unfiltered_interpolation_epochs if n <= interpolation_upper_limit]
         interpolation_epochs = [n for n in unfiltered_interpolation_epochs if n >= interpolation_lower_limit]
 
@@ -291,3 +306,6 @@ for uncertainty in uncertainties_to_run:
                                                                         interpolation_epochs,
                                                                         output_path,
                                                                         'dependent_variable_difference_wrt_nominal_case_' + str(run) + '.dat')
+
+        # Compute the atmospheric entry interface difference here:
+        ...

@@ -55,7 +55,7 @@ pre_ae_eccentricity = np.sqrt(1 - pre_ae_semilatus_rectum / pre_ae_semimajor_axi
 pre_ae_arrival_position = x_axis * pre_ae_arrival_radius
 
 initial_state_vector = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
-                                              interplanetary_arrival_velocity_in_jupiter_frame,True)
+                                              interplanetary_arrival_velocity_in_jupiter_frame, verbose=True)
 
 # AEROCAPTURE ##########################################################################################################
 

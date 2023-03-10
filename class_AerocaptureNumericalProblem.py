@@ -20,7 +20,7 @@ class AerocaptureNumericalProblem:
                  environment_model: int = 0,
                  integrator_settings_index: int = -4,
                  fly_galileo: bool = False,
-                 stop_before_aerocapture: bool = False,
+                 arc_to_compute: int = -1,
                  initial_state_perturbation=np.zeros(6)
                  ):
         """
@@ -48,10 +48,29 @@ class AerocaptureNumericalProblem:
         self.simulation_start_epoch = simulation_start_epoch
         self.decision_variable_range = decision_variable_range
         self.galileo_mission_case = fly_galileo
-        self.stop_before_aerocapture = stop_before_aerocapture
+        self.arc_to_compute = arc_to_compute
         self.environment_model = environment_model
         self.integrator_settings_index = integrator_settings_index
         self.initial_state_perturbation = initial_state_perturbation
+
+        if self.arc_to_compute == 0:
+            self._stop_before_aerocapture = True
+            self._start_at_entry_interface = False
+        elif self.arc_to_compute == 1:
+            self._stop_before_aerocapture = False
+            self._start_at_entry_interface = True
+        elif self.arc_to_compute == -1:
+            self._stop_before_aerocapture = False
+            self._start_at_entry_interface = False
+        else:
+            raise Exception(f'Wrong parameter inserted for the arc to compute ({self.arc_to_compute}). '
+                            f'Allowed values are -1, 0 and 1. (Default: -1)')
+
+        if (self.arc_to_compute == 0 or self.arc_to_compute == 1) and self.galileo_mission_case:
+            raise Exception('Incompatible combination of arguments. '
+                            'Cannot compute just a part of the Galileo trajectory. '
+                            'Leave the argument arc_to_compute unexpressed, or set it to the default value. '
+                            '(Default: -1)')
 
         body_settings = self.create_body_settings_environment()
         bodies = self.create_bodies_environment(body_settings)
@@ -63,6 +82,14 @@ class AerocaptureNumericalProblem:
 
         termination_settings = self.create_termination_settings()
         self.termination_settings_function = lambda: termination_settings
+
+    @property
+    def start_before_aerocapture(self):
+        return self._stop_before_aerocapture
+
+    @property
+    def start_at_entry_interface(self):
+        return self._start_at_entry_interface
 
     def get_last_run_propagated_cartesian_state_history(self) -> dict:
         """
@@ -240,24 +267,24 @@ class AerocaptureNumericalProblem:
                                    initial_state_perturbation = np.zeros(6)):
         dependent_variables_to_save = Util.get_dependent_variable_save_settings()
         atm_entry_alt = Util.atmospheric_entry_altitude
-        bodies = self.bodies_function()
-        termination_settings = self.termination_settings_function()
         propagator_settings = Util.get_propagator_settings(entry_fpa,
                                                            atm_entry_alt,
-                                                           bodies,
-                                                           termination_settings,
+                                                           self.bodies_function(),
+                                                           self.termination_settings_function(),
                                                            dependent_variables_to_save,
                                                            jupiter_interpl_excees_vel=interplanetary_arrival_velocity,
                                                            initial_state_perturbation=initial_state_perturbation,
                                                            model_choice=self.environment_model,
-                                                           galileo_propagator_settings=self.galileo_mission_case)
-
+                                                           galileo_propagator_settings=self.galileo_mission_case,
+                                                           start_at_entry_interface=self._start_at_entry_interface)
         return propagator_settings
 
-    def create_termination_settings(self):
+    def create_termination_settings(self, entry_fpa=0., bodies=None):
         termination_settings = Util.get_termination_settings(self.simulation_start_epoch,
                                                              galileo_termination_settings=self.galileo_mission_case,
-                                                             stop_before_aerocapture=self.stop_before_aerocapture)
+                                                             stop_before_aerocapture=self._stop_before_aerocapture,
+                                                             entry_fpa=entry_fpa,
+                                                             bodies=bodies)
         return termination_settings
 
     def fitness(self,
@@ -290,6 +317,9 @@ class AerocaptureNumericalProblem:
         interplanetary_arrival_velocity = orbital_parameters[0]
         atm_entry_fpa = orbital_parameters[1]
 
+        if self._stop_before_aerocapture:
+            self.termination_settings_function = lambda: self.create_termination_settings(atm_entry_fpa, bodies)
+
         # Create propagator settings
         propagator_settings = self.create_propagator_settings(atm_entry_fpa,interplanetary_arrival_velocity,
                                                               self.initial_state_perturbation)
@@ -306,3 +336,5 @@ class AerocaptureNumericalProblem:
         # Add the objective and constraint values into the fitness vector
         fitness = 0.0
         return [fitness]
+
+

@@ -108,6 +108,7 @@ def get_galileo_initial_state() -> np.ndarray:
 def get_initial_state(atmosphere_entry_fpa: float,
                       atmosphere_entry_altitude: float = atmospheric_entry_altitude,
                       jupiter_arrival_v_inf: float = 5600,
+                      start_at_entry_interface: bool = False,
                       verbose: bool = False) -> np.ndarray:
     """
     Calculates the initial state given the initial distance and speed, and the arrival fpa.
@@ -155,6 +156,11 @@ def get_initial_state(atmosphere_entry_fpa: float,
     # Set arrival position on x axis
     arrival_position = x_axis * arrival_radius
 
+    # Calculate arrival velocity for the atmospheric entry interface start case
+    arr_vel_rotation_matrix = rotation_matrix(z_axis, np.pi / 2 - arrival_fpa)
+    arrival_velocity = arrival_velocity_norm * \
+                       rotate_vectors_by_given_matrix(arr_vel_rotation_matrix, unit_vector(arrival_position))
+
     circ_vel_at_atm_entry = np.sqrt(
         jupiter_gravitational_parameter / (jupiter_radius + atmosphere_entry_altitude))
 
@@ -189,18 +195,23 @@ def get_initial_state(atmosphere_entry_fpa: float,
     # Build the initial state vector
     initial_state_vector = np.concatenate((departure_position, departure_velocity))
 
+    # Build the atmospheric entry interface state vector
+    if start_at_entry_interface:
+        initial_state_vector = np.concatenate((arrival_position, arrival_velocity))
+
     # Print the state vector for debugging
     if verbose:
         print('\nDeparture state:')
         print(f'{list(initial_state_vector)}')
-
     return initial_state_vector
 
 
 def get_termination_settings(simulation_start_epoch: float,
                              maximum_duration: float = 200*constants.JULIAN_DAY,
                              galileo_termination_settings: bool = False,
-                             stop_before_aerocapture: bool = False) \
+                             stop_before_aerocapture: bool = False,
+                             entry_fpa: float = 0.,
+                             bodies = None) \
         -> tudatpy.kernel.numerical_simulation.propagation_setup.propagator.PropagationTerminationSettings:
     """
     Get the termination settings for the simulation.
@@ -221,12 +232,17 @@ def get_termination_settings(simulation_start_epoch: float,
         Maximum duration of the simulation [s].
     galileo_termination_settings: bool
         Switches to the termination settings for the Galileo Mission.
+    stop_before_aerocapture: bool
+
+    entry_fpa: float
+        entry flight path angle in degrees
 
     Returns
     -------
     hybrid_termination_settings : tudatpy.kernel.numerical_simulation.propagation_setup.propagator.PropagationTerminationSettings
         Propagation termination settings object.
     """
+    entry_fpa = np.deg2rad(entry_fpa)
 
     # Return terminatino altitude for the Galileo mission
     if galileo_termination_settings:
@@ -301,14 +317,57 @@ def get_termination_settings(simulation_start_epoch: float,
                         time_termination_settings]
 
     if stop_before_aerocapture:
-        maximum_aero_force_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-            dependent_variable_settings=propagation_setup.dependent_variable.single_acceleration_norm(
-                propagation_setup.acceleration.aerodynamic_type, 'Capsule', 'Jupiter'),
-            limit_value=1e-4,
+        # maximum_aero_force_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+        #     dependent_variable_settings=propagation_setup.dependent_variable.single_acceleration_norm(
+        #         propagation_setup.acceleration.aerodynamic_type, 'Capsule', 'Jupiter'),
+        #     limit_value=1e-4,
+        #     use_as_lower_limit=False,
+        #     terminate_exactly_on_final_condition=False
+        # )
+        # Minimum altitude
+        # entry_altitude_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+        #     dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
+        #     limit_value=450e3,
+        #     use_as_lower_limit=True,
+        #     terminate_exactly_on_final_condition=True,
+        #     termination_root_finder_settings=root_finders.bisection(maximum_iteration=100, maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result_with_warning)
+        # )
+
+        entry_fpa_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+            dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle('Capsule', 'Jupiter'),
+            limit_value=entry_fpa,
             use_as_lower_limit=False,
-            terminate_exactly_on_final_condition=False
+            terminate_exactly_on_final_condition=True,
+            termination_root_finder_settings=root_finders.secant(maximum_iteration=1000,maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result_with_warning)
         )
-        termination_list = [maximum_aero_force_termination_settings,
+
+        def custom_condition(time:float) -> bool:
+            capsule_state = bodies.get('Capsule').state
+            state_position = capsule_state[0:3]
+            state_velocity = capsule_state[3:6]
+            dot_product = np.dot(unit_vector(state_position), unit_vector(state_velocity))
+            inertial_fpa = np.pi / 2 - np.arccos(dot_product)
+            do_terminate = inertial_fpa >= entry_fpa
+
+            return do_terminate
+
+        inertial_fpa_termination_settings = propagation_setup.propagator.custom_termination(custom_condition)
+        # # A negative fpa would trigger termination
+        # fpa_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+        #     dependent_variable_settings=propagation_setup.dependent_variable.flight_path_angle('Capsule', 'Jupiter'),
+        #     limit_value=0.,
+        #     use_as_lower_limit=True,
+        #     terminate_exactly_on_final_condition=False
+        # )
+        ae_entry_termination_list = [
+            # entry_altitude_termination_settings,
+            entry_fpa_termination_settings,
+            fpa_termination_settings
+        ]
+        aerocapture_entry_termination_settings = propagation_setup.propagator.hybrid_termination(ae_entry_termination_list,
+                                                                                                 fulfill_single_condition=False)
+
+        termination_list = [inertial_fpa_termination_settings,
                             maximum_altitude_termination_settings,
                             minimum_altitude_termination_settings,
                             time_termination_settings]
@@ -413,7 +472,9 @@ def get_propagator_settings(atm_entry_fpa: float,
                             jupiter_interpl_excees_vel: float = 5600.,
                             initial_state_perturbation=np.zeros(6),
                             galileo_propagator_settings: bool = False,
-                            model_choice: int = 0):
+                            start_at_entry_interface: bool = False,
+                            model_choice: int = 0,
+                            verbose: bool = False):
 
     # Define bodies that are propagated and their central bodies of propagation
     bodies_to_propagate = ['Capsule']
@@ -456,7 +517,9 @@ def get_propagator_settings(atm_entry_fpa: float,
     # environment_setup.add_rotation_model(bodies, 'Capsule', rotation_model_settings)
 
     # Retrieve initial state
-    initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel, verbose=True) + initial_state_perturbation
+    initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel,
+                                      start_at_entry_interface=start_at_entry_interface, verbose=verbose) \
+                    + initial_state_perturbation
 
     # Retrieve galileo probe entry initial state instead if needed
     if galileo_propagator_settings:
