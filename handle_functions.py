@@ -168,6 +168,20 @@ def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
     return time_range[1] - time_range[0]
 
 
+def eccentricity_vector_from_cartesian_state(cartesian_state: np.ndarray) -> np.ndarray:
+    if cartesian_state.shape[0] != 6 or len(cartesian_state.shape) != 1:
+        raise Exception('Unexpected vector entered as cartesian state.')
+    state_position = cartesian_state[0:3]
+    state_velocity = cartesian_state[3:6]
+
+    position_multiplier = LA.norm(state_velocity) ** 2 \
+                          - jupiter_gravitational_parameter / LA.norm(state_position)
+    velocity_multiplier = np.dot(state_position, state_velocity)
+    eccentricity_vector = 1 / jupiter_gravitational_parameter * (
+                position_multiplier * state_position - velocity_multiplier * state_velocity)
+    return eccentricity_vector
+
+
 def moon_circular_2d_state(epoch: float, choose_moon: str) -> np.ndarray((6,)):
     orbital_radius = galilean_moons_data[choose_moon]['SMA']
     orbital_period = galilean_moons_data[choose_moon]['Orbital_Period']

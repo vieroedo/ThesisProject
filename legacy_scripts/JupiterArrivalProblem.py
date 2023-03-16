@@ -193,7 +193,7 @@ class JupiterArrivalProblem:
             initial_propagation_time = Util.get_trajectory_initial_time(trajectory_parameters,
                                                                         self.time_buffer)
             # initial_propagation_time = self.epoch
-            dependent_variables_to_save = Util.get_dependent_variable_save_settings()
+            dependent_variables_to_save = Util.get_dependent_variable_save_settings(bodies)
             propagator_settings = Util.get_propagator_settings(
                 trajectory_parameters,
                 bodies,

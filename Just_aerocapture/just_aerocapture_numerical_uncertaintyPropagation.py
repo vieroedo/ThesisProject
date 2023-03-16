@@ -28,8 +28,8 @@ import class_AerocaptureNumericalProblem as ae_model
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
-# stop_before_aerocapture = True
-arc_to_compute = 0  # 0: from beginning to aerocapture.  1: from atm entry to end.  -1: everything
+
+# arc_to_compute = 1  # 0: from beginning to aerocapture.  1: from atm entry to exit.  12: from entry to end.  -1: everything
 fly_galileo = False
 choose_model = 0  # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
 integrator_settings_index = -4
@@ -60,7 +60,7 @@ decision_variable_range = [[5000, -5],
 
 # Save trajectory parameters
 traj_paramteres_dict = {
-    arc_to_compute: np.array(trajectory_parameters)
+    0: np.array(trajectory_parameters)
 }
 save2txt(traj_paramteres_dict, 'trajectory_parameters.dat', current_dir + '/UncertaintyAnalysis/')
 
@@ -79,31 +79,49 @@ simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
 number_of_runs_per_uncertainty = 100
 
 # Set the interpolation step at which different runs are compared
-output_interpolation_step = constants.JULIAN_DAY/2  # s
+output_interpolation_step = constants.JULIAN_DAY  # s
+# output_interpolation_step =
 
 random.seed(50)
 
-uncertainties = ['InitialPosition', 'InitialPosition_R', 'InitialPosition_S', 'InitialPosition_W',
-                 'InitialVelocity', 'InitialVelocity_R', 'InitialVelocity_S', 'InitialVelocity_W',
-                 'JupiterEphemeris', 'AeroCoefficients']
-initial_position_deviation_uncertainty = 3300  # m (1 sigma -> 3 sigma = 450 m)
+uncertainties_dictionary = {
+    'InitialPosition': 0, 'InitialPosition_R': 0, 'InitialPosition_S': 0, 'InitialPosition_W': 0,
+    'InitialVelocity': 0, 'InitialVelocity_R': 0, 'InitialVelocity_S': 0, 'InitialVelocity_W': 0,
+
+    'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1, 'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
+    'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1, 'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
+    'EntryFlightPathAngle': 1, 'EntryVelocity': 1,
+
+    'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12, 'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
+    'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12, 'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
+    'FinalOrbit_EntryFlightPathAngle': 12, 'FinalOrbit_EntryVelocity': 12
+}
+
+uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
+arcs_to_compute = list(uncertainties_dictionary.values())  # list of corresponding arcs
+
+initial_position_deviation_uncertainty = 3000  # m (1 sigma -> 3 sigma = 9000 m)
 initial_velocity_deviation_uncertainty = 10  # m/s (1 sigma -> 3 sigma = 30 m/s)
+entry_fpa_deviation_uncertainty = 0.01  # degrees (1 sigma -> 3 sigma = 0.03 degrees)
+entry_velocity_magnitude_deviation_uncertainty = 33  # m/s (1 sigma -> 3 sigma = 99 m/s)
 
-just_evaluate_some_uncertainties = True
-uncertainties_to_evaluate = [*range(8)]
-
+# Dont use it for now: BROKEN
+just_evaluate_some_uncertainties = False
+uncertainties_to_evaluate = [*range(10)]
 if just_evaluate_some_uncertainties == True:
     uncertainties_to_run = [uncertainties[i] for i in uncertainties_to_evaluate]
 else:
     uncertainties_to_run = uncertainties
 
+
 all_results = dict()
-for uncertainty in uncertainties_to_run:
+for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
+    actual_arc_to_compute = arcs_to_compute[uncertainty_nr]
 
     # Create aerocapture problem with model and integration settings of choice.
     aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch,decision_variable_range,
                                                                choose_model, integrator_settings_index,
-                                                               fly_galileo, arc_to_compute=arc_to_compute)
+                                                               fly_galileo, arc_to_compute=actual_arc_to_compute)
 
     # Initialize dictionary to store the results of the simulation
     simulation_results = dict()
@@ -114,42 +132,40 @@ for uncertainty in uncertainties_to_run:
         perturbation = 0.0
         initial_state_deviation_rsw = np.zeros(6)
 
-        if run == 3 and uncertainty == 'InitialVelocity':
-            ...
 
         # Initial position deviation in R, S, and W
-        if run > 0 and uncertainty == uncertainties[0]:
+        if run > 0 and (uncertainty in (uncertainties[0], uncertainties[8], uncertainties[18])):
             for i in range(3):
                 initial_state_deviation_rsw[i] = random.gauss(0, initial_position_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[0:3]
         # Initial position R deviation
-        if run > 0 and uncertainty == uncertainties[1]:
+        if run > 0 and (uncertainty in (uncertainties[1], uncertainties[9], uncertainties[19])):
             initial_state_deviation_rsw[0] = random.gauss(0, initial_position_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[0]
         # Initial position S deviation
-        if run > 0 and uncertainty == uncertainties[2]:
+        if run > 0 and (uncertainty in (uncertainties[2], uncertainties[10], uncertainties[20])):
             initial_state_deviation_rsw[1] = random.gauss(0, initial_position_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[1]
         # Initial position W deviation
-        if run > 0 and uncertainty == uncertainties[3]:
+        if run > 0 and (uncertainty in (uncertainties[3], uncertainties[11], uncertainties[21])):
             initial_state_deviation_rsw[2] = random.gauss(0, initial_position_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[2]
 
         # Initial velocity deviation in R, S, and W
-        if run > 0 and uncertainty == uncertainties[4]:
+        if run > 0 and (uncertainty in (uncertainties[4], uncertainties[12], uncertainties[22])):
             for i in range(3):
                 initial_state_deviation_rsw[i+3] = random.gauss(0, initial_velocity_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[3:6]
         # Initial velocity R deviation
-        if run > 0 and uncertainty == uncertainties[5]:
+        if run > 0 and (uncertainty in (uncertainties[5], uncertainties[13], uncertainties[23])):
             initial_state_deviation_rsw[3] = random.gauss(0, initial_velocity_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[3]
         # Initial velocity S deviation
-        if run > 0 and uncertainty == uncertainties[6]:
+        if run > 0 and (uncertainty in (uncertainties[6], uncertainties[14], uncertainties[24])):
             initial_state_deviation_rsw[4] = random.gauss(0, initial_velocity_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[4]
         # Initial velocity W deviation
-        if run > 0 and uncertainty == uncertainties[7]:
+        if run > 0 and (uncertainty in (uncertainties[7], uncertainties[15], uncertainties[25])):
             initial_state_deviation_rsw[5] = random.gauss(0, initial_velocity_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[5]
 
@@ -179,19 +195,19 @@ for uncertainty in uncertainties_to_run:
         bodies = aerocapture_problem.create_bodies_environment(body_settings)
 
         # Aerodynamic coefficients C_D and C_L uncertainty
-        if run > 0 and uncertainty == None:
+        if run > 0 and False:
             aerodynamic_coefficients_uncertainties = [0.1, 0.1]  # C_D, C_L
             perturbation = aerodynamic_coefficients_uncertainties
             aerodynamic_coefficients_variation = np.array([random.gauss(1, aerodynamic_coefficients_uncertainties[0]),
                       random.gauss(1, aerodynamic_coefficients_uncertainties[1])])
         # Drag coefficient C_D uncertainty
-        elif run > 0 and uncertainty == None:
+        elif run > 0 and False:
             aerodynamic_coefficients_uncertainties = [0.1, 0.]  # C_D, C_L
             perturbation = aerodynamic_coefficients_uncertainties
             aerodynamic_coefficients_variation = np.array([random.gauss(1, aerodynamic_coefficients_uncertainties[0]),
                                                            random.gauss(1, aerodynamic_coefficients_uncertainties[1])])
         # Lift coefficient C_L uncertainty
-        elif run > 0 and uncertainty == None:
+        elif run > 0 and False:
             aerodynamic_coefficients_uncertainties = [0., 0.1]  # C_D, C_L
             perturbation = aerodynamic_coefficients_uncertainties
             aerodynamic_coefficients_variation = np.array([random.gauss(1, aerodynamic_coefficients_uncertainties[0]),
@@ -205,15 +221,24 @@ for uncertainty in uncertainties_to_run:
         trajectory_initial_state = Util.get_initial_state(trajectory_parameters[1], atmospheric_entry_altitude,
                                                           trajectory_parameters[0])
         rotation_matrix = frame_conversion.rsw_to_inertial_rotation_matrix(trajectory_initial_state)
-        if run > 0 and (uncertainty == uncertainties[0] or uncertainty == uncertainties[1] or
-                        uncertainty == uncertainties[2] or uncertainty == uncertainties[3]):
+        if run > 0 and (uncertainty_nr in [0,1,2,3, 8,9,10,11, 18,19,20,21]):
             initial_state_deviation_inertial[0:3] = rotation_matrix @ initial_state_deviation_rsw[0:3]
-        elif run > 0 and (uncertainty == uncertainties[4] or uncertainty == uncertainties[5] or
-                          uncertainty == uncertainties[6] or uncertainty == uncertainties[7]):
+        elif run > 0 and (uncertainty_nr in [4,5,6,7, 12,13,14,15, 22,23,24,25]):
             initial_state_deviation_inertial[3:6] = rotation_matrix @ initial_state_deviation_rsw[3:6]
 
         # set initial state perturbation for the aerocapture problem
         aerocapture_problem.set_initial_state_perturbation(initial_state_deviation_inertial)
+
+        entry_parameters_perturbation = np.zeros(2)
+        if run > 0 and (uncertainty in (uncertainties[16], uncertainties[26])):
+            fpa_deviation = random.gauss(0, entry_fpa_deviation_uncertainty)  # degrees
+            entry_parameters_perturbation = np.array([0., fpa_deviation])
+            perturbation = fpa_deviation
+        if run > 0 and (uncertainty in (uncertainties[17], uncertainties[27])):
+            entry_velocity_deviation = random.gauss(0, entry_velocity_magnitude_deviation_uncertainty)
+            entry_parameters_perturbation = np.array([entry_velocity_deviation, 0.])
+            perturbation = entry_velocity_deviation
+        aerocapture_problem.set_entry_parameters_perturbation(entry_parameters_perturbation)
 
         ###########################################################################
         # CREATE PROPAGATOR SETTINGS ##############################################
@@ -264,11 +289,20 @@ every case with respect to the "nominal" one.
 
 print('\n\nAll runs have been done, now comparing the models\n')
 
-for uncertainty in uncertainties_to_run:
+for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
     simulation_results = all_results[uncertainty]
+    actual_arc_to_compute = arcs_to_compute[uncertainty_nr]
+
+    if actual_arc_to_compute == 1:
+        selected_output_interpolation_step = 1  # s
+    elif actual_arc_to_compute == 12:
+        selected_output_interpolation_step = output_interpolation_step/4
+    else:
+        selected_output_interpolation_step = output_interpolation_step
+
     # Compare all the model settings with the nominal case
     for run in range(1, number_of_runs_per_uncertainty):
-        print(f'\nDifference evaluation for run: {run}  ' + uncertainty)
+        print(f'\nDifference evaluation for run: {run}  -  ' + uncertainty)
         # Get output path
         output_path = current_dir + '/UncertaintyAnalysis/' + uncertainty + '/'
 
@@ -288,7 +322,10 @@ for uncertainty in uncertainties_to_run:
         interpolation_upper_limit = min(nominal_times[-limit_value],current_times[-limit_value])
 
         # Create vector of epochs to be compared (boundaries are referred to the first case)
-        unfiltered_interpolation_epochs = np.arange(current_times[0], current_times[-1], output_interpolation_step)
+        if actual_arc_to_compute == 1 or actual_arc_to_compute == 12:
+            unfiltered_interpolation_epochs = np.arange(current_times[0], current_times[-1], selected_output_interpolation_step)
+        else:
+            unfiltered_interpolation_epochs = np.geomspace(current_times[0], current_times[-1], int(abs(current_times[0]-current_times[-1])/selected_output_interpolation_step))
         # unfiltered_interpolation_epochs = np.array(current_times)
         unfiltered_interpolation_epochs = [n for n in unfiltered_interpolation_epochs if n <= interpolation_upper_limit]
         interpolation_epochs = [n for n in unfiltered_interpolation_epochs if n >= interpolation_lower_limit]
@@ -308,4 +345,4 @@ for uncertainty in uncertainties_to_run:
                                                                         'dependent_variable_difference_wrt_nominal_case_' + str(run) + '.dat')
 
         # Compute the atmospheric entry interface difference here:
-        ...
+        # ...

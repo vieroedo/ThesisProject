@@ -21,7 +21,8 @@ class AerocaptureNumericalProblem:
                  integrator_settings_index: int = -4,
                  fly_galileo: bool = False,
                  arc_to_compute: int = -1,
-                 initial_state_perturbation=np.zeros(6)
+                 initial_state_perturbation=np.zeros(6),
+                 entry_parameters_perturbation=np.zeros(2)
                  ):
         """
                 Constructor for the AerocaptureNumericalProblem class.
@@ -39,6 +40,9 @@ class AerocaptureNumericalProblem:
                     choose whether to fly the galileo mission or do aerocapture
                 initial_state_perturbation:
                     perturbation of the initial state of the simulation
+                entry_parameters_perturbation:
+                    perturbation of the atmospheric entry parameters. Can be used only if the propagation starts at
+                    atmospheric interface. Entry parameters: [entry_velocity_norm, entry_fpa]
                 Returns
                 -------
                 none
@@ -52,25 +56,37 @@ class AerocaptureNumericalProblem:
         self.environment_model = environment_model
         self.integrator_settings_index = integrator_settings_index
         self.initial_state_perturbation = initial_state_perturbation
+        self.entry_parameters_perturbation = entry_parameters_perturbation
 
         if self.arc_to_compute == 0:
             self._stop_before_aerocapture = True
             self._start_at_entry_interface = False
+            self._stop_after_aerocapture = False
         elif self.arc_to_compute == 1:
             self._stop_before_aerocapture = False
             self._start_at_entry_interface = True
+            self._stop_after_aerocapture = True
+        elif self.arc_to_compute == 12:
+            self._stop_before_aerocapture = False
+            self._start_at_entry_interface = True
+            self._stop_after_aerocapture = False
         elif self.arc_to_compute == -1:
             self._stop_before_aerocapture = False
             self._start_at_entry_interface = False
+            self._stop_after_aerocapture = False
         else:
             raise Exception(f'Wrong parameter inserted for the arc to compute ({self.arc_to_compute}). '
                             f'Allowed values are -1, 0 and 1. (Default: -1)')
 
-        if (self.arc_to_compute == 0 or self.arc_to_compute == 1) and self.galileo_mission_case:
+        if (self.arc_to_compute == 0 or self.arc_to_compute == 1 or self.arc_to_compute == 12) and self.galileo_mission_case:
             raise Exception('Incompatible combination of arguments. '
                             'Cannot compute just a part of the Galileo trajectory. '
                             'Leave the argument arc_to_compute unexpressed, or set it to the default value. '
                             '(Default: -1)')
+
+        if entry_parameters_perturbation.any() and not self.start_at_entry_interface:
+            raise Exception('Entry parameters cannot be perturbed when the propagation does not start at atmospheric entry.'
+                            'Set the perturbation of the entry parameters to 0 or the propagation to start at the entry interface.')
 
         body_settings = self.create_body_settings_environment()
         bodies = self.create_bodies_environment(body_settings)
@@ -84,12 +100,16 @@ class AerocaptureNumericalProblem:
         self.termination_settings_function = lambda: termination_settings
 
     @property
-    def start_before_aerocapture(self):
+    def stop_before_aerocapture(self):
         return self._stop_before_aerocapture
 
     @property
     def start_at_entry_interface(self):
         return self._start_at_entry_interface
+
+    @property
+    def stop_after_aerocapture(self):
+        return self._stop_after_aerocapture
 
     def get_last_run_propagated_cartesian_state_history(self) -> dict:
         """
@@ -168,10 +188,13 @@ class AerocaptureNumericalProblem:
     def set_environment_model(self, choose_model, verbose = True):
         self.environment_model = choose_model
         if verbose:
-            print('Run the \'fitness\' function for the changes to be effective')
+            print('Run the \'fitness\' function for the changes to be effective in the environment model')
 
     def set_initial_state_perturbation(self, initial_state_perturbation):
         self.initial_state_perturbation = initial_state_perturbation
+
+    def set_entry_parameters_perturbation(self, entry_parameters_perturbation):
+        self.entry_parameters_perturbation = entry_parameters_perturbation
 
     def set_bodies(self, bodies):
         self.bodies_function = lambda: bodies
@@ -264,8 +287,9 @@ class AerocaptureNumericalProblem:
     def create_propagator_settings(self,
                                    entry_fpa,
                                    interplanetary_arrival_velocity,
-                                   initial_state_perturbation = np.zeros(6)):
-        dependent_variables_to_save = Util.get_dependent_variable_save_settings()
+                                   initial_state_perturbation = np.zeros(6),
+                                   entry_parameters_perturbation = np.zeros(2)):
+        dependent_variables_to_save = Util.get_dependent_variable_save_settings(self.bodies_function())
         atm_entry_alt = Util.atmospheric_entry_altitude
         propagator_settings = Util.get_propagator_settings(entry_fpa,
                                                            atm_entry_alt,
@@ -274,6 +298,7 @@ class AerocaptureNumericalProblem:
                                                            dependent_variables_to_save,
                                                            jupiter_interpl_excees_vel=interplanetary_arrival_velocity,
                                                            initial_state_perturbation=initial_state_perturbation,
+                                                           entry_parameters_perturbation=entry_parameters_perturbation,
                                                            model_choice=self.environment_model,
                                                            galileo_propagator_settings=self.galileo_mission_case,
                                                            start_at_entry_interface=self._start_at_entry_interface)
@@ -283,8 +308,8 @@ class AerocaptureNumericalProblem:
         termination_settings = Util.get_termination_settings(self.simulation_start_epoch,
                                                              galileo_termination_settings=self.galileo_mission_case,
                                                              stop_before_aerocapture=self._stop_before_aerocapture,
-                                                             entry_fpa=entry_fpa,
-                                                             bodies=bodies)
+                                                             stop_after_aerocapture=self._stop_after_aerocapture,
+                                                             entry_fpa=entry_fpa, bodies=bodies)
         return termination_settings
 
     def fitness(self,
@@ -317,12 +342,13 @@ class AerocaptureNumericalProblem:
         interplanetary_arrival_velocity = orbital_parameters[0]
         atm_entry_fpa = orbital_parameters[1]
 
-        if self._stop_before_aerocapture:
-            self.termination_settings_function = lambda: self.create_termination_settings(atm_entry_fpa, bodies)
+        # if self._stop_before_aerocapture or self._stop_after_aerocapture:
+        self.set_termination_settings(self.create_termination_settings(atm_entry_fpa, bodies))
 
         # Create propagator settings
-        propagator_settings = self.create_propagator_settings(atm_entry_fpa,interplanetary_arrival_velocity,
-                                                              self.initial_state_perturbation)
+        propagator_settings = self.create_propagator_settings(atm_entry_fpa, interplanetary_arrival_velocity,
+                                                              self.initial_state_perturbation,
+                                                              self.entry_parameters_perturbation)
 
         # Create simulation object and propagate dynamics
         dynamics_simulator = numerical_simulation.SingleArcSimulator(

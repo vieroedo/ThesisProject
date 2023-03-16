@@ -164,12 +164,10 @@ environment_setup.add_aerodynamic_coefficient_interface(
 ###########################################################################
 
 # Retrieve termination settings
-termination_settings = Util.get_termination_settings(simulation_start_epoch,
-                                                     maximum_duration,
-                                                     galileo_termination_settings=fly_galileo
-                                                     )
+termination_settings = Util.get_termination_settings(simulation_start_epoch, maximum_duration,
+                                                     galileo_termination_settings=fly_galileo)
 # Retrieve dependent variables to save
-dependent_variables_to_save = Util.get_dependent_variable_save_settings()
+dependent_variables_to_save = Util.get_dependent_variable_save_settings(bodies)
 # Check whether there is any
 are_dependent_variables_to_save = False if not dependent_variables_to_save else True
 
@@ -216,7 +214,8 @@ if use_benchmark:
     propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
                                                        atmospheric_entry_interface_altitude,
                                                        bodies,
-                                                       Util.get_termination_settings(simulation_start_epoch, galileo_termination_settings=fly_galileo),
+                                                       Util.get_termination_settings(simulation_start_epoch,
+                                                                                     galileo_termination_settings=fly_galileo),
                                                        dependent_variables_to_save,
                                                        current_propagator,
                                                        galileo_propagator_settings=fly_galileo,
@@ -308,7 +307,8 @@ if use_benchmark:
 current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
                                                            atmospheric_entry_interface_altitude,
                                                            bodies,
-                                                           Util.get_termination_settings(simulation_start_epoch, galileo_termination_settings=fly_galileo),
+                                                           Util.get_termination_settings(simulation_start_epoch,
+                                                                                         galileo_termination_settings=fly_galileo),
                                                            dependent_variables_to_save,
                                                            current_propagator,
                                                            galileo_propagator_settings=fly_galileo)

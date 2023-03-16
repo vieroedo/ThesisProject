@@ -16,14 +16,28 @@ from tudatpy.kernel.math import interpolators
 from tudatpy.kernel.astro import frame_conversion, element_conversion
 
 # Problem-specific imports
-import CapsuleEntryUtilities as Util
+from CapsuleEntryUtilities import compare_models
+from handle_functions import eccentricity_vector_from_cartesian_state
 
 # SET PARAMETERS
-uncertainty_to_analyze = 4  # From 0 to 7
+uncertainty_to_analyze = 5  # From 0 to 17
 
 # uncertainties = ['EarthEph', 'SRP', 'InitialState', 'InitialState_1', 'InitialState_2', 'InitialState_3']
-uncertainties = ['InitialPosition', 'InitialPosition_R', 'InitialPosition_S', 'InitialPosition_W',
-                 'InitialVelocity', 'InitialVelocity_R', 'InitialVelocity_S', 'InitialVelocity_W']
+uncertainties_dictionary = {
+    'InitialPosition': 0, 'InitialPosition_R': 0, 'InitialPosition_S': 0, 'InitialPosition_W': 0,
+    'InitialVelocity': 0, 'InitialVelocity_R': 0, 'InitialVelocity_S': 0, 'InitialVelocity_W': 0,
+
+    'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1, 'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
+    'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1, 'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
+    'EntryFlightPathAngle': 1, 'EntryVelocity': 1,
+
+    'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12, 'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
+    'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12, 'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
+    'FinalOrbit_EntryFlightPathAngle': 12, 'FinalOrbit_EntryVelocity': 12
+}
+
+uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
+arcs_computed = list(uncertainties_dictionary.values())  # list of corresponding arcs
 
 # Font sizes
 ticks_size = 12
@@ -49,16 +63,51 @@ perturbations = np.loadtxt(current_dir + f'/UncertaintyAnalysis/simulation_resul
 number_of_runs = len(perturbations[:,0]) + 1
 
 trajectory_parameters = np.loadtxt(current_dir + '/UncertaintyAnalysis/trajectory_parameters.dat')  # [0, vel, fpa]
+# evaluated_arc = trajectory_parameters[0]
 interplanetary_arrival_velocity = trajectory_parameters[1]
 atmospheric_entry_fpa = trajectory_parameters[2]
+
+evaluated_arc = arcs_computed[uncertainty_to_analyze]
+
+final_state_names = ['Atmospheric Entry', 'Atmospheric Exit', 'Final Orbit']
+if evaluated_arc == 0:
+    final_state_name = final_state_names[0]
+elif evaluated_arc == 1:
+    final_state_name = final_state_names[1]
+elif evaluated_arc == 12 or evaluated_arc == -1:
+    final_state_name = final_state_names[2]
+else:
+    raise Exception('The propagated arc cannot yet be shown! Update the code.')
+
+# if uncertainties[uncertainty_to_analyze] == uncertainties[8] or uncertainties[uncertainty_to_analyze] == uncertainties[9]:
+#     evaluated_arc = 1
+
+if evaluated_arc == 0:
+    stop_before_aerocapture = True
+    start_at_entry_interface = False
+    stop_after_aerocapture = False
+elif evaluated_arc == 1:
+    stop_before_aerocapture = False
+    start_at_entry_interface = True
+    stop_after_aerocapture = True
+elif evaluated_arc == 12:
+    stop_before_aerocapture = False
+    start_at_entry_interface = True
+    stop_after_aerocapture = False
+elif evaluated_arc == -1:
+    stop_before_aerocapture = False
+    start_at_entry_interface = False
+    stop_after_aerocapture = False
+else:
+    raise Exception('Trajectory arc not yet supported. The variable evaluated_arc has an unsupported value.')
 
 # This is made for compatibility between the various uncertainty analyses
 entries = perturbations.shape[1]
 
-# if uncertainty_to_analyze == 0:
+# if uncertainty_to_analyze == 0:  # earth ephemeris
 #     entry_names_x = [0, 'eph']
 #     entry_names_y = [0, 'R \; (t_1)', 'S \; (t_1)', 'W \; (t_1)']
-# elif uncertainty_to_analyze == 1:
+# elif uncertainty_to_analyze == 1:  # radiation pressure coefficient
 #     entry_names_x = [0, 'C_r']
 #     entry_names_y = [0, 'R \; (t_1)', 'S \; (t_1)', 'W \; (t_1)']
 if uncertainty_to_analyze == 0:
@@ -74,6 +123,26 @@ elif uncertainty_to_analyze==4:
 elif 4<uncertainty_to_analyze<8:
     temp_base = [0, 'V_R \; (t_0)', 'V_S \; (t_0)', 'V_W \; (t_0)']
     entry_names_x = [0, temp_base[uncertainty_to_analyze-4]]
+    x_axis_measure_unit = '(m/s)'
+elif uncertainty_to_analyze == 8 or uncertainty_to_analyze==18:
+    entry_names_x = [0, 'R \; (t_E)', 'S \; (t_E)', 'W \; (t_E)']
+    x_axis_measure_unit = '(m)'
+elif 8<uncertainty_to_analyze<12 or 18<uncertainty_to_analyze<22:
+    temp_base = [0, 'R \; (t_E)', 'S \; (t_E)', 'W \; (t_E)']
+    entry_names_x = [0, temp_base[uncertainty_to_analyze]]
+    x_axis_measure_unit = '(m)'
+elif uncertainty_to_analyze==12or uncertainty_to_analyze==22:
+    entry_names_x = [0, 'V_R \; (t_E)', 'V_S \; (t_E)', 'V_W \; (t_E)']
+    x_axis_measure_unit = '(m/s)'
+elif 12<uncertainty_to_analyze<16 or 22<uncertainty_to_analyze<26:
+    temp_base = [0, 'V_R \; (t_E)', 'V_S \; (t_E)', 'V_W \; (t_E)']
+    entry_names_x = [0, temp_base[uncertainty_to_analyze-4]]
+    x_axis_measure_unit = '(m/s)'
+elif uncertainty_to_analyze == 16 or uncertainty_to_analyze==26:
+    entry_names_x = [0, '\gamma (t_E)']
+    x_axis_measure_unit = '(°)'
+elif uncertainty_to_analyze == 17 or uncertainty_to_analyze ==27:
+    entry_names_x = [0, 'V (t_E)']
     x_axis_measure_unit = '(m/s)'
 else:
     raise Exception('No such uncertainty exists to be analyzed, or you just forgot to update the elif\'s.'
@@ -96,7 +165,7 @@ for entry in range(1,entries):
         ax_hist.hist(perturbations[:, entry], 20, edgecolor='black', linewidth=1.2)
         ax_hist.set_xlabel(fr'$\Delta {entry_names_x[entry]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
         ax_hist.tick_params(axis='both', which='major', labelsize=ticks_size)
-fig_hist.suptitle('Random variable distribution', fontsize=suptitle_size)
+fig_hist.suptitle('Random variable distribution at initial time', fontsize=suptitle_size)
 fig_hist.supylabel('Occurrences', fontsize=common_y_label_size)
 fig_hist.tight_layout()
 
@@ -110,18 +179,20 @@ interpolator_settings = interpolators.lagrange_interpolation(
 
 # Extract nominal state history dictionary
 nominal_state_history_np = np.loadtxt(data_path + 'state_history_0.dat')
-nominal_state_history = dict(zip(nominal_state_history_np[:, 0],nominal_state_history_np[:, 1:7]))
+nominal_state_history = dict(zip(nominal_state_history_np[:, 0],nominal_state_history_np[:, 1:]))
 nominal_sh_interpolator = interpolators.create_one_dimensional_vector_interpolator(
     nominal_state_history, interpolator_settings)
 
+nominal_final_eccentricity = LA.norm(eccentricity_vector_from_cartesian_state(nominal_state_history_np[-1, 1:]))
 
 # PLOT THE POSITION ERROR RESULTING FROM THE APPLIED UNCERTAINTY
-fig, axs = plt.subplots(2, 2, figsize=(6, 6), sharex='col')
+fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex='col')
 
 for run_number in range(1, number_of_runs):
     state_history_np = np.loadtxt(data_path + 'state_history_' + str(run_number) + '.dat')
     state_difference_wrt_nominal_case_np = np.loadtxt(data_path + 'state_difference_wrt_nominal_case_' + str(run_number)
                                                       + '.dat')
+    spacecraft_final_state = state_history_np[-1, 1:]
 
     epochs_comparison_sh = state_difference_wrt_nominal_case_np[:, 0]
     epochs_diff = (epochs_comparison_sh - epochs_comparison_sh[0]) / constants.JULIAN_DAY
@@ -139,13 +210,13 @@ for run_number in range(1, number_of_runs):
     velocity_difference_norm = LA.norm(velocity_difference, axis=1)
 
     altitude_difference, speed_difference = np.zeros(len(epochs_comparison_sh)), np.zeros(len(epochs_comparison_sh))
-    altitude_difference_debug = np.zeros(len(epochs_comparison_sh))
+    # altitude_difference_debug = np.zeros(len(epochs_comparison_sh))
     for i, epoch in enumerate(epochs_comparison_sh):
         nominal_state = nominal_sh_interpolator.interpolate(epoch)
         current_state = sh_interpolator.interpolate(epoch)
 
         altitude_difference[i] = abs(LA.norm(nominal_state[0:3]) - LA.norm(current_state[0:3]))
-        altitude_difference_debug[i] = LA.norm(np.dot(cartesian_state_difference[i,0:3], Util.unit_vector(current_state[0:3])))
+        # altitude_difference_debug[i] = LA.norm(np.dot(cartesian_state_difference[i,0:3], Util.unit_vector(current_state[0:3])))
         speed_difference[i] = abs(LA.norm(nominal_state[3:6]) - LA.norm(current_state[3:6]))
 
     rsw_state_difference = np.zeros(np.shape(cartesian_state_difference))
@@ -157,21 +228,18 @@ for run_number in range(1, number_of_runs):
     rsw_position_difference = rsw_state_difference[:,0:3]
     rsw_velocity_difference = rsw_state_difference[:,3:6]
 
-    # rsw_state_histories[run_number] = [epochs_diff, rsw_position_difference]
-    # rsw_end_values[run_number] = rsw_position_difference[-1,:] # np.amax(rsw_position_difference,axis=0)
-    rsw_end_values[run_number] = rsw_state_difference[-1, :]
-    state_history_end_values[run_number] = np.array([position_difference_norm[-1], velocity_difference_norm[-1]])  # np.amax(position_difference_norm)
+    final_eccentricity = LA.norm(eccentricity_vector_from_cartesian_state(spacecraft_final_state))
 
-    # rsw_end_values[run_number] = np.amax(rsw_position_difference,axis=0)
-    # state_history_end_values[run_number] = np.amax(position_difference_norm)
+    rsw_end_values[run_number] = rsw_state_difference[-1, :]
+    state_history_end_values[run_number] = np.array([position_difference_norm[-1], velocity_difference_norm[-1], final_eccentricity])  # np.amax(position_difference_norm)
+
     axs[0, 0].plot(epochs_diff, position_difference_norm, color='blue')
     axs[1, 0].plot(epochs_diff, velocity_difference_norm, color='blue')
 
     axs[0, 1].plot(epochs_diff, altitude_difference, color='blue')
-    axs[0, 1].plot(epochs_diff, altitude_difference_debug, color='red')
     axs[1, 1].plot(epochs_diff, speed_difference, color='blue')
 
-fig.suptitle('Performed Propagations', fontsize=suptitle_size)
+fig.suptitle(f'Performed Propagations (End state: {final_state_name})', fontsize=suptitle_size)
 fig.supxlabel('Elapsed time (days)', fontsize=x_label_size)
 axs[0, 0].set_ylabel('Position Error Magnitude (m)', fontsize=y_label_size)
 axs[1, 0].set_ylabel('Velocity Error Magnitude (m/s)', fontsize=y_label_size)
@@ -198,6 +266,9 @@ nominal_dependent_variable_history_np = np.loadtxt(data_path + 'dependent_variab
 nominal_dependent_variable_history = dict(zip(nominal_dependent_variable_history_np[:, 0], nominal_dependent_variable_history_np[:, 1:]))
 nominal_depvarh_interpolator = interpolators.create_one_dimensional_vector_interpolator(
     nominal_dependent_variable_history, interpolator_settings)
+
+nominal_altitude_based_depvar_dictionary = dict(zip(nominal_dependent_variable_history_np[:,5], nominal_dependent_variable_history_np[:,6:8]))
+nominal_altitude_keys = list(nominal_altitude_based_depvar_dictionary.keys())
 
 # PLOT THE DIFFERENCE IN ENTRY PARAMETERS: f.p.a., entry airspeed, and so on
 dependent_variable_end_values = dict()
@@ -229,11 +300,39 @@ for run_number in range(1, number_of_runs):
     #     fpa_difference[i] = abs(nominal_dependent_variables[:,5] - current_dependent_variables[:,5])
     #     airspeed_difference[i] = abs(nominal_dependent_variables[:,6] - current_dependent_variables[:,6])
 
-    nominal_end_dependent_variables = nominal_depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
-    current_end_dependent_variables = depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
+    if stop_before_aerocapture:
+        # altitude_velocity_dictionary = dict(zip())
+        altitude_based_depvar_dictionary = dict(zip(dependent_variable_history_np[:, 5], dependent_variable_history_np[:, 6:8]))
 
-    final_fpa_difference = abs(nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
-    final_airspeed_difference = abs(nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
+        altitude_keys = list(altitude_based_depvar_dictionary.keys())
+        # output_interpolation_step=-1000e3
+
+        limit_value = 2
+        interpolation_upper_limit = max(nominal_altitude_keys[limit_value], altitude_keys[limit_value])
+        interpolation_lower_limit = min(nominal_altitude_keys[-limit_value], altitude_keys[-limit_value])
+
+        # unfiltered_interpolation_altitudes = np.arange(altitude_keys[0], altitude_keys[-1], output_interpolation_step)
+        unfiltered_interpolation_altitudes = np.geomspace(altitude_keys[0], altitude_keys[-1], int(1e4))
+        unfiltered_interpolation_altitudes = [n for n in unfiltered_interpolation_altitudes if n <= interpolation_upper_limit]
+        interpolation_altitudes = [n for n in unfiltered_interpolation_altitudes if n >= interpolation_lower_limit]
+
+        print(f'Comparing dependent variables for run: {run_number}')
+        depvar_difference_wrt_altitude = compare_models(altitude_based_depvar_dictionary,
+                                                        nominal_altitude_based_depvar_dictionary,
+                                                        interpolation_altitudes, None, None)
+        print('Comparison done.\n')
+
+        # fpa, velocity
+        depvar_difference_wrt_altitude_values = np.vstack(list(depvar_difference_wrt_altitude.values()))
+        final_fpa_difference = depvar_difference_wrt_altitude_values[-1,0]
+        final_airspeed_difference = depvar_difference_wrt_altitude_values[-1,1]
+    else:
+
+        nominal_end_dependent_variables = nominal_depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
+        current_end_dependent_variables = depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
+
+        final_fpa_difference = abs(nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
+        final_airspeed_difference = abs(nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
 
     # dependent_variable_end_values[run_number] = np.array([fpa_difference[-1], airspeed_difference[-1]])
     dependent_variable_end_values[run_number] = np.array([final_fpa_difference, final_airspeed_difference, there_is_aerocapture])
@@ -247,37 +346,36 @@ for entry in range(1, entries):
     add_x_comma = ',' if entry < entries-1 else ''
     xlabel = xlabel + '\Delta ' + x_component_name + add_x_comma if entry < entries else xlabel
 
-fig_depvar, ax_depvar = plt.subplots(2,2, figsize=(6, 8), sharex='col')
-for entry in range(1, entries):
-    marker = marker_styles[0][entry-1]
-    facecolor = marker_styles[1][entry-1]
-    edgecolor = marker_styles[2][entry-1]
-    ax_depvar[0, 0].scatter(perturbations[:, entry], dependent_variable_end_values_array[:,0],
-                 label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor, edgecolor=edgecolor)
-    ax_depvar[1, 0].scatter(perturbations[:, entry], dependent_variable_end_values_array[:, 1],
-                 label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,edgecolor=edgecolor)
+if stop_after_aerocapture or stop_before_aerocapture:
+    fig_depvar, ax_depvar = plt.subplots(2,2, figsize=(6, 8), sharex='col')
+    for entry in range(1, entries):
+        marker = marker_styles[0][entry-1]
+        facecolor = marker_styles[1][entry-1]
+        edgecolor = marker_styles[2][entry-1]
+        ax_depvar[0, 0].scatter(perturbations[:, entry], dependent_variable_end_values_array[:,0],
+                     label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor, edgecolor=edgecolor)
+        ax_depvar[1, 0].scatter(perturbations[:, entry], dependent_variable_end_values_array[:, 1],
+                     label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,edgecolor=edgecolor)
 
-    aerocapture_performed_cells = list(np.where(dependent_variable_end_values_array[:, 2] == 1)[0])
-    yes_ae__perturbations = perturbations[aerocapture_performed_cells, :]
-    yes_ae__depvars_endvalues = dependent_variable_end_values_array[aerocapture_performed_cells, :]
-    ax_depvar[0, 1].scatter(yes_ae__perturbations[:, entry], yes_ae__depvars_endvalues[:, 0],
-                            label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,
-                            edgecolor=edgecolor)
-    ax_depvar[1, 1].scatter(yes_ae__perturbations[:, entry], yes_ae__depvars_endvalues[:, 1],
-                            label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,
-                            edgecolor=edgecolor)
+        aerocapture_performed_cells = list(np.where(dependent_variable_end_values_array[:, 2] == 1)[0])
+        yes_ae__perturbations = perturbations[aerocapture_performed_cells, :]
+        yes_ae__depvars_endvalues = dependent_variable_end_values_array[aerocapture_performed_cells, :]
+        ax_depvar[0, 1].scatter(yes_ae__perturbations[:, entry], yes_ae__depvars_endvalues[:, 0],
+                                label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,
+                                edgecolor=edgecolor)
+        ax_depvar[1, 1].scatter(yes_ae__perturbations[:, entry], yes_ae__depvars_endvalues[:, 1],
+                                label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,
+                                edgecolor=edgecolor)
 
-
-
-ax_depvar[0, 0].set_ylabel(r'$\gamma \,(t_1)$ (\textdegree)', fontsize=y_label_size)
-ax_depvar[1, 0].set_ylabel(r'$Airspeed \,(t_1)$ (m/s)', fontsize=y_label_size)
-fig_depvar.supxlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
-for i in [0,1]:
-    for j in[0,1]:
-        if entries-1 > 1:
-            ax_depvar[i, j].legend()
-fig_depvar.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final $\gamma$ and Airspeed', fontsize=suptitle_size)
-fig_depvar.tight_layout()
+    ax_depvar[0, 0].set_ylabel(r'$\gamma \,(t_1)$ (\textdegree)', fontsize=y_label_size)
+    ax_depvar[1, 0].set_ylabel(r'$Airspeed \,(t_1)$ (m/s)', fontsize=y_label_size)
+    fig_depvar.supxlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+    for i in [0,1]:
+        for j in [0,1]:
+            if entries-1 > 1:
+                ax_depvar[i, j].legend()
+    fig_depvar.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final $\gamma$ and Airspeed (End state: {final_state_name})', fontsize=suptitle_size)
+    fig_depvar.tight_layout()
 
 
 # PLOT THE IMPACT OF THE APPLIED UNCERTAINTY ON THE FINAL NORM OF POSITION DIFFERENCE
@@ -301,8 +399,34 @@ for i in [0,1]:
     axs2[i].tick_params(axis='both', which='major', labelsize=ticks_size)
     if entries-1 > 1:
         axs2[i].legend()
-fig2.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final state', fontsize=suptitle_size)
+fig2.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final state (End state: {final_state_name})', fontsize=suptitle_size)
 fig2.tight_layout()
+
+# Plot of final eccentricity
+fig_ecc, axs_ecc = plt.subplots()
+
+for entry in range(1, entries):
+    axs_ecc.scatter(perturbations[:, entry], state_history_end_values_array[:, 2],
+                    label=fr'$\Delta {entry_names_x[entry]}$',
+                    marker=marker_styles[0][entry - 1], facecolor=marker_styles[1][entry - 1],
+                    edgecolor=marker_styles[2][entry - 1])
+axs_ecc.axhline(y=nominal_final_eccentricity, color='grey', linestyle='--')
+
+for i in [0]:  # change if you add other subplots
+    # Show the major grid lines with dark grey lines
+    axs_ecc.grid(visible=True, which='major', color='#666666', linestyle='-')
+    # Show the minor grid lines with very faint and almost transparent grey lines
+    axs_ecc.minorticks_on()
+    axs_ecc.grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+    axs_ecc.tick_params(axis='both', which='major', labelsize=ticks_size)
+    if entries-1 > 1:
+        axs_ecc.legend()
+axs_ecc.set_ylabel(r'Final eccentricity $(t_1)$')
+axs_ecc.set_xlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+
+fig_ecc.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final eccentricity (End state: {final_state_name})', fontsize=suptitle_size)
+fig_ecc.tight_layout()
+
 
 # SHOW THE IMPACT OF THE APPLIED UNCERTAINTY ON THE FINAL NORM OF POSITION DIFFERENCE
 # and
@@ -310,7 +434,7 @@ fig2.tight_layout()
 # plt.show()
 
 
-max_entries_pert = perturbations.shape[1] -1
+max_entries_pert = perturbations.shape[1] - 1
 
 # PLOT THE IMPACT OF THE APPLIED UNCERTAINTY ON THE FINAL RSW COMPONENTS AND
 # PLOT THE HISTOGRAM OF THE FINAL RSW COMPONENTS DISTRIBUTION
@@ -360,11 +484,15 @@ for i in [0,1]:
 
 fig3.suptitle(fr'Impact of ${xlabel[0]} \; (t_0)$ on final RSW position and velocity', fontsize=suptitle_size)
 
-fig3_hist.suptitle('End Values Distribution', fontsize=suptitle_size)
+fig3_hist.suptitle(f'End Values Distribution (End state: {final_state_name})', fontsize=suptitle_size)
 fig3_hist.supylabel('Occurrences', fontsize=common_y_label_size)
 
 fig3_hist.tight_layout()
 fig3.tight_layout()
+
+# Plot the heat flux accuracy and the subsequent
+if evaluated_arc == 1 or evaluated_arc==12:
+    ...
 
 # SHOW THEM
 plt.show()

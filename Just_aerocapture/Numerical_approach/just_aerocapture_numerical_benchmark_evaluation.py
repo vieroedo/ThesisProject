@@ -148,11 +148,9 @@ environment_setup.add_aerodynamic_coefficient_interface(
 ###########################################################################
 
 # Retrieve termination settings
-termination_settings = Util.get_termination_settings(simulation_start_epoch,
-                                                     maximum_duration,
-                                                     )
+termination_settings = Util.get_termination_settings(simulation_start_epoch, maximum_duration)
 # Retrieve dependent variables to save
-dependent_variables_to_save = Util.get_dependent_variable_save_settings()
+dependent_variables_to_save = Util.get_dependent_variable_save_settings(bodies)
 # Check whether there is any
 are_dependent_variables_to_save = False if not dependent_variables_to_save else True
 
