@@ -99,6 +99,8 @@ class AerocaptureNumericalProblem:
         termination_settings = self.create_termination_settings()
         self.termination_settings_function = lambda: termination_settings
 
+        # self.dynamics_simulator_function = lambda: None
+
     @property
     def stop_before_aerocapture(self):
         return self._stop_before_aerocapture
@@ -121,6 +123,10 @@ class AerocaptureNumericalProblem:
         -------
         dict
         """
+
+        if self.dynamics_simulator_function() is None:
+            raise Exception('Unable to retrieve state history. Trajectory not yet propagated.')
+
         return self.dynamics_simulator_function( ).get_equations_of_motion_numerical_solution()
 
     def get_last_run_propagated_state_history(self) -> dict:
@@ -134,7 +140,11 @@ class AerocaptureNumericalProblem:
         -------
         dict
         """
-        return self.dynamics_simulator_function( ).get_equations_of_motion_numerical_solution_raw()
+
+        if self.dynamics_simulator_function() is None:
+            raise Exception('Unable to retrieve state history. Trajectory not yet propagated.')
+
+        return self.dynamics_simulator_function().get_equations_of_motion_numerical_solution_raw()
 
     def get_bounds(self):
 
@@ -150,7 +160,10 @@ class AerocaptureNumericalProblem:
         -------
         dict
         """
-        return self.dynamics_simulator_function( ).get_dependent_variable_history()
+
+        if self.dynamics_simulator_function() is None:
+            raise Exception('Unable to retrieve dependent variable history. Trajectory not yet propagated.')
+        return self.dynamics_simulator_function( ).dependent_variable_history
 
     def get_last_run_dynamics_simulator(self):
         """
@@ -162,6 +175,9 @@ class AerocaptureNumericalProblem:
         -------
         tudatpy.kernel.simulation.propagation_setup.SingleArcDynamicsSimulator
         """
+
+        if self.dynamics_simulator_function() is None:
+            raise Exception('Unable to retrieve the dynamics simulator. Trajectory not yet propagated.')
         return self.dynamics_simulator_function( )
 
     def get_bodies(self):
@@ -170,10 +186,6 @@ class AerocaptureNumericalProblem:
     def get_integrator_settings(self):
         integrator_settings = self.integrator_settings_function
         return integrator_settings
-
-    # def get_propagator_settings(self):
-    #     """Cannot be used because the propagator settings object gets defined only when running the simulation"""
-    #     return self.propagator_settings_function
 
     def get_termination_settings(self):
         termination_settings = self.termination_settings_function
@@ -311,6 +323,32 @@ class AerocaptureNumericalProblem:
                                                              stop_after_aerocapture=self._stop_after_aerocapture,
                                                              entry_fpa=entry_fpa, bodies=bodies)
         return termination_settings
+
+    def get_entry_heat_fluxes(self, return_history_dictionary = False):
+        dependent_variable_history = self.get_last_run_dependent_variable_history()
+        dependent_variable_values = np.vstack(list(dependent_variable_history.values()))
+        dependent_variable_epochs = np.array(list(dependent_variable_history.keys()))
+        airspeed = dependent_variable_values[:,6]
+        density = dependent_variable_values[:,8]
+        nose_radius = Util.vehicle_radius
+        convective_hfx, radiative_hfx = Util.calculate_trajectory_heat_fluxes(density, airspeed, nose_radius)
+        if return_history_dictionary:
+            heat_fluxes_dict = Util.calculate_trajectory_heat_fluxes_history(dependent_variable_epochs, convective_hfx, radiative_hfx)
+            return heat_fluxes_dict
+
+        return convective_hfx, radiative_hfx
+
+    def get_peak_heat_flux_and_heat_load(self):
+        convective, radiative = self.get_entry_heat_fluxes()
+        total= convective+radiative
+        dependent_variable_history = self.get_last_run_dependent_variable_history()
+        dependent_variable_epochs = np.array(list(dependent_variable_history.keys()))
+        peak_hfx, heat_load = Util.calculate_peak_hfx_and_heat_load(dependent_variable_epochs, total)
+        return peak_hfx, heat_load
+
+    def get_tps_mass_fraction(self):
+        peak, heat_load = self.get_peak_heat_flux_and_heat_load()
+        return Util.calculate_tps_mass_fraction(heat_load)
 
     def fitness(self,
                 orbital_parameters,
