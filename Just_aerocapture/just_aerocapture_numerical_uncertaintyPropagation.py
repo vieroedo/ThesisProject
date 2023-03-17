@@ -252,9 +252,10 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         state_history = dynamics_simulator.state_history
         unprocessed_state_history = dynamics_simulator.unprocessed_state_history
         dependent_variable_history = dynamics_simulator.dependent_variable_history
+        heat_fluxes_history = aerocapture_problem.get_entry_heat_fluxes(return_history_dictionary=True)
 
         # Save results to a dictionary
-        simulation_results[run] = [state_history, dependent_variable_history]
+        simulation_results[run] = [state_history, dependent_variable_history, heat_fluxes_history]
         if run > 0:
             perturbations[run] = perturbation
 
@@ -271,6 +272,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         if write_results_to_file:
             save2txt(state_history, 'state_history_' + str(run) + '.dat', output_path)
             save2txt(dependent_variable_history, 'dependent_variable_history_' + str(run) + '.dat', output_path)
+            save2txt(heat_fluxes_history, 'heat_fluxes_history_' + str(run) + '.dat', output_path)
 
     all_results[uncertainty] = simulation_results
     if write_results_to_file:
@@ -309,11 +311,13 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         # Set time limits to avoid numerical issues at the boundaries due to the interpolation
         nominal_state_history = simulation_results[0][0]
         nominal_dependent_variable_history = simulation_results[0][1]
+        nominal_heat_fluxes_history = simulation_results[0][2]
         nominal_times = list(nominal_state_history.keys())
 
         # Retrieve current state and dependent variable history
         current_state_history = simulation_results[run][0]
         current_dependent_variable_history = simulation_results[run][1]
+        current_heat_fluxes_history = simulation_results[run][2]
         current_times = list(current_state_history.keys())
 
         # Get limit times at which both histories can be validly interpolated
@@ -343,6 +347,13 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
                                                                         interpolation_epochs,
                                                                         output_path,
                                                                         'dependent_variable_difference_wrt_nominal_case_' + str(run) + '.dat')
+
+        # Compare heat_fluxes history
+        heat_fluxes_difference_wrt_nominal = Util.compare_models(current_heat_fluxes_history,
+                                                                 nominal_heat_fluxes_history,
+                                                                 interpolation_epochs,
+                                                                 output_path,
+                                                                 'heat_fluxes_difference_wrt_nominal_case_' + str(run) + '.dat')
 
         # Compute the atmospheric entry interface difference here:
         # ...

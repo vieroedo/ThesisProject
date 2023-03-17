@@ -1,3 +1,4 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy.linalg as LA
 import numpy as np
@@ -5,8 +6,10 @@ import scipy as sp
 import random
 import os
 
+# mpl.use('TkAgg')  # or can use 'TkAgg', whatever you have/prefer
+
 # Tudatpy imports
-from tudatpy.io import save2txt
+from tudatpy.io import save2txt, read_vector_history_from_file
 from tudatpy.kernel import constants
 from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel import numerical_simulation
@@ -16,11 +19,11 @@ from tudatpy.kernel.math import interpolators
 from tudatpy.kernel.astro import frame_conversion, element_conversion
 
 # Problem-specific imports
-from CapsuleEntryUtilities import compare_models
+from CapsuleEntryUtilities import compare_models, calculate_peak_hfx_and_heat_load, calculate_tps_mass_fraction
 from handle_functions import eccentricity_vector_from_cartesian_state
 
-# SET PARAMETERS
-uncertainty_to_analyze = 5  # From 0 to 17
+# SET PARAMETERS:  arc 0: from 0 to 7   arc 1: from 8 to 17   arc 12: from 18 to 27
+uncertainty_to_analyze = 8
 
 # uncertainties = ['EarthEph', 'SRP', 'InitialState', 'InitialState_1', 'InitialState_2', 'InitialState_3']
 uncertainties_dictionary = {
@@ -270,8 +273,9 @@ nominal_depvarh_interpolator = interpolators.create_one_dimensional_vector_inter
 nominal_altitude_based_depvar_dictionary = dict(zip(nominal_dependent_variable_history_np[:,5], nominal_dependent_variable_history_np[:,6:8]))
 nominal_altitude_keys = list(nominal_altitude_based_depvar_dictionary.keys())
 
-# PLOT THE DIFFERENCE IN ENTRY PARAMETERS: f.p.a., entry airspeed, and so on
+# PLOT THE DIFFERENCE IN ENTRY PARAMETERS: f.p.a., entry airspeed, and so on + heat fluxes
 dependent_variable_end_values = dict()
+# heat_fluxes_values = dict()
 for run_number in range(1, number_of_runs):
     dependent_variable_history_np = np.loadtxt(data_path + 'dependent_variable_history_' + str(run_number) + '.dat')
     dependent_variable_difference_wrt_nominal_case_np = np.loadtxt(data_path + 'dependent_variable_difference_wrt_nominal_case_' + str(run_number)
@@ -286,6 +290,9 @@ for run_number in range(1, number_of_runs):
         there_is_aerocapture = 1
     else:
         there_is_aerocapture = 0
+
+    # heat_fluxes_history = read_vector_history_from_file(2, data_path + 'heat_fluxes_history_' + str(run_number) + '.dat')
+
     # dependent_variable_difference_values = dependent_variable_difference_wrt_nominal_case_np[:, 1:]
     # epochs_comparison_depvar = dependent_variable_difference_wrt_nominal_case_np[:, 0]
     # dependent_variable_difference_wrt_nominal_case = dict()
@@ -327,6 +334,8 @@ for run_number in range(1, number_of_runs):
         final_fpa_difference = depvar_difference_wrt_altitude_values[-1,0]
         final_airspeed_difference = depvar_difference_wrt_altitude_values[-1,1]
     else:
+
+        inertial_fpa_based_depvar_dictionary = dict(zip(dependent_variable_history_np[:, 9], dependent_variable_history_np[:, 6:8]))
 
         nominal_end_dependent_variables = nominal_depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
         current_end_dependent_variables = depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
@@ -421,7 +430,7 @@ for i in [0]:  # change if you add other subplots
     axs_ecc.tick_params(axis='both', which='major', labelsize=ticks_size)
     if entries-1 > 1:
         axs_ecc.legend()
-axs_ecc.set_ylabel(r'Final eccentricity $(t_1)$')
+axs_ecc.set_ylabel(r'Final eccentricity $(t_1)$', fontsize=y_label_size)
 axs_ecc.set_xlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
 
 fig_ecc.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final eccentricity (End state: {final_state_name})', fontsize=suptitle_size)
@@ -450,7 +459,7 @@ for entry in range(1,7):
     # nice_c = entry%3-1
     # entry%3 : 1, 2, 0, 1, 2, 0
 
-    plot_label = '\\Delta ' + entry_names_x[min(coord_nr+1,max_entries_pert)] + ' \\rightarrow ' + '\\Delta ' + entry_names_y[entry]
+    plot_label = '\Delta ' + entry_names_x[min(coord_nr+1,max_entries_pert)] + ' \\rightarrow ' + '\Delta ' + entry_names_y[entry]
 
     x_component_name = entry_names_x[min(coord_nr+1,max_entries_pert)].split()[0]
     y_component_name = entry_names_y[entry].split()[0]
@@ -459,8 +468,8 @@ for entry in range(1,7):
     add_y_comma = ',' if entry%3 != 0 else ''
     add_x_comma = ',' if entry%3 != 0 and max_entries_pert > 1 else ''
 
-    xlabel[plot_nr] = xlabel[plot_nr] + '\\Delta ' + x_component_name + add_x_comma if entry%3+1 <= max_entries_pert else xlabel[plot_nr]
-    ylabel[plot_nr] = ylabel[plot_nr] + '\\Delta ' + y_component_name + add_y_comma
+    xlabel[plot_nr] = xlabel[plot_nr] + '\Delta ' + x_component_name + add_x_comma if entry%3+1 <= max_entries_pert else xlabel[plot_nr]
+    ylabel[plot_nr] = ylabel[plot_nr] + '\Delta ' + y_component_name + add_y_comma
 
     axs3[plot_nr].scatter(perturbations[:,min(coord_nr+1,max_entries_pert)],max_vals_in_rsw[:,entry-1], label=fr'${plot_label}$',
                  marker=marker_styles[0][coord_nr], facecolor=marker_styles[1][coord_nr], edgecolor=marker_styles[2][coord_nr])
@@ -491,8 +500,84 @@ fig3_hist.tight_layout()
 fig3.tight_layout()
 
 # Plot the heat flux accuracy and the subsequent
-if evaluated_arc == 1 or evaluated_arc==12:
-    ...
+if evaluated_arc == 1 or evaluated_arc == 12:
+    nominal_heat_fluxes_np = np.loadtxt(data_path + 'heat_fluxes_history_' + str(0) + '.dat')
+    nominal_heat_fluxes_epochs = nominal_heat_fluxes_np[:, 0]
+    nominal_heat_fluxes_values = nominal_heat_fluxes_np[:, 1:]
+
+    nominal_convective_heat_flux = nominal_heat_fluxes_values[:, 0]
+    nominal_radiative_heat_flux = nominal_heat_fluxes_values[:, 1]
+
+    nominal_total_wall_heat_flux = nominal_convective_heat_flux + nominal_radiative_heat_flux
+    nominal_peak_heat_flux, nominal_total_heat_load = calculate_peak_hfx_and_heat_load(nominal_heat_fluxes_epochs, nominal_total_wall_heat_flux)
+    nominal_tps_mass_fraction = calculate_tps_mass_fraction(nominal_total_heat_load)
+
+    nominal_heat_flux_values = np.array([0., nominal_peak_heat_flux,
+                                         nominal_total_heat_load, nominal_tps_mass_fraction])
+
+    heat_fluxes_values_dictionary = dict()
+    for run_number in range(1, number_of_runs):
+        heat_fluxes_np = np.loadtxt(data_path + 'heat_fluxes_history_' + str(run_number) + '.dat')
+        heat_fluxes_difference_wrt_nominal_case_np = np.loadtxt(
+            data_path + 'heat_fluxes_difference_wrt_nominal_case_' + str(run_number) + '.dat')
+        heat_fluxes_difference_values = heat_fluxes_difference_wrt_nominal_case_np[:, 1:]
+        conv_hfx_diff = heat_fluxes_difference_values[:,0]
+        rad_hfx_diff = heat_fluxes_difference_values[:,1]
+        total_hfx_diff = conv_hfx_diff + rad_hfx_diff
+        epochs_comparison_hfxes = heat_fluxes_difference_wrt_nominal_case_np[:, 0]
+
+        heat_fluxes_epochs = heat_fluxes_np[:, 0]
+        heat_fluxes_values = heat_fluxes_np[:, 1:]
+        convective_heat_flux = heat_fluxes_values[:,0]
+        radiative_heat_flux = heat_fluxes_values[:,1]
+
+        heat_fluxes_history = dict(zip(heat_fluxes_epochs, heat_fluxes_values))
+        hfxes_interpolator = interpolators.create_one_dimensional_vector_interpolator(
+            heat_fluxes_history, interpolator_settings)
+
+        total_wall_heat_flux = convective_heat_flux + radiative_heat_flux
+        peak_heat_flux, total_heat_load = calculate_peak_hfx_and_heat_load(heat_fluxes_epochs, total_wall_heat_flux)
+        tps_mass_fraction = calculate_tps_mass_fraction(total_heat_load)
+
+        max_total_heat_flux_difference = max(abs(total_hfx_diff)) if max(abs(total_hfx_diff)) == max(total_hfx_diff) else -max(abs(total_hfx_diff))
+        peak_heat_flux_difference = peak_heat_flux - nominal_peak_heat_flux
+        heat_load_difference = total_heat_load - nominal_total_heat_load
+        tps_mass_fraction_difference = tps_mass_fraction - nominal_tps_mass_fraction
+
+        heat_fluxes_values_dictionary[run_number] = np.array([max_total_heat_flux_difference, peak_heat_flux_difference, heat_load_difference, tps_mass_fraction_difference])
+
+    heat_fluxes_values_array = np.vstack(list(heat_fluxes_values_dictionary.values()))
+
+    fig_hfx, ax_hfx = plt.subplots(2,2, figsize=(7,7))
+    heat_fluxes_y_labels = np.array([['Max $q_w$ difference (kW/m$^2$)', 'Peak $q_w$ difference (kW/m$^2$)'],
+                                     ['Heat load difference (kJ/m$^2$)', 'TPS mass fraction difference']])
+    heat_fluxes_rescaling = np.array([1e-3,1e-3,1e-3,1])
+    for entry in range(1, entries):
+        for i in range(2):
+            for j in range(2):
+
+                ax_hfx[i,j].scatter(perturbations[:, entry], heat_fluxes_values_array[:,int(2*i+1*j)] * heat_fluxes_rescaling[int(2*i+1*j)],
+                                label=fr'$\Delta {entry_names_x[entry]}$',
+                                marker=marker_styles[0][entry - 1], facecolor=marker_styles[1][entry - 1],
+                                edgecolor=marker_styles[2][entry - 1])
+                if entries - 1 > 1:
+                    ax_hfx[i, j].legend()
+                if entry == 1:
+                    # axs_ecc[i,j].axhline(y=nominal_heat_flux_values[int(2*i+1*j)], color='grey', linestyle='--')
+
+                    # Show the major grid lines with dark grey lines
+                    ax_hfx[i,j].grid(visible=True, which='major', color='#666666', linestyle='-')
+                    # Show the minor grid lines with very faint and almost transparent grey lines
+                    ax_hfx[i,j].minorticks_on()
+                    ax_hfx[i,j].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+                    ax_hfx[i,j].tick_params(axis='both', which='major', labelsize=ticks_size)
+                    ax_hfx[i,j].set_ylabel(fr'{heat_fluxes_y_labels[i,j]}', fontsize=y_label_size)
+                    ax_hfx[i,j].set_xlabel(fr'${xlabel[0]} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+
+    fig_hfx.suptitle(fr'Impact of ${xlabel[0]} \, (t_0) $ on heat fluxes, heat load, and TPS mass fraction (End state: {final_state_name})',
+                     fontsize=suptitle_size)
+    fig_hfx.tight_layout()
+
 
 # SHOW THEM
 plt.show()
