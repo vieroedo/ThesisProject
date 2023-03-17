@@ -733,7 +733,6 @@ def jupiter_atmosphere_density_model(h: np.ndarray):
         return density_values
 
 
-
 def atmospheric_entry_trajectory_distance_travelled(fpa_angle: np.ndarray,
                                                     atmospheric_entry_fpa: float,
                                                     effective_entry_fpa: float,
@@ -814,7 +813,12 @@ def atmospheric_pressure_given_altitude(altitude,
 
 
 def atmospheric_entry_heat_loads_correlations(density, velocity, nose_radius):
-    '''obtained from https://adsabs.harvard.edu/pdf/2006ESASP.631E...6R'''
+    '''
+    obtained from https://adsabs.harvard.edu/pdf/2006ESASP.631E...6R
+
+    :returns
+        convective and radiative heat fluxes in W/m^2
+    '''
 
     convective_heat_flux = 2004.2526 * 1/(np.sqrt(2*nose_radius/0.6091)) * (density/1.22522)**(0.4334341) * (velocity/3048) ** (2.9978867)
     # convective_heat_flux = 3.6380163716698004e-08 / np.sqrt(nose_radius) * density**0.4334341 * velocity ** 2.9978867
@@ -823,8 +827,10 @@ def atmospheric_entry_heat_loads_correlations(density, velocity, nose_radius):
     # radiative_heat_flux = 8.623716107859813e-40 * nose_radius**(-0.17905) * density ** 1.763827469 * velocity**10.993852
 
     zero_cells = np.where(density == 0)
-    gamma_factor = 4 * radiative_heat_flux*1e3 / (density * velocity**3)
-    radiation_with_blockage = radiative_heat_flux*1e3 / (1 + 3 * gamma_factor**0.7)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        gamma_factor = 4 * radiative_heat_flux*1e3 / (density * velocity**3)
+        radiation_with_blockage = radiative_heat_flux*1e3 / (1 + 3 * gamma_factor**0.7)
     radiation_with_blockage[zero_cells] = 0
     return convective_heat_flux*1e3, radiative_heat_flux*1e3, radiation_with_blockage
 
@@ -845,20 +851,24 @@ def heat_flux_with_blockage_from_blowing(total_wall_hfx, single_hf, density, vel
 def ablation_blockage(incident_hfx, density, velocity, total_wall_hfx):
     # chapter 2 of https://doi.org/10.1016/j.actaastro.2012.06.016
 
-    k = 2.7659985259098415e-28 # from interpolation
+    k = 2.7659985259098415e-28  # from interpolation
     dm_dt = k * density * velocity ** 6.9
 
     # hot wall correction can be neglected in hypersonic flow (T_inf >> T_wall)
     # if type(total_wall_hfx) == np.ndarray:
     zero_cells = np.where(total_wall_hfx == 0)
-    blowing_coefficient = dm_dt * velocity ** 2 / (2 * total_wall_hfx)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        blowing_coefficient = dm_dt * velocity ** 2 / (2 * total_wall_hfx)
     # else:
     #     zero_cells = np.where(convective_hfx == 0)
     #     blowing_coefficient = dm_dt * velocity ** 2 / (2 * convective_hfx)
     blowing_coefficient[zero_cells] = 0
 
     b_coeff_null_cells = np.where(blowing_coefficient == 0)
-    blockage_factor = ( 2.344/blowing_coefficient * (np.sqrt(blowing_coefficient+1)-1) ) **1.063
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        blockage_factor = ( 2.344/blowing_coefficient * (np.sqrt(blowing_coefficient+1)-1) ) **1.063
     blockage_factor[b_coeff_null_cells] = 1.18378  # value of the function for blowing_coefficient = 0
     incident_hfx_w_blockage = blockage_factor * incident_hfx
     return incident_hfx_w_blockage, blowing_coefficient
@@ -906,6 +916,7 @@ def galileo_heat_fluxes_park(entry_altitudes):
             flight_heat_fluxes[i, :] = heatflux_value_interpolator.interpolate(curr_altitude)
 
     return flight_heat_fluxes
+
 
 def convective_heat_flux_girija(density, velocity, radius):
     # from https://arc.aiaa.org/doi/pdf/10.2514/1.A35214?src=getftr
