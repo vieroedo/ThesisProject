@@ -328,48 +328,53 @@ def get_termination_settings(simulation_start_epoch: float,
     #                         minimum_altitude_termination_settings,
     #                         time_termination_settings]
 
-    if stop_before_aerocapture:
+    if stop_before_aerocapture or stop_after_aerocapture:
+        exit_fpa = - entry_fpa
 
-        def custom_condition(time:float) -> bool:
-            capsule_state = bodies.get('Capsule').state
-            state_position = capsule_state[0:3]
-            state_velocity = capsule_state[3:6]
-            dot_product = np.dot(unit_vector(state_position), unit_vector(state_velocity))
-            inertial_fpa = np.pi / 2 - np.arccos(dot_product)
-            do_terminate = inertial_fpa >= entry_fpa
-            return do_terminate
-        inertial_fpa_termination_settings = propagation_setup.propagator.custom_termination(custom_condition)
+        entry_fpa_limit_value = entry_fpa
+        if stop_after_aerocapture:
+            entry_fpa_limit_value = exit_fpa
 
-        # def inertial_fpa():
+        # def custom_condition(time:float) -> bool:
         #     capsule_state = bodies.get('Capsule').state
         #     state_position = capsule_state[0:3]
         #     state_velocity = capsule_state[3:6]
         #     dot_product = np.dot(unit_vector(state_position), unit_vector(state_velocity))
         #     inertial_fpa = np.pi / 2 - np.arccos(dot_product)
-        #     return np.array([inertial_fpa])
-        #
-        # inertial_fpa_termination_settings = propagation_setup.propagator.dependent_variable_termination(
-        #     dependent_variable_settings=propagation_setup.dependent_variable.custom_dependent_variable(inertial_fpa, 1),
-        #     limit_value=entry_fpa,
-        #     use_as_lower_limit=False,
-        #     terminate_exactly_on_final_condition=True,
-        #     termination_root_finder_settings=root_finders.bisection(maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result_with_warning)
-        # )
-        nominal_termination_settings = inertial_fpa_termination_settings
+        #     do_terminate = inertial_fpa >= entry_fpa
+        #     return do_terminate
+        # inertial_fpa_termination_settings = propagation_setup.propagator.custom_termination(custom_condition)
 
-    if stop_after_aerocapture:
-        exit_fpa = -entry_fpa
-
-        def custom_condition(time:float) -> bool:
+        def inertial_fpa():
             capsule_state = bodies.get('Capsule').state
             state_position = capsule_state[0:3]
             state_velocity = capsule_state[3:6]
             dot_product = np.dot(unit_vector(state_position), unit_vector(state_velocity))
             inertial_fpa = np.pi / 2 - np.arccos(dot_product)
-            do_terminate = inertial_fpa >= exit_fpa
-            return do_terminate
-        inertial_fpa_termination_settings = propagation_setup.propagator.custom_termination(custom_condition)
+            return np.array([inertial_fpa])
+
+        inertial_fpa_termination_settings = propagation_setup.propagator.dependent_variable_termination(
+            dependent_variable_settings=propagation_setup.dependent_variable.custom_dependent_variable(inertial_fpa, 1),
+            limit_value=entry_fpa_limit_value,
+            use_as_lower_limit=False,
+            terminate_exactly_on_final_condition=True,
+            termination_root_finder_settings=root_finders.bisection(relative_variable_tolerance=1e-12, absolute_variable_tolerance=1e-12, maximum_iteration_handling=root_finders.MaximumIterationHandling.accept_result_with_warning)
+        )
         nominal_termination_settings = inertial_fpa_termination_settings
+
+    # if stop_after_aerocapture:
+    #     exit_fpa = -entry_fpa
+    #
+    #     def custom_condition(time:float) -> bool:
+    #         capsule_state = bodies.get('Capsule').state
+    #         state_position = capsule_state[0:3]
+    #         state_velocity = capsule_state[3:6]
+    #         dot_product = np.dot(unit_vector(state_position), unit_vector(state_velocity))
+    #         inertial_fpa = np.pi / 2 - np.arccos(dot_product)
+    #         do_terminate = inertial_fpa >= exit_fpa
+    #         return do_terminate
+    #     inertial_fpa_termination_settings = propagation_setup.propagator.custom_termination(custom_condition)
+    #     nominal_termination_settings = inertial_fpa_termination_settings
 
     # List of all settings that terminate the propagation
     termination_list = [nominal_termination_settings,
@@ -1057,14 +1062,71 @@ def compare_models(first_model: dict,
     return model_difference
 
 
+def calculate_trajectory_heat_fluxes(density, velocity, nose_radius):
+    """
+    Calculates the heat fluxes for an entry trajectory at Jupiter. It is valid both for aerocapture and steeper entries.
+
+    :param density:
+        free-stream atmospheric density. Can be one value or an array.
+    :param velocity:
+        free-stream air speed. Can be one value or an array.
+    :param nose_radius:
+        probe nose radius. Can be one value (constant nose radius) or an array (radius reduction due to ablation).
+    :return:
+        convective and radiative heat fluxes at wall conditions.
+    """
+
+    # Calculate the boundary-layer edge conditions for the radiative and convective heat fluxes
+    convective_hfx, radiative_hfx, radiative_hfx_w_adiabatic_effects = atmospheric_entry_heat_loads_correlations(density, velocity, nose_radius)
+
+    # Calculate the wall conditions for the convective heat flux, by including the effect of ablation injection
+    convective_hfx_wall, blowing_coefficient_conv = ablation_blockage(convective_hfx, density,
+                                                                      velocity,
+                                                                      total_wall_hfx=convective_hfx+radiative_hfx_w_adiabatic_effects)
+
+    # Calculate the wall conditions for the radiative heat flux, by including the effect of ablation injection
+    radiative_hfx_wall, blowing_coefficient_rad = ablation_blockage(radiative_hfx_w_adiabatic_effects, density,
+                                                                   velocity,
+                                                                   total_wall_hfx=convective_hfx+radiative_hfx_w_adiabatic_effects)
+
+    return convective_hfx_wall, radiative_hfx_wall
+
+
+def calculate_trajectory_heat_fluxes_history(epochs, convective, radiative):
+    hfxes = np.vstack((convective,radiative))
+    if hfxes.shape == (2, len(convective)):
+        hfxes = hfxes.T
+    elif hfxes.shape == (len(convective), 2):
+        hfxes = hfxes
+    else:
+        raise Exception('fix this haha you used vstack wrong.')
+    heat_fluxes_dictionary = dict(zip(epochs, hfxes))
+    return heat_fluxes_dictionary
+
+
+def calculate_peak_hfx_and_heat_load(epochs, total_wall_heat_flux) -> (float, float):
+    peak_heat_flux = max(total_wall_heat_flux)  # W/m^2
+    integrated_heat_load = np.trapz(total_wall_heat_flux, epochs)  # J/m^2
+    return peak_heat_flux, integrated_heat_load
+
+
+def calculate_tps_mass_fraction(total_heat_load: float) -> float:
+    """TPS mass fraction goes from 0 to 1. Values above 1 are considered unfeasible.
+    :param total_heat_load
+        total wall heat load J/m2
+    """
+    tps_mass_fraction = (0.091 * (total_heat_load / 1e4) ** 0.51575) / 100
+    return tps_mass_fraction
+
+
 ###########################################################################
 # OTHER UTILITIES #########################################################
 ###########################################################################
 
 
 def plot_base_trajectory(state_history,
-                         fig = plt.figure(),
-                         ax = plt.axes(projection='3d')):
+                         fig,
+                         ax):
     if type(state_history) == dict:
         sim_result = np.vstack(list(state_history.values()))
     else:
