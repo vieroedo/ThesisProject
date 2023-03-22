@@ -56,8 +56,8 @@ spice_interface.load_standard_kernels()
 
 # Atmospheric entry conditions
 atmospheric_entry_interface_altitude = Util.atmospheric_entry_altitude  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -3.05  # degrees
-interplanetary_arrival_velocity = 5630  # m/s
+flight_path_angle_at_atmosphere_entry = -3.1  # degrees
+interplanetary_arrival_velocity = 5600  # m/s
 
 ###########################################################################
 # DEFINE SIMULATION SETTINGS ##############################################
@@ -74,12 +74,12 @@ simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
 decision_variable_range = [[0.],
                            [0.]]
 
-inertial_state_deviation = np.array([0.00000,0.00000,0.00000,-8.51131,-2.95697,4.91416])
-# inertial_state_deviation = np.zeros(6)
+# inertial_state_deviation = np.array([0.00000,0.00000,0.00000,-8.51131,-2.95697,4.91416])
+inertial_state_deviation = np.zeros(6)
 
 aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
                                                            choose_model, integrator_settings_index,
-                                                           fly_galileo=fly_galileo, arc_to_compute=0,
+                                                           fly_galileo=fly_galileo, arc_to_compute=-1,
                                                            initial_state_perturbation=inertial_state_deviation)
 are_dependent_variables_to_save = True
 

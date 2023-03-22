@@ -102,7 +102,7 @@ for i in range(len(dependent_variables)):
     drag_acc[i, :] = np.dot(aero_acc[i, :], drag_direction[i, :]) * drag_direction[i, :]
     lift_acc[i, :] = np.dot(aero_acc[i, :], lift_direction[i, :]) * lift_direction[i, :]
 
-noise_level = 1e-6
+noise_level = 1e-2
 
 drag_acc = LA.norm(drag_acc, axis=1)
 lift_acc = LA.norm(lift_acc, axis=1)

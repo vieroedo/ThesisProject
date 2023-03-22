@@ -44,7 +44,7 @@ spice_interface.load_standard_kernels()
 
 # Atmospheric entry conditions
 atmospheric_entry_interface_altitude = Util.atmospheric_entry_altitude  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -3.05  # degrees
+flight_path_angle_at_atmosphere_entry = -3.1  # degrees
 interplanetary_arrival_velocity = 5600  # m/s
 
 trajectory_parameters = [interplanetary_arrival_velocity,
@@ -85,38 +85,52 @@ output_interpolation_step = constants.JULIAN_DAY  # s
 random.seed(50)
 
 uncertainties_dictionary = {
+
+    # from 0 to 3
     'InitialPosition': 0, 'InitialPosition_R': 0, 'InitialPosition_S': 0, 'InitialPosition_W': 0,
+    # from 4 to 7
     'InitialVelocity': 0, 'InitialVelocity_R': 0, 'InitialVelocity_S': 0, 'InitialVelocity_W': 0,
 
+    # from 8 to 11
     'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1, 'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
+    # from 12 to 15
     'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1, 'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
+    # 16, 17
     'EntryFlightPathAngle': 1, 'EntryVelocity': 1,
 
+    # from 18 to 21
     'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12, 'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
+    # from 22 to 25
     'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12, 'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
+    # 26, 27
     'FinalOrbit_EntryFlightPathAngle': 12, 'FinalOrbit_EntryVelocity': 12
 }
 
 uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
 arcs_to_compute = list(uncertainties_dictionary.values())  # list of corresponding arcs
 
-initial_position_deviation_uncertainty = 3000  # m (1 sigma -> 3 sigma = 9000 m)
-initial_velocity_deviation_uncertainty = 10  # m/s (1 sigma -> 3 sigma = 30 m/s)
+multiple_initial_position_deviation_uncertainty = 2700  # m (1 sigma -> 3 sigma = 9000 m)
+initial_position_deviation_uncertainty = 6300  # m (1 sigma -> 3 sigma = 9000 m)
+multiple_initial_velocity_deviation_uncertainty = 7e-4  # m/s (1 sigma -> 3 sigma = 30 m/s)
+initial_velocity_deviation_uncertainty = 1e-3  # m/s (1 sigma -> 3 sigma = 30 m/s)
 entry_fpa_deviation_uncertainty = 0.01  # degrees (1 sigma -> 3 sigma = 0.03 degrees)
 entry_velocity_magnitude_deviation_uncertainty = 33  # m/s (1 sigma -> 3 sigma = 99 m/s)
 
-# Dont use it for now: BROKEN
-just_evaluate_some_uncertainties = False
-uncertainties_to_evaluate = [*range(10)]
+
+just_evaluate_some_uncertainties = True
+uncertainties_to_evaluate = [*range(4,8)]
+# uncertainties_to_evaluate = [9]
 if just_evaluate_some_uncertainties == True:
     uncertainties_to_run = [uncertainties[i] for i in uncertainties_to_evaluate]
+    arcs_to_compute_actually = [arcs_to_compute[i] for i in uncertainties_to_evaluate]
 else:
     uncertainties_to_run = uncertainties
+    arcs_to_compute_actually = arcs_to_compute
 
 
 all_results = dict()
 for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
-    actual_arc_to_compute = arcs_to_compute[uncertainty_nr]
+    actual_arc_to_compute = arcs_to_compute_actually[uncertainty_nr]
 
     # Create aerocapture problem with model and integration settings of choice.
     aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch,decision_variable_range,
@@ -136,10 +150,12 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         # Initial position deviation in R, S, and W
         if run > 0 and (uncertainty in (uncertainties[0], uncertainties[8], uncertainties[18])):
             for i in range(3):
-                initial_state_deviation_rsw[i] = random.gauss(0, initial_position_deviation_uncertainty)
+                initial_state_deviation_rsw[i] = random.gauss(0, multiple_initial_position_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[0:3]
         # Initial position R deviation
         if run > 0 and (uncertainty in (uncertainties[1], uncertainties[9], uncertainties[19])):
+            if uncertainty_nr == 9:
+                initial_position_deviation_uncertainty = 7000  # m
             initial_state_deviation_rsw[0] = random.gauss(0, initial_position_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[0]
         # Initial position S deviation
@@ -154,7 +170,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         # Initial velocity deviation in R, S, and W
         if run > 0 and (uncertainty in (uncertainties[4], uncertainties[12], uncertainties[22])):
             for i in range(3):
-                initial_state_deviation_rsw[i+3] = random.gauss(0, initial_velocity_deviation_uncertainty)
+                initial_state_deviation_rsw[i+3] = random.gauss(0, multiple_initial_velocity_deviation_uncertainty)
             perturbation = initial_state_deviation_rsw[3:6]
         # Initial velocity R deviation
         if run > 0 and (uncertainty in (uncertainties[5], uncertainties[13], uncertainties[23])):
@@ -172,7 +188,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         body_settings = aerocapture_problem.create_body_settings_environment()
 
         # If you want to add environment uncertainties
-        if run > 0 and uncertainty == None:
+        if run > 0 and False:
             # define variable for scaling factor
             scaling_constant = random.gauss(0, 33)  # 3sigma = 100
             # # define variables containing the existing ephemeris settings
@@ -221,9 +237,9 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         trajectory_initial_state = Util.get_initial_state(trajectory_parameters[1], atmospheric_entry_altitude,
                                                           trajectory_parameters[0])
         rotation_matrix = frame_conversion.rsw_to_inertial_rotation_matrix(trajectory_initial_state)
-        if run > 0 and (uncertainty_nr in [0,1,2,3, 8,9,10,11, 18,19,20,21]):
+        if run > 0 and (uncertainty in [ uncertainties[i] for i in [0,1,2,3, 8,9,10,11, 18,19,20,21]]):
             initial_state_deviation_inertial[0:3] = rotation_matrix @ initial_state_deviation_rsw[0:3]
-        elif run > 0 and (uncertainty_nr in [4,5,6,7, 12,13,14,15, 22,23,24,25]):
+        elif run > 0 and (uncertainty in [ uncertainties[i] for i in [4,5,6,7, 12,13,14,15, 22,23,24,25]]):
             initial_state_deviation_inertial[3:6] = rotation_matrix @ initial_state_deviation_rsw[3:6]
 
         # set initial state perturbation for the aerocapture problem
@@ -293,7 +309,7 @@ print('\n\nAll runs have been done, now comparing the models\n')
 
 for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
     simulation_results = all_results[uncertainty]
-    actual_arc_to_compute = arcs_to_compute[uncertainty_nr]
+    actual_arc_to_compute = arcs_to_compute_actually[uncertainty_nr]
 
     if actual_arc_to_compute == 1:
         selected_output_interpolation_step = 1  # s

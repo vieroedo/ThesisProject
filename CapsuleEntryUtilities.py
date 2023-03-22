@@ -329,10 +329,11 @@ def get_termination_settings(simulation_start_epoch: float,
     #                         time_termination_settings]
 
     if stop_before_aerocapture or stop_after_aerocapture:
-        exit_fpa = - entry_fpa
+
 
         entry_fpa_limit_value = entry_fpa
         if stop_after_aerocapture:
+            exit_fpa = - entry_fpa
             entry_fpa_limit_value = exit_fpa
 
         # def custom_condition(time:float) -> bool:
@@ -462,7 +463,7 @@ def get_integrator_settings(settings_index: int,
     integrator = propagation_setup.integrator
     integrator_settings = integrator.runge_kutta_variable_step_size(
         simulation_start_epoch,
-        40000.0,
+        1.0,
         current_coefficient_set,
         np.finfo(float).eps,
         5*constants.JULIAN_DAY,

@@ -23,19 +23,28 @@ from CapsuleEntryUtilities import compare_models, calculate_peak_hfx_and_heat_lo
 from handle_functions import eccentricity_vector_from_cartesian_state
 
 # SET PARAMETERS:  arc 0: from 0 to 7   arc 1: from 8 to 17   arc 12: from 18 to 27
-uncertainty_to_analyze = 8
+uncertainty_to_analyze = 12
 
 # uncertainties = ['EarthEph', 'SRP', 'InitialState', 'InitialState_1', 'InitialState_2', 'InitialState_3']
+
 uncertainties_dictionary = {
+    # from 0 to 3
     'InitialPosition': 0, 'InitialPosition_R': 0, 'InitialPosition_S': 0, 'InitialPosition_W': 0,
+    # from 4 to 7
     'InitialVelocity': 0, 'InitialVelocity_R': 0, 'InitialVelocity_S': 0, 'InitialVelocity_W': 0,
 
+    # from 8 to 11
     'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1, 'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
+    # from 12 to 15
     'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1, 'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
+    # 16, 17
     'EntryFlightPathAngle': 1, 'EntryVelocity': 1,
 
+    # from 18 to 21
     'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12, 'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
+    # from 22 to 25
     'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12, 'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
+    # 26, 27
     'FinalOrbit_EntryFlightPathAngle': 12, 'FinalOrbit_EntryVelocity': 12
 }
 
@@ -75,10 +84,13 @@ evaluated_arc = arcs_computed[uncertainty_to_analyze]
 final_state_names = ['Atmospheric Entry', 'Atmospheric Exit', 'Final Orbit']
 if evaluated_arc == 0:
     final_state_name = final_state_names[0]
+    time_interval_names = ['(t_0)', '(t_E)']
 elif evaluated_arc == 1:
     final_state_name = final_state_names[1]
+    time_interval_names = ['(t_E)', '(t_F)']
 elif evaluated_arc == 12 or evaluated_arc == -1:
     final_state_name = final_state_names[2]
+    time_interval_names = ['(t_E)', '(t_1)'] if evaluated_arc == 12 else ['(t_0)', '(t_1)']
 else:
     raise Exception('The propagated arc cannot yet be shown! Update the code.')
 
@@ -114,44 +126,46 @@ entries = perturbations.shape[1]
 #     entry_names_x = [0, 'C_r']
 #     entry_names_y = [0, 'R \; (t_1)', 'S \; (t_1)', 'W \; (t_1)']
 if uncertainty_to_analyze == 0:
-    entry_names_x = [0, 'R \; (t_0)', 'S \; (t_0)', 'W \; (t_0)']
+    entry_names_x = [0, 'R \;', 'S \;', 'W \;']
     x_axis_measure_unit = '(m)'
 elif 0<uncertainty_to_analyze<4:
-    temp_base = [0, 'R \; (t_0)', 'S \; (t_0)', 'W \; (t_0)']
+    temp_base = [0, 'R \;', 'S \;', 'W \;']
     entry_names_x = [0, temp_base[uncertainty_to_analyze]]
     x_axis_measure_unit = '(m)'
 elif uncertainty_to_analyze==4:
-    entry_names_x = [0, 'V_R \; (t_0)', 'V_S \; (t_0)', 'V_W \; (t_0)']
+    entry_names_x = [0, 'V_R \;', 'V_S \;', 'V_W \;']
     x_axis_measure_unit = '(m/s)'
 elif 4<uncertainty_to_analyze<8:
-    temp_base = [0, 'V_R \; (t_0)', 'V_S \; (t_0)', 'V_W \; (t_0)']
+    temp_base = [0, 'V_R \;', 'V_S \;', 'V_W \;']
     entry_names_x = [0, temp_base[uncertainty_to_analyze-4]]
     x_axis_measure_unit = '(m/s)'
 elif uncertainty_to_analyze == 8 or uncertainty_to_analyze==18:
-    entry_names_x = [0, 'R \; (t_E)', 'S \; (t_E)', 'W \; (t_E)']
+    entry_names_x = [0, 'R \;', 'S \;', 'W \;']
     x_axis_measure_unit = '(m)'
 elif 8<uncertainty_to_analyze<12 or 18<uncertainty_to_analyze<22:
-    temp_base = [0, 'R \; (t_E)', 'S \; (t_E)', 'W \; (t_E)']
-    entry_names_x = [0, temp_base[uncertainty_to_analyze]]
+    cell_no = uncertainty_to_analyze%3+1 if 8<uncertainty_to_analyze<12 else uncertainty_to_analyze%3
+    temp_base = [0, 'R \;', 'S \;', 'W \;']
+    entry_names_x = [0, temp_base[cell_no]]
     x_axis_measure_unit = '(m)'
 elif uncertainty_to_analyze==12or uncertainty_to_analyze==22:
-    entry_names_x = [0, 'V_R \; (t_E)', 'V_S \; (t_E)', 'V_W \; (t_E)']
+    entry_names_x = [0, 'V_R \;', 'V_S \;', 'V_W \;']
     x_axis_measure_unit = '(m/s)'
 elif 12<uncertainty_to_analyze<16 or 22<uncertainty_to_analyze<26:
-    temp_base = [0, 'V_R \; (t_E)', 'V_S \; (t_E)', 'V_W \; (t_E)']
-    entry_names_x = [0, temp_base[uncertainty_to_analyze-4]]
+    cell_no = (uncertainty_to_analyze-1) % 3 + 1 if 12<uncertainty_to_analyze<16 else (uncertainty_to_analyze-2) % 3 +1
+    temp_base = [0, 'V_R \;', 'V_S \;', 'V_W \;']
+    entry_names_x = [0, temp_base[cell_no]]
     x_axis_measure_unit = '(m/s)'
 elif uncertainty_to_analyze == 16 or uncertainty_to_analyze==26:
-    entry_names_x = [0, '\gamma (t_E)']
+    entry_names_x = [0, '\gamma']
     x_axis_measure_unit = '(°)'
 elif uncertainty_to_analyze == 17 or uncertainty_to_analyze ==27:
-    entry_names_x = [0, 'V (t_E)']
+    entry_names_x = [0, 'V']
     x_axis_measure_unit = '(m/s)'
 else:
     raise Exception('No such uncertainty exists to be analyzed, or you just forgot to update the elif\'s.'
                     'That\'s probably the case...')
 
-entry_names_y = [0, 'R \; (t_1)', 'S \; (t_1)', 'W \; (t_1)', 'V_R \; (t_1)', 'V_S \; (t_1)', 'V_W \; (t_1)']
+entry_names_y = [0, 'R \;', 'S \;', 'W \;', 'V_R \;', 'V_S \;', 'V_W \;']
 y_axis_measure_units = ['(m)', '(m/s)']
 
 print(f'Analyzing uncertainty: {uncertainties[uncertainty_to_analyze]}')
@@ -161,12 +175,12 @@ fig_hist, ax_hist = plt.subplots(entries-1, figsize=(7,6), sharex=True)
 for entry in range(1,entries):
     if type(ax_hist) == np.ndarray:
         ax_hist[entry-1].hist(perturbations[:, entry], 20, edgecolor='black', linewidth=1.2)
-        ax_hist[entry-1].set_xlabel(fr'$\Delta {entry_names_x[entry]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+        ax_hist[entry-1].set_xlabel(fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
         ax_hist[entry-1].tick_params(axis='both', which='major', labelsize=ticks_size)
         ax_hist[entry-1].tick_params(axis='x', labelbottom=True)
     else:
         ax_hist.hist(perturbations[:, entry], 20, edgecolor='black', linewidth=1.2)
-        ax_hist.set_xlabel(fr'$\Delta {entry_names_x[entry]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+        ax_hist.set_xlabel(fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
         ax_hist.tick_params(axis='both', which='major', labelsize=ticks_size)
 fig_hist.suptitle('Random variable distribution at initial time', fontsize=suptitle_size)
 fig_hist.supylabel('Occurrences', fontsize=common_y_label_size)
@@ -250,6 +264,7 @@ axs[0, 1].set_ylabel('Altitude Error (m)', fontsize=y_label_size)
 axs[1, 1].set_ylabel('Speed Error (m/s)', fontsize=y_label_size)
 for i in [0,1]:
     for j in [0,1]:
+        axs[i, j].set_xlabel('Elapsed time (days)', fontsize=x_label_size)
         axs[i, j].set_yscale('log')
         axs[i, j].tick_params(axis='both', which='major', labelsize=ticks_size)
         axs[i, j].tick_params(axis='x', labelbottom=True)
@@ -307,7 +322,8 @@ for run_number in range(1, number_of_runs):
     #     fpa_difference[i] = abs(nominal_dependent_variables[:,5] - current_dependent_variables[:,5])
     #     airspeed_difference[i] = abs(nominal_dependent_variables[:,6] - current_dependent_variables[:,6])
 
-    if stop_before_aerocapture:
+    # if stop_before_aerocapture:
+    if False:
         # altitude_velocity_dictionary = dict(zip())
         altitude_based_depvar_dictionary = dict(zip(dependent_variable_history_np[:, 5], dependent_variable_history_np[:, 6:8]))
 
@@ -335,13 +351,13 @@ for run_number in range(1, number_of_runs):
         final_airspeed_difference = depvar_difference_wrt_altitude_values[-1,1]
     else:
 
-        inertial_fpa_based_depvar_dictionary = dict(zip(dependent_variable_history_np[:, 9], dependent_variable_history_np[:, 6:8]))
+        # inertial_fpa_based_depvar_dictionary = dict(zip(dependent_variable_history_np[:, 10], dependent_variable_history_np[:, [5,7,9]]))
 
         nominal_end_dependent_variables = nominal_depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
         current_end_dependent_variables = depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
 
-        final_fpa_difference = abs(nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
-        final_airspeed_difference = abs(nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
+        final_fpa_difference = (nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
+        final_airspeed_difference = (nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
 
     # dependent_variable_end_values[run_number] = np.array([fpa_difference[-1], airspeed_difference[-1]])
     dependent_variable_end_values[run_number] = np.array([final_fpa_difference, final_airspeed_difference, there_is_aerocapture])
@@ -356,34 +372,38 @@ for entry in range(1, entries):
     xlabel = xlabel + '\Delta ' + x_component_name + add_x_comma if entry < entries else xlabel
 
 if stop_after_aerocapture or stop_before_aerocapture:
-    fig_depvar, ax_depvar = plt.subplots(2,2, figsize=(6, 8), sharex='col')
+    fig_depvar, ax_depvar = plt.subplots(2,2, figsize=(6, 8))
     for entry in range(1, entries):
         marker = marker_styles[0][entry-1]
         facecolor = marker_styles[1][entry-1]
         edgecolor = marker_styles[2][entry-1]
         ax_depvar[0, 0].scatter(perturbations[:, entry], dependent_variable_end_values_array[:,0],
-                     label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor, edgecolor=edgecolor)
+                     label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$', marker=marker, facecolor=facecolor, edgecolor=edgecolor)
         ax_depvar[1, 0].scatter(perturbations[:, entry], dependent_variable_end_values_array[:, 1],
-                     label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,edgecolor=edgecolor)
+                     label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$', marker=marker, facecolor=facecolor,edgecolor=edgecolor)
 
         aerocapture_performed_cells = list(np.where(dependent_variable_end_values_array[:, 2] == 1)[0])
         yes_ae__perturbations = perturbations[aerocapture_performed_cells, :]
         yes_ae__depvars_endvalues = dependent_variable_end_values_array[aerocapture_performed_cells, :]
         ax_depvar[0, 1].scatter(yes_ae__perturbations[:, entry], yes_ae__depvars_endvalues[:, 0],
-                                label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,
+                                label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$', marker=marker, facecolor=facecolor,
                                 edgecolor=edgecolor)
         ax_depvar[1, 1].scatter(yes_ae__perturbations[:, entry], yes_ae__depvars_endvalues[:, 1],
-                                label=fr'$\Delta {entry_names_x[entry]}$', marker=marker, facecolor=facecolor,
+                                label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$', marker=marker, facecolor=facecolor,
                                 edgecolor=edgecolor)
 
-    ax_depvar[0, 0].set_ylabel(r'$\gamma \,(t_1)$ (\textdegree)', fontsize=y_label_size)
-    ax_depvar[1, 0].set_ylabel(r'$Airspeed \,(t_1)$ (m/s)', fontsize=y_label_size)
-    fig_depvar.supxlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+    ax_depvar[0, 0].set_ylabel(fr'$\gamma \, {time_interval_names[1]}$ (°)', fontsize=y_label_size)
+    ax_depvar[1, 0].set_ylabel(fr'$Airspeed \, {time_interval_names[1]}$ (m/s)', fontsize=y_label_size)
+    fig_depvar.supxlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+
+    x_axis_bounds = np.amax(abs(perturbations[:,1:]))
     for i in [0,1]:
         for j in [0,1]:
+            ax_depvar[i,j].set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+            ax_depvar[i,j].set_xlim(-x_axis_bounds,x_axis_bounds)
             if entries-1 > 1:
                 ax_depvar[i, j].legend()
-    fig_depvar.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final $\gamma$ and Airspeed (End state: {final_state_name})', fontsize=suptitle_size)
+    fig_depvar.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]} $ on the final $\gamma$ and Airspeed (End state: {final_state_name})', fontsize=suptitle_size)
     fig_depvar.tight_layout()
 
 
@@ -391,15 +411,16 @@ if stop_after_aerocapture or stop_before_aerocapture:
 fig2, axs2 = plt.subplots(2, figsize=(6, 8))
 
 for entry in range(1, entries):
-    axs2[0].scatter(perturbations[:, entry], state_history_end_values_array[:, 0], label=fr'$\Delta {entry_names_x[entry]}$',
+    axs2[0].scatter(perturbations[:, entry], state_history_end_values_array[:, 0], label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$',
                     marker=marker_styles[0][entry-1], facecolor=marker_styles[1][entry-1], edgecolor=marker_styles[2][entry-1])
-    axs2[1].scatter(perturbations[:, entry], state_history_end_values_array[:, 1], label=fr'$\Delta {entry_names_x[entry]}$',
+    axs2[1].scatter(perturbations[:, entry], state_history_end_values_array[:, 1], label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$',
                     marker=marker_styles[0][entry - 1], facecolor=marker_styles[1][entry - 1],
                     edgecolor=marker_styles[2][entry - 1])
-axs2[0].set_ylabel(r'$|\Delta \mathbf{r}| \,(t_1)$ (m)', fontsize=y_label_size)
-axs2[1].set_ylabel(r'$|\Delta \mathbf{v}| \,(t_1)$ (m/s)', fontsize=y_label_size)
-fig2.supxlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+axs2[0].set_ylabel(r'$|\Delta \mathbf{r}|' + fr' \, {time_interval_names[1]}$ (m)', fontsize=y_label_size)
+axs2[1].set_ylabel(r'$|\Delta \mathbf{v}|' + fr' \, {time_interval_names[1]}$ (m/s)', fontsize=y_label_size)
+fig2.supxlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
 for i in [0,1]:
+    axs2[i].set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
     # Show the major grid lines with dark grey lines
     axs2[i].grid(visible=True, which='major', color='#666666', linestyle='-')
     # Show the minor grid lines with very faint and almost transparent grey lines
@@ -408,33 +429,34 @@ for i in [0,1]:
     axs2[i].tick_params(axis='both', which='major', labelsize=ticks_size)
     if entries-1 > 1:
         axs2[i].legend()
-fig2.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final state (End state: {final_state_name})', fontsize=suptitle_size)
+fig2.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]}$ on the final state (End state: {final_state_name})', fontsize=suptitle_size)
 fig2.tight_layout()
 
 # Plot of final eccentricity
-fig_ecc, axs_ecc = plt.subplots()
+if not stop_before_aerocapture:
+    fig_ecc, axs_ecc = plt.subplots()
 
-for entry in range(1, entries):
-    axs_ecc.scatter(perturbations[:, entry], state_history_end_values_array[:, 2],
-                    label=fr'$\Delta {entry_names_x[entry]}$',
-                    marker=marker_styles[0][entry - 1], facecolor=marker_styles[1][entry - 1],
-                    edgecolor=marker_styles[2][entry - 1])
-axs_ecc.axhline(y=nominal_final_eccentricity, color='grey', linestyle='--')
+    for entry in range(1, entries):
+        axs_ecc.scatter(perturbations[:, entry], state_history_end_values_array[:, 2],
+                        label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$',
+                        marker=marker_styles[0][entry - 1], facecolor=marker_styles[1][entry - 1],
+                        edgecolor=marker_styles[2][entry - 1])
+    axs_ecc.axhline(y=nominal_final_eccentricity, color='grey', linestyle='--')
 
-for i in [0]:  # change if you add other subplots
-    # Show the major grid lines with dark grey lines
-    axs_ecc.grid(visible=True, which='major', color='#666666', linestyle='-')
-    # Show the minor grid lines with very faint and almost transparent grey lines
-    axs_ecc.minorticks_on()
-    axs_ecc.grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
-    axs_ecc.tick_params(axis='both', which='major', labelsize=ticks_size)
-    if entries-1 > 1:
-        axs_ecc.legend()
-axs_ecc.set_ylabel(r'Final eccentricity $(t_1)$', fontsize=y_label_size)
-axs_ecc.set_xlabel(fr'${xlabel} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+    for i in [0]:  # change if you add other subplots
+        # Show the major grid lines with dark grey lines
+        axs_ecc.grid(visible=True, which='major', color='#666666', linestyle='-')
+        # Show the minor grid lines with very faint and almost transparent grey lines
+        axs_ecc.minorticks_on()
+        axs_ecc.grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+        axs_ecc.tick_params(axis='both', which='major', labelsize=ticks_size)
+        if entries-1 > 1:
+            axs_ecc.legend()
+    axs_ecc.set_ylabel(fr'Final eccentricity  ${time_interval_names[1]}$', fontsize=y_label_size)
+    axs_ecc.set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
 
-fig_ecc.suptitle(fr'Impact of ${xlabel} \, (t_0) $ on the final eccentricity (End state: {final_state_name})', fontsize=suptitle_size)
-fig_ecc.tight_layout()
+    fig_ecc.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]}$ on the final eccentricity (End state: {final_state_name})', fontsize=suptitle_size)
+    fig_ecc.tight_layout()
 
 
 # SHOW THE IMPACT OF THE APPLIED UNCERTAINTY ON THE FINAL NORM OF POSITION DIFFERENCE
@@ -448,7 +470,7 @@ max_entries_pert = perturbations.shape[1] - 1
 # PLOT THE IMPACT OF THE APPLIED UNCERTAINTY ON THE FINAL RSW COMPONENTS AND
 # PLOT THE HISTOGRAM OF THE FINAL RSW COMPONENTS DISTRIBUTION
 fig3_hist, ax3_hist = plt.subplots(3,2, figsize=(9, 6), sharex='col', constrained_layout=True)
-fig3, axs3 = plt.subplots(2, figsize=(6, 8))
+fig3, axs3 = plt.subplots(2, figsize=(6, 10))
 
 xlabel = ['', '']
 ylabel = ['', '']
@@ -459,7 +481,7 @@ for entry in range(1,7):
     # nice_c = entry%3-1
     # entry%3 : 1, 2, 0, 1, 2, 0
 
-    plot_label = '\Delta ' + entry_names_x[min(coord_nr+1,max_entries_pert)] + ' \\rightarrow ' + '\Delta ' + entry_names_y[entry]
+    plot_label = '\Delta ' + entry_names_x[min(coord_nr+1,max_entries_pert)] + ' ' + time_interval_names[0] + ' \\rightarrow ' + '\Delta ' + entry_names_y[entry] + ' ' + time_interval_names[1]
 
     x_component_name = entry_names_x[min(coord_nr+1,max_entries_pert)].split()[0]
     y_component_name = entry_names_y[entry].split()[0]
@@ -476,10 +498,10 @@ for entry in range(1,7):
 
     ax3_hist[coord_nr, plot_nr].hist(max_vals_in_rsw[:, entry - 1], 30, edgecolor='black', linewidth=1.2)
     ax3_hist[coord_nr, plot_nr].tick_params(axis='both', which='major', labelsize=ticks_size)
-    ax3_hist[coord_nr, plot_nr].set_xlabel(fr'$\Delta {entry_names_y[entry]} $ ' + y_axis_measure_units[plot_nr], fontsize=x_label_size)
+    ax3_hist[coord_nr, plot_nr].set_xlabel(fr'$\Delta {entry_names_y[entry]} {time_interval_names[1]}$ ' + y_axis_measure_units[plot_nr], fontsize=x_label_size)
     ax3_hist[coord_nr, plot_nr].tick_params(axis='x', labelbottom=True)
 
-
+# axs3[0].set_aspect('equal', 'box')
 for i in [0,1]:
     axs3[i].tick_params(axis='both', which='major', labelsize=ticks_size)
     # Show the major grid lines with dark grey lines
@@ -487,11 +509,11 @@ for i in [0,1]:
     # Show the minor grid lines with very faint and almost transparent grey lines
     axs3[i].minorticks_on()
     axs3[i].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
-    axs3[i].set_xlabel(fr'${xlabel[i]} \; (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
-    axs3[i].set_ylabel(fr'${ylabel[i]} \; (t_1)$ ' + y_axis_measure_units[i], fontsize=y_label_size)
+    axs3[i].set_xlabel(fr'${xlabel[i]} \; {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+    axs3[i].set_ylabel(fr'${ylabel[i]} \; {time_interval_names[1]}$ ' + y_axis_measure_units[i], fontsize=y_label_size)
     axs3[i].legend()
 
-fig3.suptitle(fr'Impact of ${xlabel[0]} \; (t_0)$ on final RSW position and velocity', fontsize=suptitle_size)
+fig3.suptitle(fr'Impact of ${xlabel[0]} \; {time_interval_names[0]}$ on final RSW position and velocity {time_interval_names[0]}', fontsize=suptitle_size)
 
 fig3_hist.suptitle(f'End Values Distribution (End state: {final_state_name})', fontsize=suptitle_size)
 fig3_hist.supylabel('Occurrences', fontsize=common_y_label_size)
@@ -557,7 +579,7 @@ if evaluated_arc == 1 or evaluated_arc == 12:
             for j in range(2):
 
                 ax_hfx[i,j].scatter(perturbations[:, entry], heat_fluxes_values_array[:,int(2*i+1*j)] * heat_fluxes_rescaling[int(2*i+1*j)],
-                                label=fr'$\Delta {entry_names_x[entry]}$',
+                                label=fr'$\Delta {entry_names_x[entry]} {time_interval_names[0]}$',
                                 marker=marker_styles[0][entry - 1], facecolor=marker_styles[1][entry - 1],
                                 edgecolor=marker_styles[2][entry - 1])
                 if entries - 1 > 1:
@@ -572,9 +594,9 @@ if evaluated_arc == 1 or evaluated_arc == 12:
                     ax_hfx[i,j].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
                     ax_hfx[i,j].tick_params(axis='both', which='major', labelsize=ticks_size)
                     ax_hfx[i,j].set_ylabel(fr'{heat_fluxes_y_labels[i,j]}', fontsize=y_label_size)
-                    ax_hfx[i,j].set_xlabel(fr'${xlabel[0]} \, (t_0)$ ' + x_axis_measure_unit, fontsize=x_label_size)
+                    ax_hfx[i,j].set_xlabel(fr'${xlabel[0]} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
 
-    fig_hfx.suptitle(fr'Impact of ${xlabel[0]} \, (t_0) $ on heat fluxes, heat load, and TPS mass fraction (End state: {final_state_name})',
+    fig_hfx.suptitle(fr'Impact of ${xlabel[0]} \, $ on heat fluxes, heat load, and TPS mass fraction (End state: {final_state_name} {time_interval_names[0]})',
                      fontsize=suptitle_size)
     fig_hfx.tight_layout()
 
