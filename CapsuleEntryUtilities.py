@@ -1119,6 +1119,14 @@ def calculate_tps_mass_fraction(total_heat_load: float) -> float:
     tps_mass_fraction = (0.091 * (total_heat_load / 1e4) ** 0.51575) / 100
     return tps_mass_fraction
 
+# Only needed it for calculating a requirement
+def calculate_heat_load_from_mass_fraction(tps_mass_fraction: float) -> float:
+
+    # (tps_mass_fraction*100/0.091)**1/0.51575 *1e4 =  total_heat_load
+    heat_load = (tps_mass_fraction*100/0.091)**(1/0.51575) *1e4
+
+    return heat_load
+
 
 ###########################################################################
 # OTHER UTILITIES #########################################################

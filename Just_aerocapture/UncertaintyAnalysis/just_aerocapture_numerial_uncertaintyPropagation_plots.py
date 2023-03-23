@@ -22,59 +22,24 @@ from tudatpy.kernel.astro import frame_conversion, element_conversion
 from CapsuleEntryUtilities import compare_models, calculate_peak_hfx_and_heat_load, calculate_tps_mass_fraction
 from handle_functions import eccentricity_vector_from_cartesian_state
 
+from UncertaintyStudy_GlobalVariables import *
+
 # SET PARAMETERS:  arc 0: from 0 to 7   arc 1: from 8 to 17   arc 12: from 18 to 27
-uncertainty_to_analyze = 12
+uncertainty_to_analyze = 8
 
-# uncertainties = ['EarthEph', 'SRP', 'InitialState', 'InitialState_1', 'InitialState_2', 'InitialState_3']
-
-uncertainties_dictionary = {
-    # from 0 to 3
-    'InitialPosition': 0, 'InitialPosition_R': 0, 'InitialPosition_S': 0, 'InitialPosition_W': 0,
-    # from 4 to 7
-    'InitialVelocity': 0, 'InitialVelocity_R': 0, 'InitialVelocity_S': 0, 'InitialVelocity_W': 0,
-
-    # from 8 to 11
-    'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1, 'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
-    # from 12 to 15
-    'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1, 'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
-    # 16, 17
-    'EntryFlightPathAngle': 1, 'EntryVelocity': 1,
-
-    # from 18 to 21
-    'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12, 'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
-    # from 22 to 25
-    'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12, 'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
-    # 26, 27
-    'FinalOrbit_EntryFlightPathAngle': 12, 'FinalOrbit_EntryVelocity': 12
-}
 
 uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
 arcs_computed = list(uncertainties_dictionary.values())  # list of corresponding arcs
 
-# Font sizes
-ticks_size = 12
-x_label_size, y_label_size = 14, 14
-common_y_label_size = 16
-suptitle_size = 18
-
-# Marker styles and cmap
-cmap = plt.get_cmap('tab10')
-# marker_styles = (['o', 'o', 'v', 'v', 'D', 'D'],
-#                  [cmap(0), 'none', 'none', cmap(3), 'none', cmap(5)],
-#                  [cmap(0), cmap(1), cmap(2), cmap(3), cmap(4), cmap(5)])
-marker_styles = (['D', 'o', 'o'],
-                 [cmap(5), cmap(0), 'none'],
-                 [cmap(5), cmap(0), cmap(1)])
-
 
 current_dir = os.path.dirname(__file__)
-subdirectory = '/UncertaintyAnalysis/' + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
+subdirectory = '/UncertaintyAnalysisData/' + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
 data_path = current_dir + subdirectory
 
-perturbations = np.loadtxt(current_dir + f'/UncertaintyAnalysis/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
+perturbations = np.loadtxt(current_dir + f'/UncertaintyAnalysisData/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
 number_of_runs = len(perturbations[:,0]) + 1
 
-trajectory_parameters = np.loadtxt(current_dir + '/UncertaintyAnalysis/trajectory_parameters.dat')  # [0, vel, fpa]
+trajectory_parameters = np.loadtxt(current_dir + '/UncertaintyAnalysisData/trajectory_parameters.dat')  # [0, vel, fpa]
 # evaluated_arc = trajectory_parameters[0]
 interplanetary_arrival_velocity = trajectory_parameters[1]
 atmospheric_entry_fpa = trajectory_parameters[2]
@@ -94,8 +59,6 @@ elif evaluated_arc == 12 or evaluated_arc == -1:
 else:
     raise Exception('The propagated arc cannot yet be shown! Update the code.')
 
-# if uncertainties[uncertainty_to_analyze] == uncertainties[8] or uncertainties[uncertainty_to_analyze] == uncertainties[9]:
-#     evaluated_arc = 1
 
 if evaluated_arc == 0:
     stop_before_aerocapture = True

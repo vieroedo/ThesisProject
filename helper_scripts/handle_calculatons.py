@@ -4,6 +4,8 @@ from tudatpy.kernel.interface import spice_interface
 from handle_functions import *
 import os
 
+from CapsuleEntryUtilities import *
+
 #### r_SOI calculation ####################################################
 r_SOI = dict()
 for moon in list(galilean_moons_data.keys()):
@@ -23,7 +25,7 @@ theta = np.linspace(-theta_max,theta_max,200)
 radii = radius_from_true_anomaly(theta, ecc, sma, planet_SoI=1e9)
 x, y = cartesian_2d_from_polar(radii, theta)
 plt.plot(x, y)
-plt.show()
+# plt.show()
 
 ### Jupiter atmosphere ################
 ref_density = 0.16  # kg/m^3
@@ -48,7 +50,7 @@ density_lol = jupiter_atmosphere_density_model(altitude_lol)
 plt.plot(altitude_lol/1e3,density_lol)
 plt.yscale('log')
 plt.xscale('log')
-plt.show()
+# plt.show()
 
 convective_hf, radiative_hf, radiative_hf_w_blockage = atmospheric_entry_heat_loads_correlations(density_lol,
                                                                                                  galileo_velocity_from_altitude(
@@ -60,7 +62,7 @@ plt.plot(altitude_lol/1e3,radiative_hf, label='rad')
 plt.plot(altitude_lol/1e3,radiative_hf_w_blockage, label='rad_w_blockage')
 plt.yscale('log')
 plt.legend()
-plt.show()
+# plt.show()
 
 
 x_data = np.linspace(-2,8,1000)
@@ -72,4 +74,17 @@ plt.plot(x_data, y_data, label='other one')
 plt.plot(x_data, y_data2, label='quadratic')
 plt.title('B equations')
 plt.legend()
-plt.show()
+# plt.show()
+
+nominal_tps = 0.15
+tps_var = nominal_tps - 0.01
+
+nominal_heatload = calculate_heat_load_from_mass_fraction(nominal_tps)
+heatload_var = calculate_heat_load_from_mass_fraction(tps_var)
+
+print(f'Difference in heatload: {nominal_heatload-heatload_var} J/m2')
+
+nominal_tps_check = calculate_tps_mass_fraction(nominal_heatload)
+tps_var_check = calculate_tps_mass_fraction(heatload_var)
+
+print(f'TPS var check: {nominal_tps_check-tps_var_check}')
