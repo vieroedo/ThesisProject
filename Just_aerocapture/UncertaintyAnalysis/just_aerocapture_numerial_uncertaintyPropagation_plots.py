@@ -27,6 +27,25 @@ from UncertaintyStudy_GlobalVariables import *
 # SET PARAMETERS:  arc 0: from 0 to 7   arc 1: from 8 to 17   arc 12: from 18 to 27
 uncertainty_to_analyze = 8
 
+# # from 0 to 3
+# 'InitialPosition', 'InitialPosition_R', 'InitialPosition_S', 'InitialPosition_W',
+# # from 4 to 7
+# 'InitialVelocity', 'InitialVelocity_R', 'InitialVelocity_S', 'InitialVelocity_W',
+#
+# # from 8 to 11
+# 'InitialPosition_Entry', 'InitialPosition_R_Entry', 'InitialPosition_S_Entry', 'InitialPosition_W_Entry',
+# # from 12 to 15
+# 'InitialVelocity_Entry', 'InitialVelocity_R_Entry', 'InitialVelocity_S_Entry', 'InitialVelocity_W_Entry',
+# # 16, 17
+# 'EntryFlightPathAngle', 'EntryVelocity',
+#
+# # from 18 to 21
+# 'FinalOrbit_InitialPosition_Entry', 'FinalOrbit_InitialPosition_R_Entry', 'FinalOrbit_InitialPosition_S_Entry', 'FinalOrbit_InitialPosition_W_Entry',
+# # from 22 to 25
+# 'FinalOrbit_InitialVelocity_Entry', 'FinalOrbit_InitialVelocity_R_Entry', 'FinalOrbit_InitialVelocity_S_Entry', 'FinalOrbit_InitialVelocity_W_Entry',
+# # 26, 27
+# 'FinalOrbit_EntryFlightPathAngle', 'FinalOrbit_EntryVelocity'
+
 
 uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
 arcs_computed = list(uncertainties_dictionary.values())  # list of corresponding arcs
@@ -39,10 +58,10 @@ data_path = current_dir + subdirectory
 perturbations = np.loadtxt(current_dir + f'/UncertaintyAnalysisData/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
 number_of_runs = len(perturbations[:,0]) + 1
 
-trajectory_parameters = np.loadtxt(current_dir + '/UncertaintyAnalysisData/trajectory_parameters.dat')  # [0, vel, fpa]
-# evaluated_arc = trajectory_parameters[0]
-interplanetary_arrival_velocity = trajectory_parameters[1]
-atmospheric_entry_fpa = trajectory_parameters[2]
+# trajectory_parameters = np.loadtxt(current_dir + '/UncertaintyAnalysisData/trajectory_parameters.dat')  # [0, vel, fpa]
+# # evaluated_arc = trajectory_parameters[0]
+# interplanetary_arrival_velocity = trajectory_parameters[1]
+# atmospheric_entry_fpa = trajectory_parameters[2]
 
 evaluated_arc = arcs_computed[uncertainty_to_analyze]
 

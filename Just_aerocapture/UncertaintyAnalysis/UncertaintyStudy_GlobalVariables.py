@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 # from tudatpy.kernel import constants
 from tudatpy.kernel.math import interpolators
 
+peak_heat_flux_max_error = 250  # kW/m2
+heat_load_max_error = 40  # MJ/m2
+eccentricity_max_error = 0.001
+
+
 
 # Create interpolator settings
 interpolator_settings = interpolators.lagrange_interpolation(
@@ -27,23 +32,26 @@ common_y_label_size = 16
 suptitle_size = 18
 
 uncertainties_dictionary = {
-
     # from 0 to 3
     'InitialPosition': 0, 'InitialPosition_R': 0, 'InitialPosition_S': 0, 'InitialPosition_W': 0,
     # from 4 to 7
     'InitialVelocity': 0, 'InitialVelocity_R': 0, 'InitialVelocity_S': 0, 'InitialVelocity_W': 0,
 
     # from 8 to 11
-    'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1, 'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
+    'InitialPosition_Entry': 1, 'InitialPosition_R_Entry': 1,
+    'InitialPosition_S_Entry': 1, 'InitialPosition_W_Entry': 1,
     # from 12 to 15
-    'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1, 'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
+    'InitialVelocity_Entry': 1, 'InitialVelocity_R_Entry': 1,
+    'InitialVelocity_S_Entry': 1, 'InitialVelocity_W_Entry': 1,
     # 16, 17
     'EntryFlightPathAngle': 1, 'EntryVelocity': 1,
 
     # from 18 to 21
-    'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12, 'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
+    'FinalOrbit_InitialPosition_Entry': 12, 'FinalOrbit_InitialPosition_R_Entry': 12,
+    'FinalOrbit_InitialPosition_S_Entry': 12, 'FinalOrbit_InitialPosition_W_Entry': 12,
     # from 22 to 25
-    'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12, 'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
+    'FinalOrbit_InitialVelocity_Entry': 12, 'FinalOrbit_InitialVelocity_R_Entry': 12,
+    'FinalOrbit_InitialVelocity_S_Entry': 12, 'FinalOrbit_InitialVelocity_W_Entry': 12,
     # 26, 27
     'FinalOrbit_EntryFlightPathAngle': 12, 'FinalOrbit_EntryVelocity': 12
 }

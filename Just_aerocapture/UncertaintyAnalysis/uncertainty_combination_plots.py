@@ -10,17 +10,20 @@ from tudatpy.kernel import constants
 from tudatpy.kernel.math import interpolators
 from tudatpy.kernel.astro import frame_conversion
 
-from handle_functions import eccentricity_vector_from_cartesian_state
 from UncertaintyStudy_GlobalVariables import *
 
-choose_combination_case = 2
-rescale_y_axis_units = 1  # keep to 1
-rescale_x_axis_units = 1  # keep to 1
+from CapsuleEntryUtilities import compare_models, calculate_peak_hfx_and_heat_load, calculate_tps_mass_fraction
+from handle_functions import eccentricity_vector_from_cartesian_state
+
+plot_eccentricity_wrt_final_values = False  # works but makes no sense
+choose_combination_case = 3
+rescale_y_axis_units = 1  # allowed values are 1, 1e3, 1e-3
+rescale_x_axis_units = 1  # allowed values are 1, 1e3, 1e-3
 
 combination_dictionary = {
-    'Initial_RSW_Position':[1,2,3], 'Initial_RSW_Velocity':[5,6,7],
-    'Entry_RSW_Position':[9,10,11], 'Entry_RSW_Velocity':[13,14,15],
-    'FinalOrbit_RSW_Position':[19,20,21], 'FinalOrbit_RSW_velocity':[23,24,25]
+    'Initial_RSW_Position': [1,2,3],        'Initial_RSW_Velocity': [5,6,7],
+    'Entry_RSW_Position': [9,10,11],        'Entry_RSW_Velocity': [13,14,15],
+    'FinalOrbit_RSW_Position': [19,20,21],  'FinalOrbit_RSW_velocity': [23,24,25]
     }
 
 combination_cases = list(combination_dictionary.keys())
@@ -32,15 +35,20 @@ if choose_combination_case > len(combination_cases):
 uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
 arcs_computed = list(uncertainties_dictionary.values())  # list of corresponding arcs
 
-current_dir = os.path.dirname(__file__)
+combination_to_plot = combination_dictionary[combination_cases[choose_combination_case]]
 
-trajectory_parameters = np.loadtxt(current_dir + '/UncertaintyAnalysisData/trajectory_parameters.dat')  # [0, vel, fpa]
-# evaluated_arc = trajectory_parameters[0]
-interplanetary_arrival_velocity = trajectory_parameters[1]
-atmospheric_entry_fpa = trajectory_parameters[2]
+current_dir = os.path.dirname(__file__)
 
 entry_names_y = ['R \;', 'S \;', 'W \;', 'V_R \;', 'V_S \;', 'V_W \;']
 y_axis_measure_units = ['(m)', '(m/s)']
+
+if rescale_y_axis_units == 1e-3:
+    y_axis_measure_units = ['(km)', '(km/s)']
+elif rescale_y_axis_units == 1e3:
+    y_axis_measure_units = ['(mm)', '(mm/s)']
+elif rescale_y_axis_units != 1:
+    raise Exception('Invalid value for y axis rescaling. Allowed values are 1, 1e3, 1e-3')
+
 
 if choose_combination_case%2 == 0:
     position_combination = True
@@ -48,8 +56,6 @@ if choose_combination_case%2 == 0:
 else:
     position_combination = False
     velocity_combination = True
-
-combination_to_plot = combination_dictionary[combination_cases[choose_combination_case]]
 
 # Set labels for plotting
 if position_combination:
@@ -88,20 +94,13 @@ elif choose_combination_case in [4,5]:
 else:
     raise Exception('You forgot to set names for time interval boundaries hehe (get your shit together ffs)')
 
-if rescale_y_axis_units == 1e-3:
-    y_axis_measure_units = ['(km)', '(km/s)']
-elif rescale_y_axis_units == 1e3:
-    y_axis_measure_units = ['(mm)', '(mm/s)']
-elif rescale_y_axis_units != 1:
-    raise Exception('Invalid value for y axis rescaling. Allowed values are 1, 1e3, 1e-3')
-
 
 # PLOT THE IMPACT OF THE APPLIED UNCERTAINTY ON THE FINAL NORM OF POSITION DIFFERENCE
 # Combine delta r and delta v plots of initial position error R, S, W: cases 1, 2, 3
 fig_rv_norms, axs_rv_norms = plt.subplots(2, figsize=(6, 8))
 
 fig_rsw, axs_rsw = plt.subplots(2, 3, figsize=(8, 8), sharey='row')
-fig_ecc, axs_ecc = plt.subplots()
+fig_ecc, axs_ecc = plt.subplots(figsize=(5,6))
 
 total_entries = len(combination_to_plot)
 for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
@@ -166,8 +165,10 @@ for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
         # Calculate eccentricity of the final state (usually t_E, t_F, t_1)
         final_eccentricity = LA.norm(eccentricity_vector_from_cartesian_state(spacecraft_final_state))
 
+        final_eccentricity_difference = final_eccentricity - nmnl_final_eccentricity
+
         rsw_end_values[run_number] = rsw_state_difference[-1, :]
-        state_history_end_values[run_number] = np.array([position_difference_norm[-1], velocity_difference_norm[-1], final_eccentricity])
+        state_history_end_values[run_number] = np.array([position_difference_norm[-1], velocity_difference_norm[-1], final_eccentricity_difference])
 
     # Reprocess values to plot them
     rsw_end_values_array = np.vstack(list(rsw_end_values.values()))
@@ -223,12 +224,18 @@ for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
     #     entry_for_labels = (uncertainty_to_analyze+1)%3+1 if uncertainty_to_analyze in [5,6,7] else 0
     #     entry_for_labels = (uncertainty_to_analyze - 1) % 3 + 1 if uncertainty_to_analyze in [13, 14, 15] else 0
     #     entry_for_labels = uncertainty_to_analyze % 3 + 1 if uncertainty_to_analyze in [9,10,11] else 0
-    axs_ecc.scatter(perturbations[:, 1]*rescale_x_axis_units, state_history_end_values_array[:, 2],
-                    label=fr'$\Delta {entry_names_x[entry_nr]} {time_interval_names[0]}$',
-                    marker=marker_styles[0][entry_nr], facecolor=marker_styles[1][entry_nr],
-                    edgecolor=marker_styles[2][entry_nr])
-    if entry_nr==0:
-        axs_ecc.axhline(y=nmnl_final_eccentricity, color='grey', linestyle='--')
+    if plot_eccentricity_wrt_final_values:
+        axs_ecc.scatter(rsw_end_values_array[:,entry_nr] * rescale_x_axis_units, state_history_end_values_array[:, 2],
+                        label=fr'$\Delta {entry_names_x[entry_nr]} {time_interval_names[1]}$',
+                        marker=marker_styles[0][entry_nr], facecolor=marker_styles[1][entry_nr],
+                        edgecolor=marker_styles[2][entry_nr])
+    else:
+        axs_ecc.scatter(perturbations[:, 1]*rescale_x_axis_units, state_history_end_values_array[:, 2],
+                        label=fr'$\Delta {entry_names_x[entry_nr]} {time_interval_names[0]}$',
+                        marker=marker_styles[0][entry_nr], facecolor=marker_styles[1][entry_nr],
+                        edgecolor=marker_styles[2][entry_nr])
+    # if entry_nr==0:
+    #     axs_ecc.axhline(y=nmnl_final_eccentricity, color='grey', linestyle='--')
 
 xlabel = ''
 for entry in range(total_entries):
@@ -285,10 +292,21 @@ for i in [0]:  # change if you add other subplots
     axs_ecc.grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
     axs_ecc.tick_params(axis='both', which='major', labelsize=ticks_size)
     axs_ecc.legend()
-axs_ecc.set_ylabel(fr'Final eccentricity  ${time_interval_names[1]}$', fontsize=y_label_size)
-axs_ecc.set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
 
-fig_ecc.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]}$ on the final eccentricity (End state: lol)', fontsize=suptitle_size)
+axs_ecc.axhline(y=eccentricity_max_error, linestyle='-.', color='firebrick')
+axs_ecc.axhline(y=-eccentricity_max_error, linestyle='-.', color='firebrick')
+axs_ecc.set_ylim(-0.0025, 0.0025)
+
+axs_ecc.set_ylabel(fr'Final eccentricity error  ${time_interval_names[1]}$', fontsize=y_label_size)
+if plot_eccentricity_wrt_final_values:
+    axs_ecc.set_xlabel(fr'${xlabel} \, {time_interval_names[1]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+    fig_ecc.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[1]}$ on the final eccentricity {time_interval_names[1]}',
+                     fontsize=suptitle_size)
+else:
+    axs_ecc.set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit, fontsize=x_label_size)
+    fig_ecc.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]}$ on the final eccentricity {time_interval_names[1]}',
+                     fontsize=suptitle_size)
+
 fig_ecc.tight_layout()
 
 
@@ -335,8 +353,8 @@ for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
         nominal_end_dependent_variables = nominal_depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
         current_end_dependent_variables = depvarh_interpolator.interpolate(epochs_comparison_depvar[-1])
 
-        final_fpa_difference = (nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
-        final_airspeed_difference = (nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
+        final_fpa_difference = -(nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
+        final_airspeed_difference = -(nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
 
         # dependent_variable_end_values[run_number] = np.array([fpa_difference[-1], airspeed_difference[-1]])
         dependent_variable_end_values[run_number] = np.array(
@@ -378,5 +396,111 @@ for i in [0,1]:
 fig_depvar.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]} $ on the final $\gamma$ and Airspeed ${time_interval_names[1]}$)', fontsize=suptitle_size)
 fig_depvar.tight_layout()
 
+
+fig_hfx, ax_hfx = plt.subplots(2, 2, figsize=(8, 8))
+for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
+    uncert_plot = entry_nr
+
+    subdirectory = '/UncertaintyAnalysisData/' + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
+    data_path = current_dir + subdirectory
+
+    perturbations = np.loadtxt(
+        current_dir + f'/UncertaintyAnalysisData/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
+    number_of_runs = len(perturbations[:, 0]) + 1
+
+    nominal_heat_fluxes_np = np.loadtxt(data_path + 'heat_fluxes_history_' + str(0) + '.dat')
+    nominal_heat_fluxes_epochs = nominal_heat_fluxes_np[:, 0]
+    nominal_heat_fluxes_values = nominal_heat_fluxes_np[:, 1:]
+
+    nominal_convective_heat_flux = nominal_heat_fluxes_values[:, 0]
+    nominal_radiative_heat_flux = nominal_heat_fluxes_values[:, 1]
+
+    nominal_total_wall_heat_flux = nominal_convective_heat_flux + nominal_radiative_heat_flux
+    nominal_peak_heat_flux, nominal_total_heat_load = calculate_peak_hfx_and_heat_load(nominal_heat_fluxes_epochs,
+                                                                                       nominal_total_wall_heat_flux)
+    nominal_tps_mass_fraction = calculate_tps_mass_fraction(nominal_total_heat_load)
+
+    nominal_heat_flux_values = np.array([0., nominal_tps_mass_fraction,
+                                         nominal_peak_heat_flux, nominal_total_heat_load])
+
+    heat_fluxes_values_dictionary = dict()
+    for run_number in range(1, number_of_runs):
+        heat_fluxes_np = np.loadtxt(data_path + 'heat_fluxes_history_' + str(run_number) + '.dat')
+        heat_fluxes_difference_wrt_nominal_case_np = np.loadtxt(
+            data_path + 'heat_fluxes_difference_wrt_nominal_case_' + str(run_number) + '.dat')
+        heat_fluxes_difference_values = heat_fluxes_difference_wrt_nominal_case_np[:, 1:]
+        conv_hfx_diff = heat_fluxes_difference_values[:, 0]
+        rad_hfx_diff = heat_fluxes_difference_values[:, 1]
+        total_hfx_diff = conv_hfx_diff + rad_hfx_diff
+        epochs_comparison_hfxes = heat_fluxes_difference_wrt_nominal_case_np[:, 0]
+
+        heat_fluxes_epochs = heat_fluxes_np[:, 0]
+        heat_fluxes_values = heat_fluxes_np[:, 1:]
+        convective_heat_flux = heat_fluxes_values[:, 0]
+        radiative_heat_flux = heat_fluxes_values[:, 1]
+
+        heat_fluxes_history = dict(zip(heat_fluxes_epochs, heat_fluxes_values))
+        hfxes_interpolator = interpolators.create_one_dimensional_vector_interpolator(
+            heat_fluxes_history, interpolator_settings)
+
+        total_wall_heat_flux = convective_heat_flux + radiative_heat_flux
+        peak_heat_flux, total_heat_load = calculate_peak_hfx_and_heat_load(heat_fluxes_epochs, total_wall_heat_flux)
+        tps_mass_fraction = calculate_tps_mass_fraction(total_heat_load)
+
+        max_total_heat_flux_difference = max(abs(total_hfx_diff)) if max(abs(total_hfx_diff)) == max(
+            total_hfx_diff) else -max(abs(total_hfx_diff))
+        peak_heat_flux_difference = peak_heat_flux - nominal_peak_heat_flux
+        heat_load_difference = total_heat_load - nominal_total_heat_load
+        tps_mass_fraction_difference = tps_mass_fraction - nominal_tps_mass_fraction
+
+        heat_fluxes_values_dictionary[run_number] = np.array(
+            [max_total_heat_flux_difference, tps_mass_fraction_difference, peak_heat_flux_difference,
+             heat_load_difference])
+
+    heat_fluxes_values_array = np.vstack(list(heat_fluxes_values_dictionary.values()))
+
+
+
+    heat_fluxes_rescaling = np.array([1e-3, 1, 1e-3, 1e-6])
+
+    for i in range(2):
+        for j in range(2):
+            ax_hfx[i, j].scatter(perturbations[:, 1]*rescale_x_axis_units,
+                                 heat_fluxes_values_array[:, int(2 * i + 1 * j)] * heat_fluxes_rescaling[
+                                     int(2 * i + 1 * j)],
+                                 label=fr'$\Delta {entry_names_x[entry_nr]} {time_interval_names[0]}$',
+                                 marker=marker_styles[0][entry_nr], facecolor=marker_styles[1][entry_nr],
+                                 edgecolor=marker_styles[2][entry_nr])
+
+heat_fluxes_y_labels = np.array([['Max $q_w$ difference (kW/m$^2$)', 'TPS mass fraction difference'],
+                                 ['Peak $q_w$ difference (kW/m$^2$)', 'Heat load difference (MJ/m$^2$)']])
+for i in range(2):
+    for j in range(2):
+        ax_hfx[i, j].legend()
+        # axs_ecc[i,j].axhline(y=nominal_heat_flux_values[int(2*i+1*j)], color='grey', linestyle='--')
+
+        # Show the major grid lines with dark grey lines
+        ax_hfx[i, j].grid(visible=True, which='major', color='#666666', linestyle='-')
+        # Show the minor grid lines with very faint and almost transparent grey lines
+        ax_hfx[i, j].minorticks_on()
+        ax_hfx[i, j].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+        ax_hfx[i, j].tick_params(axis='both', which='major', labelsize=ticks_size)
+        ax_hfx[i, j].set_ylabel(fr'{heat_fluxes_y_labels[i, j]}', fontsize=y_label_size)
+        ax_hfx[i, j].set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit,
+                                fontsize=x_label_size)
+
+ax_hfx[1,0].axhline(y=peak_heat_flux_max_error, linestyle='-.', color='firebrick')
+ax_hfx[1,0].axhline(y=-peak_heat_flux_max_error, linestyle='-.', color='firebrick')
+
+ax_hfx[1,1].axhline(y=heat_load_max_error, linestyle='-.', color='firebrick')
+ax_hfx[1,1].axhline(y=-heat_load_max_error, linestyle='-.', color='firebrick')
+
+
+
+
+fig_hfx.suptitle(
+    fr'Impact of ${xlabel} \, $ on heat fluxes, heat load, and TPS mass fraction {time_interval_names[1]}',
+    fontsize=suptitle_size)
+fig_hfx.tight_layout()
 
 plt.show()
