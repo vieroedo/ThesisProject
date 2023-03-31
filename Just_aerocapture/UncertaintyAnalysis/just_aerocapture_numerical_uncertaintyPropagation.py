@@ -29,7 +29,9 @@ from UncertaintyStudy_GlobalVariables import *
 
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
+seed_number = 100  # default 50
 
+just_evaluate_some_uncertainties = False
 
 # arc_to_compute = 1  # 0: from beginning to aerocapture.  1: from atm entry to exit.  12: from entry to end.  -1: everything
 fly_galileo = False
@@ -40,6 +42,8 @@ current_dir = os.path.dirname(__file__)
 
 if fly_galileo:
     current_dir = current_dir + '/GalileoMission'
+
+uncertainty_analysis_folder = '/UncertaintyAnalysisData_seed' + str(seed_number) + '/'
 
 # Load spice kernels
 spice_interface.load_standard_kernels()
@@ -64,7 +68,7 @@ decision_variable_range = [[5000, -5],
 traj_paramteres_dict = {
     0: np.array(trajectory_parameters)
 }
-save2txt(traj_paramteres_dict, 'trajectory_parameters.dat', current_dir + '/UncertaintyAnalysisData/')
+save2txt(traj_paramteres_dict, 'trajectory_parameters.dat', current_dir + uncertainty_analysis_folder)
 
 ###########################################################################
 # DEFINE SIMULATION SETTINGS ##############################################
@@ -84,15 +88,14 @@ number_of_runs_per_uncertainty = 100
 output_interpolation_step = constants.JULIAN_DAY  # s
 # output_interpolation_step =
 
-random.seed(50)
+random.seed(seed_number)
 
 
 uncertainties = list(uncertainties_dictionary.keys())  # list of uncertainty names
 arcs_to_compute = list(uncertainties_dictionary.values())  # list of corresponding arcs
 
 
-just_evaluate_some_uncertainties = True
-uncertainties_to_evaluate = [*range(4,8)]
+uncertainties_to_evaluate = [0]
 # uncertainties_to_evaluate = [9]
 if just_evaluate_some_uncertainties == True:
     uncertainties_to_run = [uncertainties[i] for i in uncertainties_to_evaluate]
@@ -115,49 +118,152 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
     simulation_results = dict()
     perturbations = dict()
 
+    uncertainty_properties = uncertainty.split('_')
+    if len(uncertainty_properties) == 2 and uncertainty_properties[0] not in ['FlightPathAngle','VelocityMag']:
+        uncertainty_properties = uncertainty_properties + ['ApproachArc']
+
     for run in range(number_of_runs_per_uncertainty):
         print(f'\nRun: {run}  ' + uncertainty)
         perturbation = 0.0
         initial_state_deviation_rsw = np.zeros(6)
 
+        # Perturb the initial position in the RSW frame
+        if run > 0 and uncertainty_properties[0] == 'InitialPosition':
+            if uncertainty_properties[1] == 'RSW':
+                if uncertainty_properties[2] in ['ApproachArc', 'FullOrbit']:
+                    dev_uncertainty = multiple_RSW_initial_position_uncertainty
+                elif uncertainty_properties[2] == 'Entry':
+                    dev_uncertainty = multiple_RSW_entry_position_uncertainty
+                else: raise Exception('dev_uncertainty undefined')
 
-        # Initial position deviation in R, S, and W
-        if run > 0 and (uncertainty in (uncertainties[0], uncertainties[8], uncertainties[18])):
-            for i in range(3):
-                initial_state_deviation_rsw[i] = random.gauss(0, multiple_initial_position_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[0:3]
-        # Initial position R deviation
-        if run > 0 and (uncertainty in (uncertainties[1], uncertainties[9], uncertainties[19])):
-            if uncertainty_nr == 9:
-                initial_position_deviation_uncertainty = 7000  # m
-            initial_state_deviation_rsw[0] = random.gauss(0, initial_position_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[0]
-        # Initial position S deviation
-        if run > 0 and (uncertainty in (uncertainties[2], uncertainties[10], uncertainties[20])):
-            initial_state_deviation_rsw[1] = random.gauss(0, initial_position_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[1]
-        # Initial position W deviation
-        if run > 0 and (uncertainty in (uncertainties[3], uncertainties[11], uncertainties[21])):
-            initial_state_deviation_rsw[2] = random.gauss(0, initial_position_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[2]
+                for i in range(3):
+                    initial_state_deviation_rsw[i] = random.gauss(0, dev_uncertainty)
+                perturbation = initial_state_deviation_rsw[0:3]
 
-        # Initial velocity deviation in R, S, and W
-        if run > 0 and (uncertainty in (uncertainties[4], uncertainties[12], uncertainties[22])):
-            for i in range(3):
-                initial_state_deviation_rsw[i+3] = random.gauss(0, multiple_initial_velocity_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[3:6]
-        # Initial velocity R deviation
-        if run > 0 and (uncertainty in (uncertainties[5], uncertainties[13], uncertainties[23])):
-            initial_state_deviation_rsw[3] = random.gauss(0, initial_velocity_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[3]
-        # Initial velocity S deviation
-        if run > 0 and (uncertainty in (uncertainties[6], uncertainties[14], uncertainties[24])):
-            initial_state_deviation_rsw[4] = random.gauss(0, initial_velocity_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[4]
-        # Initial velocity W deviation
-        if run > 0 and (uncertainty in (uncertainties[7], uncertainties[15], uncertainties[25])):
-            initial_state_deviation_rsw[5] = random.gauss(0, initial_velocity_deviation_uncertainty)
-            perturbation = initial_state_deviation_rsw[5]
+            rsw_entries = ['R','S','W']
+            if uncertainty_properties[1] in rsw_entries:
+                if uncertainty_properties[2] in ['ApproachArc', 'FullOrbit']:
+                    dev_uncertainty = single_RSW_initial_position_uncertainty
+                elif uncertainty_properties[2] == 'Entry':
+                    dev_uncertainty = single_RSW_entry_position_uncertainty
+                else: raise Exception('dev_uncertainty undefined')
+
+                rsw_entry = rsw_entries.index(uncertainty_properties[1])
+                initial_state_deviation_rsw[rsw_entry] = random.gauss(0, dev_uncertainty)
+                perturbation = initial_state_deviation_rsw[rsw_entry]
+
+        # Perturb the initial velocity in the RSW frame
+        if run > 0 and uncertainty_properties[0] == 'InitialVelocity':
+            if uncertainty_properties[1] == 'RSW':
+                if uncertainty_properties[2] in ['ApproachArc', 'FullOrbit']:
+                    dev_uncertainty = multiple_RSW_initial_velocity_uncertainty
+                elif uncertainty_properties[2] == 'Entry':
+                    dev_uncertainty = multiple_RSW_entry_velocity_uncertainty
+                else:
+                    raise Exception('dev_uncertainty undefined')
+
+                for i in range(3):
+                    initial_state_deviation_rsw[i+3] = random.gauss(0, dev_uncertainty)
+                perturbation = initial_state_deviation_rsw[3:6]
+
+            rsw_entries = ['R', 'S', 'W']
+            if uncertainty_properties[1] in rsw_entries:
+                if uncertainty_properties[2] in ['ApproachArc', 'FullOrbit']:
+                    dev_uncertainty = single_RSW_initial_velocity_uncertainty
+                elif uncertainty_properties[2] == 'Entry':
+                    dev_uncertainty = single_RSW_entry_velocity_uncertainty
+                else:
+                    raise Exception('dev_uncertainty undefined')
+
+                rsw_entry = rsw_entries.index(uncertainty_properties[1])
+                initial_state_deviation_rsw[rsw_entry+3] = random.gauss(0, dev_uncertainty)
+                perturbation = initial_state_deviation_rsw[rsw_entry+3]
+
+
+        # # Initial position deviation in R, S, and W
+        # # if run > 0 and (uncertainty in (uncertainties[0], uncertainties[8], uncertainties[18])):
+        # if run > 0 and uncertainty_properties[0] == 'InitialPosition' and uncertainty_properties[1] == 'RSW':
+        #     if uncertainty in uncertainties[0]:
+        #         dev_uncertainty = multiple_RSW_initial_position_uncertainty
+        #     elif uncertainty in (uncertainties[8], uncertainties[18]):
+        #         dev_uncertainty = multiple_RSW_entry_position_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     for i in range(3):
+        #         initial_state_deviation_rsw[i] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[0:3]
+        # # Initial position R deviation
+        # if run > 0 and (uncertainty in (uncertainties[1], uncertainties[9], uncertainties[19])):
+        #     if uncertainty in uncertainties[1]:
+        #         dev_uncertainty = single_RSW_initial_position_uncertainty
+        #     elif uncertainty in (uncertainties[9], uncertainties[19]):
+        #         dev_uncertainty = single_RSW_entry_position_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     initial_state_deviation_rsw[0] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[0]
+        # # Initial position S deviation
+        # if run > 0 and (uncertainty in (uncertainties[2], uncertainties[10], uncertainties[20])):
+        #     if uncertainty in uncertainties[2]:
+        #         dev_uncertainty = single_RSW_initial_position_uncertainty
+        #     elif uncertainty in (uncertainties[10], uncertainties[20]):
+        #         dev_uncertainty = single_RSW_entry_position_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     initial_state_deviation_rsw[1] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[1]
+        # # Initial position W deviation
+        # if run > 0 and (uncertainty in (uncertainties[3], uncertainties[11], uncertainties[21])):
+        #     if uncertainty in uncertainties[3]:
+        #         dev_uncertainty = single_RSW_initial_position_uncertainty
+        #     elif uncertainty in (uncertainties[11], uncertainties[21]):
+        #         dev_uncertainty = single_RSW_entry_position_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     initial_state_deviation_rsw[2] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[2]
+        #
+        # # Initial velocity deviation in R, S, and W
+        # if run > 0 and (uncertainty in (uncertainties[4], uncertainties[12], uncertainties[22])):
+        #     if uncertainty in uncertainties[4]:
+        #         dev_uncertainty = multiple_RSW_initial_velocity_uncertainty
+        #     elif uncertainty in (uncertainties[12], uncertainties[22]):
+        #         dev_uncertainty = multiple_RSW_entry_velocity_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     for i in range(3):
+        #         initial_state_deviation_rsw[i+3] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[3:6]
+        # # Initial velocity R deviation
+        # if run > 0 and (uncertainty in (uncertainties[5], uncertainties[13], uncertainties[23])):
+        #     if uncertainty in uncertainties[5]:
+        #         dev_uncertainty = single_RSW_initial_velocity_uncertainty
+        #     elif uncertainty in (uncertainties[13], uncertainties[23]):
+        #         dev_uncertainty = single_RSW_entry_velocity_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     initial_state_deviation_rsw[3] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[3]
+        # # Initial velocity S deviation
+        # if run > 0 and (uncertainty in (uncertainties[6], uncertainties[14], uncertainties[24])):
+        #     if uncertainty in uncertainties[6]:
+        #         dev_uncertainty = single_RSW_initial_velocity_uncertainty
+        #     elif uncertainty in (uncertainties[14], uncertainties[24]):
+        #         dev_uncertainty = single_RSW_entry_velocity_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     initial_state_deviation_rsw[4] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[4]
+        # # Initial velocity W deviation
+        # if run > 0 and (uncertainty in (uncertainties[7], uncertainties[15], uncertainties[25])):
+        #     if uncertainty in uncertainties[7]:
+        #         dev_uncertainty = single_RSW_initial_velocity_uncertainty
+        #     elif uncertainty in (uncertainties[15], uncertainties[25]):
+        #         dev_uncertainty = single_RSW_entry_velocity_uncertainty
+        #     else: raise Exception('dev_uncertainty undefined')
+        #
+        #     initial_state_deviation_rsw[5] = random.gauss(0, dev_uncertainty)
+        #     perturbation = initial_state_deviation_rsw[5]
 
         body_settings = aerocapture_problem.create_body_settings_environment()
 
@@ -211,20 +317,27 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         trajectory_initial_state = Util.get_initial_state(trajectory_parameters[1], atmospheric_entry_altitude,
                                                           trajectory_parameters[0])
         rotation_matrix = frame_conversion.rsw_to_inertial_rotation_matrix(trajectory_initial_state)
-        if run > 0 and (uncertainty in [ uncertainties[i] for i in [0,1,2,3, 8,9,10,11, 18,19,20,21]]):
+        if run > 0 and uncertainty_properties[0] == 'InitialPosition':
             initial_state_deviation_inertial[0:3] = rotation_matrix @ initial_state_deviation_rsw[0:3]
-        elif run > 0 and (uncertainty in [ uncertainties[i] for i in [4,5,6,7, 12,13,14,15, 22,23,24,25]]):
+        elif run > 0 and uncertainty_properties[0] == 'InitialVelocity':
             initial_state_deviation_inertial[3:6] = rotation_matrix @ initial_state_deviation_rsw[3:6]
+
+        # if run > 0 and (uncertainty in [ uncertainties[i] for i in [0,1,2,3, 8,9,10,11, 18,19,20,21]]):
+        #     initial_state_deviation_inertial[0:3] = rotation_matrix @ initial_state_deviation_rsw[0:3]
+        # elif run > 0 and (uncertainty in [ uncertainties[i] for i in [4,5,6,7, 12,13,14,15, 22,23,24,25]]):
+        #     initial_state_deviation_inertial[3:6] = rotation_matrix @ initial_state_deviation_rsw[3:6]
 
         # set initial state perturbation for the aerocapture problem
         aerocapture_problem.set_initial_state_perturbation(initial_state_deviation_inertial)
 
         entry_parameters_perturbation = np.zeros(2)
-        if run > 0 and (uncertainty in (uncertainties[16], uncertainties[26])):
+        # if run > 0 and (uncertainty in (uncertainties[16], uncertainties[26])):
+        if run > 0 and uncertainty_properties[0] == 'FlightPathAngle':
             fpa_deviation = random.gauss(0, entry_fpa_deviation_uncertainty)  # degrees
             entry_parameters_perturbation = np.array([0., fpa_deviation])
             perturbation = fpa_deviation
-        if run > 0 and (uncertainty in (uncertainties[17], uncertainties[27])):
+        # if run > 0 and (uncertainty in (uncertainties[17], uncertainties[27])):
+        if run > 0 and uncertainty_properties[0] == 'VelocityMag':
             entry_velocity_deviation = random.gauss(0, entry_velocity_magnitude_deviation_uncertainty)
             entry_parameters_perturbation = np.array([entry_velocity_deviation, 0.])
             perturbation = entry_velocity_deviation
@@ -250,7 +363,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
             perturbations[run] = perturbation
 
         # Get output path
-        subdirectory = '/UncertaintyAnalysisData/' + uncertainty + '/'
+        subdirectory = uncertainty_analysis_folder + uncertainty + '/'
 
         # Decide if output writing is required
         if write_results_to_file:
@@ -266,7 +379,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
 
     all_results[uncertainty] = simulation_results
     if write_results_to_file:
-        subdirectory = '/UncertaintyAnalysisData/'
+        subdirectory = uncertainty_analysis_folder
         output_path = current_dir + subdirectory
         save2txt(perturbations, 'simulation_results_' + uncertainty + '.dat',output_path)
 
@@ -287,7 +400,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
 
     if actual_arc_to_compute == 1:
         selected_output_interpolation_step = 1  # s
-    elif actual_arc_to_compute == 12:
+    elif actual_arc_to_compute == 12 or actual_arc_to_compute == 2:
         selected_output_interpolation_step = output_interpolation_step/4
     else:
         selected_output_interpolation_step = output_interpolation_step
@@ -296,7 +409,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
     for run in range(1, number_of_runs_per_uncertainty):
         print(f'\nDifference evaluation for run: {run}  -  ' + uncertainty)
         # Get output path
-        output_path = current_dir + '/UncertaintyAnalysisData/' + uncertainty + '/'
+        output_path = current_dir + uncertainty_analysis_folder + uncertainty + '/'
 
         # Set time limits to avoid numerical issues at the boundaries due to the interpolation
         nominal_state_history = simulation_results[0][0]

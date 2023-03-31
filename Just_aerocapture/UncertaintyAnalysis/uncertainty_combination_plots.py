@@ -15,10 +15,12 @@ from UncertaintyStudy_GlobalVariables import *
 from CapsuleEntryUtilities import compare_models, calculate_peak_hfx_and_heat_load, calculate_tps_mass_fraction
 from handle_functions import eccentricity_vector_from_cartesian_state
 
+show_requirement_lines = False
 plot_eccentricity_wrt_final_values = False  # works but makes no sense
-choose_combination_case = 3
-rescale_y_axis_units = 1  # allowed values are 1, 1e3, 1e-3
-rescale_x_axis_units = 1  # allowed values are 1, 1e3, 1e-3
+choose_combination_case = 0
+seed_number = 50  # default 50
+rescale_y_axis_units = 1e-3  # allowed values are 1, 1e3, 1e-3
+rescale_x_axis_units = 1e-3  # allowed values are 1, 1e3, 1e-3
 
 combination_dictionary = {
     'Initial_RSW_Position': [1,2,3],        'Initial_RSW_Velocity': [5,6,7],
@@ -38,6 +40,8 @@ arcs_computed = list(uncertainties_dictionary.values())  # list of corresponding
 combination_to_plot = combination_dictionary[combination_cases[choose_combination_case]]
 
 current_dir = os.path.dirname(__file__)
+uncertainty_analysis_folder = '/UncertaintyAnalysisData_seed' + str(seed_number) + '/'
+
 
 entry_names_y = ['R \;', 'S \;', 'W \;', 'V_R \;', 'V_S \;', 'V_W \;']
 y_axis_measure_units = ['(m)', '(m/s)']
@@ -105,10 +109,10 @@ fig_ecc, axs_ecc = plt.subplots(figsize=(5,6))
 total_entries = len(combination_to_plot)
 for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
     uncert_plot = entry_nr
-    subdirectory = '/UncertaintyAnalysisData/' + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
+    subdirectory = uncertainty_analysis_folder + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
     data_path = current_dir + subdirectory
 
-    perturbations = np.loadtxt(current_dir + f'/UncertaintyAnalysisData/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
+    perturbations = np.loadtxt(current_dir + uncertainty_analysis_folder + f'simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
     number_of_runs = len(perturbations[:,0]) + 1
 
     evaluated_arc = arcs_computed[uncertainty_to_analyze]
@@ -267,11 +271,11 @@ for i in[0,1]:
         # Show the minor grid lines with very faint and almost transparent grey lines
         axs_rsw[i, j].minorticks_on()
         axs_rsw[i, j].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
-        if arc_to_analyze == 1 and position_combination:
-            if j == 0:
-                axs_rsw[i, j].set_xlim(-20000 * rescale_x_axis_units, 20000 * rescale_x_axis_units)
-            else:
-                axs_rsw[i, j].set_xlim(-10000 * rescale_x_axis_units, 10000 * rescale_x_axis_units)
+        # if arc_to_analyze == 1 and position_combination:
+            # if j == 0:
+            #     axs_rsw[i, j].set_xlim(-20000 * rescale_x_axis_units, 20000 * rescale_x_axis_units)
+            # else:
+            #     axs_rsw[i, j].set_xlim(-10000 * rescale_x_axis_units, 10000 * rescale_x_axis_units)
         axs_rsw[i, j].legend()
 fig_rsw.tight_layout()
 
@@ -293,9 +297,10 @@ for i in [0]:  # change if you add other subplots
     axs_ecc.tick_params(axis='both', which='major', labelsize=ticks_size)
     axs_ecc.legend()
 
-axs_ecc.axhline(y=eccentricity_max_error, linestyle='-.', color='firebrick')
-axs_ecc.axhline(y=-eccentricity_max_error, linestyle='-.', color='firebrick')
-axs_ecc.set_ylim(-0.0025, 0.0025)
+if show_requirement_lines:
+    axs_ecc.axhline(y=eccentricity_max_error, linestyle='-.', color='firebrick')
+    axs_ecc.axhline(y=-eccentricity_max_error, linestyle='-.', color='firebrick')
+# axs_ecc.set_ylim(-0.0025, 0.0025)
 
 axs_ecc.set_ylabel(fr'Final eccentricity error  ${time_interval_names[1]}$', fontsize=y_label_size)
 if plot_eccentricity_wrt_final_values:
@@ -311,20 +316,15 @@ fig_ecc.tight_layout()
 
 
 fig_depvar, ax_depvar = plt.subplots(1, 2, figsize=(8, 6))
-# time_interval_names = ['(t_E)', '(t_F)']
-# uncertainties_to_analyze = [9,10,11]
-
-# time_interval_names = ['(t_0)', '(t_E)']
-# uncertainties_to_analyze = [1,2,3]
 
 for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
     uncert_plot = entry_nr
 
-    subdirectory = '/UncertaintyAnalysisData/' + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
+    subdirectory = uncertainty_analysis_folder + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
     data_path = current_dir + subdirectory
 
     perturbations = np.loadtxt(
-        current_dir + f'/UncertaintyAnalysisData/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
+        current_dir + uncertainty_analysis_folder + f'simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
     number_of_runs = len(perturbations[:, 0]) + 1
 
     # evaluated_arc = arcs_computed[uncertainty_to_analyze]
@@ -356,12 +356,10 @@ for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
         final_fpa_difference = -(nominal_end_dependent_variables[5] - current_end_dependent_variables[5])
         final_airspeed_difference = -(nominal_end_dependent_variables[6] - current_end_dependent_variables[6])
 
-        # dependent_variable_end_values[run_number] = np.array([fpa_difference[-1], airspeed_difference[-1]])
         dependent_variable_end_values[run_number] = np.array(
             [final_fpa_difference, final_airspeed_difference])
 
     dependent_variable_end_values_array = np.vstack(list(dependent_variable_end_values.values()))
-
 
     marker = marker_styles[0][entry_nr]
     facecolor = marker_styles[1][entry_nr]
@@ -390,8 +388,8 @@ for i in [0,1]:
     # Show the minor grid lines with very faint and almost transparent grey lines
     ax_depvar[i].minorticks_on()
     ax_depvar[i].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
-    if position_combination:
-        ax_depvar[i].set_xlim(-10000*rescale_x_axis_units,10000*rescale_x_axis_units)
+    # if position_combination:
+    #     ax_depvar[i].set_xlim(-10000*rescale_x_axis_units,10000*rescale_x_axis_units)
     ax_depvar[i].legend()
 fig_depvar.suptitle(fr'Impact of ${xlabel} \, {time_interval_names[0]} $ on the final $\gamma$ and Airspeed ${time_interval_names[1]}$)', fontsize=suptitle_size)
 fig_depvar.tight_layout()
@@ -401,11 +399,11 @@ fig_hfx, ax_hfx = plt.subplots(2, 2, figsize=(8, 8))
 for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
     uncert_plot = entry_nr
 
-    subdirectory = '/UncertaintyAnalysisData/' + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
+    subdirectory = uncertainty_analysis_folder + uncertainties[uncertainty_to_analyze] + '/'  # it can be 0, 1, 2
     data_path = current_dir + subdirectory
 
     perturbations = np.loadtxt(
-        current_dir + f'/UncertaintyAnalysisData/simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
+        current_dir + uncertainty_analysis_folder + f'simulation_results_{uncertainties[uncertainty_to_analyze]}.dat')
     number_of_runs = len(perturbations[:, 0]) + 1
 
     nominal_heat_fluxes_np = np.loadtxt(data_path + 'heat_fluxes_history_' + str(0) + '.dat')
@@ -459,10 +457,7 @@ for entry_nr, uncertainty_to_analyze in enumerate(combination_to_plot):
 
     heat_fluxes_values_array = np.vstack(list(heat_fluxes_values_dictionary.values()))
 
-
-
     heat_fluxes_rescaling = np.array([1e-3, 1, 1e-3, 1e-6])
-
     for i in range(2):
         for j in range(2):
             ax_hfx[i, j].scatter(perturbations[:, 1]*rescale_x_axis_units,
@@ -489,11 +484,12 @@ for i in range(2):
         ax_hfx[i, j].set_xlabel(fr'${xlabel} \, {time_interval_names[0]}$ ' + x_axis_measure_unit,
                                 fontsize=x_label_size)
 
-ax_hfx[1,0].axhline(y=peak_heat_flux_max_error, linestyle='-.', color='firebrick')
-ax_hfx[1,0].axhline(y=-peak_heat_flux_max_error, linestyle='-.', color='firebrick')
+if show_requirement_lines:
+    ax_hfx[1,0].axhline(y=peak_heat_flux_max_error, linestyle='-.', color='firebrick')
+    ax_hfx[1,0].axhline(y=-peak_heat_flux_max_error, linestyle='-.', color='firebrick')
 
-ax_hfx[1,1].axhline(y=heat_load_max_error, linestyle='-.', color='firebrick')
-ax_hfx[1,1].axhline(y=-heat_load_max_error, linestyle='-.', color='firebrick')
+    ax_hfx[1,1].axhline(y=heat_load_max_error, linestyle='-.', color='firebrick')
+    ax_hfx[1,1].axhline(y=-heat_load_max_error, linestyle='-.', color='firebrick')
 
 
 

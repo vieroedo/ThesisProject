@@ -62,23 +62,32 @@ class AerocaptureNumericalProblem:
             self._stop_before_aerocapture = True
             self._start_at_entry_interface = False
             self._stop_after_aerocapture = False
+            # self._start_at_exit_interface = False
         elif self.arc_to_compute == 1:
             self._stop_before_aerocapture = False
             self._start_at_entry_interface = True
             self._stop_after_aerocapture = True
+            # self._start_at_exit_interface = False
         elif self.arc_to_compute == 12:
             self._stop_before_aerocapture = False
             self._start_at_entry_interface = True
             self._stop_after_aerocapture = False
+            # self._start_at_exit_interface = False
+        # elif self.arc_to_compute == 2:
+        #     self._stop_before_aerocapture = False
+        #     self._start_at_entry_interface = False
+        #     self._stop_after_aerocapture = False
+        #     self._start_at_exit_interface = True
         elif self.arc_to_compute == -1:
             self._stop_before_aerocapture = False
             self._start_at_entry_interface = False
             self._stop_after_aerocapture = False
+            # self._start_at_exit_interface = False
         else:
             raise Exception(f'Wrong parameter inserted for the arc to compute ({self.arc_to_compute}). '
-                            f'Allowed values are -1, 0 and 1. (Default: -1)')
+                            f'Allowed values are -1, 0, 1, 12, and 2. (Default: -1)')
 
-        if (self.arc_to_compute == 0 or self.arc_to_compute == 1 or self.arc_to_compute == 12) and self.galileo_mission_case:
+        if self.arc_to_compute != -1 and self.galileo_mission_case:
             raise Exception('Incompatible combination of arguments. '
                             'Cannot compute just a part of the Galileo trajectory. '
                             'Leave the argument arc_to_compute unexpressed, or set it to the default value. '
@@ -112,6 +121,10 @@ class AerocaptureNumericalProblem:
     @property
     def stop_after_aerocapture(self):
         return self._stop_after_aerocapture
+
+    # @property
+    # def start_at_exit_interface(self):
+    #     return self._start_at_exit_interface
 
     def get_last_run_propagated_cartesian_state_history(self) -> dict:
         """
@@ -314,6 +327,7 @@ class AerocaptureNumericalProblem:
                                                            model_choice=self.environment_model,
                                                            galileo_propagator_settings=self.galileo_mission_case,
                                                            start_at_entry_interface=self._start_at_entry_interface)
+                                                           # start_at_exit_interface=self._start_at_exit_interface)
         return propagator_settings
 
     def create_termination_settings(self, entry_fpa=0., bodies=None):
@@ -396,6 +410,10 @@ class AerocaptureNumericalProblem:
             print_dependent_variable_data = False)
 
         self.dynamics_simulator_function = lambda: dynamics_simulator
+
+        # if self._stop_after_aerocapture:
+        #     state_history_final_state = list(dynamics_simulator.state_history.values())[-1]
+        #     self.entry_interface_nominal_state = state_history_final_state
 
         # Add the objective and constraint values into the fitness vector
         fitness = 0.0

@@ -111,6 +111,7 @@ def get_initial_state(atmosphere_entry_fpa: float,
                       perturb_fpa: float = 0.,
                       perturb_entry_velocity_magnitude: float = 0.,
                       start_at_entry_interface: bool = False,
+                      # start_at_exit_interface: bool = False,
                       verbose: bool = False) -> np.ndarray:
     """
     Calculates the initial state given the initial distance and speed, and the arrival fpa.
@@ -137,6 +138,9 @@ def get_initial_state(atmosphere_entry_fpa: float,
     if perturb_entry_velocity_magnitude != 0. and not start_at_entry_interface:
         warnings.warn('Warning: you are calculating a wrong initial state!'
                       'Entry velocity magnitude perturation might not work well under these conditions.')
+
+    # if start_at_exit_interface:
+
 
     arrival_fpa_deg = atmosphere_entry_fpa + perturb_fpa
     # Problem parameters
@@ -495,6 +499,7 @@ def get_propagator_settings(atm_entry_fpa: float,
                             entry_parameters_perturbation=np.zeros(2),
                             galileo_propagator_settings: bool = False,
                             start_at_entry_interface: bool = False,
+                            # start_at_exit_interface: bool = False,
                             model_choice: int = 0,
                             verbose: bool = False):
     """
@@ -572,6 +577,7 @@ def get_propagator_settings(atm_entry_fpa: float,
     # Retrieve initial state
     initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel,
                                       start_at_entry_interface=start_at_entry_interface,
+                                      # start_at_exit_interface=start_at_exit_interface,
                                       perturb_entry_velocity_magnitude=entry_parameters_perturbation[0],
                                       perturb_fpa=entry_parameters_perturbation[1],
                                       verbose=verbose) \
@@ -1052,7 +1058,7 @@ def compare_models(first_model: dict,
     second_interpolator = interpolators.create_one_dimensional_vector_interpolator(
         second_model, interpolator_settings)
     # Calculate the difference between the first and second model at specific epochs
-    model_difference = {epoch: second_interpolator.interpolate(epoch) - first_interpolator.interpolate(epoch)
+    model_difference = {epoch: - second_interpolator.interpolate(epoch) + first_interpolator.interpolate(epoch)
                         for epoch in interpolation_epochs}
     # Write results to files
     if output_path is not None:

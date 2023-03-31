@@ -723,4 +723,17 @@ if plot_galileo_tabulated_data:
         ax_gm[k].set_ylabel(y_labels[k])
     ax_gm[-1].set_xlabel('elapsed time [s]')
 
+
+high_radiation_altitude_cells = np.where(altitude < Util.galilean_moons_data['Ganymede']['SMA'])
+very_high_rad_cells = np.where(altitude < Util.galilean_moons_data['Io']['SMA'])
+
+high_radiation_epochs = epochs_vector[high_radiation_altitude_cells]
+very_high_radiation_epochs = epochs_vector[very_high_rad_cells]
+
+# high_radiation_areas_elapsed_time = (high_radiation_epochs[-1] - high_radiation_epochs[0]) / constants.JULIAN_DAY
+high_radiation_areas_elapsed_time = (very_high_radiation_epochs[0] - high_radiation_epochs[0]) / constants.JULIAN_DAY *2
+very_high_rad_elapsed_time = (very_high_radiation_epochs[-1] - very_high_radiation_epochs[0]) / constants.JULIAN_DAY
+
+print(f'The spacecraft passes {high_radiation_areas_elapsed_time} days in the high radiation area, and {very_high_rad_elapsed_time} days in the very high rad area')
+
 plt.show()
