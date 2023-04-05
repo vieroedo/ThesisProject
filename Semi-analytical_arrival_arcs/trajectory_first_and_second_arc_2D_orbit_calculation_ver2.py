@@ -16,7 +16,7 @@ first_arc_arrival_epoch_days = 11293.  # days
 # (Consider moving to related script in case other ones using this library need different parameters)
 
 # Atmospheric entry conditions
-arrival_pericenter_altitude = 2000e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+arrival_pericenter_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -3.  # degrees
 
 # Jupiter arrival conditions
@@ -101,9 +101,9 @@ if not skip_regula_falsi:
                                               arc_1_initial_radius=first_arc_departure_radius,
                                               delta_hoh=delta_angle_from_hohmann_trajectory,
                                               arc_2_final_radius=second_arc_arrival_radius,
-                                              mu_moon=mu_moon,
-                                              moon_SOI=moon_SOI_radius,
-                                              moon_state_at_flyby=moon_flyby_state)
+                                              flyby_moon=choose_flyby_moon,
+                                              flyby_epoch=moon_epoch_of_flyby
+                                              )
 
     f_a = fpa_a - flight_path_angle_at_atmosphere_entry
 
@@ -112,9 +112,9 @@ if not skip_regula_falsi:
                                               arc_1_initial_radius=first_arc_departure_radius,
                                               delta_hoh=delta_angle_from_hohmann_trajectory,
                                               arc_2_final_radius=second_arc_arrival_radius,
-                                              mu_moon=mu_moon,
-                                              moon_SOI=moon_SOI_radius,
-                                              moon_state_at_flyby=moon_flyby_state)
+                                              flyby_moon=choose_flyby_moon,
+                                              flyby_epoch=moon_epoch_of_flyby
+                                              )
 
     f_b = fpa_b - flight_path_angle_at_atmosphere_entry
 
@@ -135,9 +135,9 @@ if not skip_regula_falsi:
                                                   arc_1_initial_radius=first_arc_departure_radius,
                                                   delta_hoh=delta_angle_from_hohmann_trajectory,
                                                   arc_2_final_radius=second_arc_arrival_radius,
-                                                  mu_moon=mu_moon,
-                                                  moon_SOI=moon_SOI_radius,
-                                                  moon_state_at_flyby=moon_flyby_state)
+                                                  flyby_moon=choose_flyby_moon,
+                                                  flyby_epoch=moon_epoch_of_flyby
+                                                  )
         f_c = fpa_c - flight_path_angle_at_atmosphere_entry
 
         if abs(f_c) < tolerance:

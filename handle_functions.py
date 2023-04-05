@@ -330,14 +330,27 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
                                       arc_1_initial_radius: float,
                                       delta_hoh: float,
                                       arc_2_final_radius: float,
-                                      mu_moon: float,
-                                      moon_SOI: float,
-                                      moon_state_at_flyby: np.ndarray,
-                                      moon_radius: float = 0.,
+                                      flyby_moon,
+                                      flyby_epoch
+                                      # mu_moon: float,
+                                      # moon_SOI: float,
+                                      # moon_state_at_flyby: np.ndarray,
+                                      # moon_radius: float = 0.,
                                       ) -> float:
 
-    moon_position = moon_state_at_flyby[0:3]
-    moon_velocity = moon_state_at_flyby[3:6]
+    moon_flyby_state = spice_interface.get_body_cartesian_state_at_epoch(
+        target_body_name=flyby_moon,
+        observer_body_name="Jupiter",
+        reference_frame_name=global_frame_orientation,
+        aberration_corrections="NONE",
+        ephemeris_time=flyby_epoch)
+
+    moon_position = moon_flyby_state[0:3]
+    moon_velocity = moon_flyby_state[3:6]
+
+    mu_moon = galilean_moons_data[flyby_moon]['mu']
+    moon_SOI = galilean_moons_data[flyby_moon]['SOI_Radius']
+    moon_radius = galilean_moons_data[flyby_moon]['Radius']
 
     orbit_axis = unit_vector(np.cross(moon_position, moon_velocity))
     flyby_initial_position = rotate_vectors_by_given_matrix(rotation_matrix(orbit_axis, -sigma_angle), unit_vector(moon_velocity)) * moon_SOI
