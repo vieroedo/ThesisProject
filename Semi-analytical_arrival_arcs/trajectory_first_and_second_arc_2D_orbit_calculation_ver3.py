@@ -16,7 +16,7 @@ first_arc_arrival_epoch_days = 11293.  # days
 # (Consider moving to related script in case other ones using this library need different parameters)
 
 # Atmospheric entry conditions
-arrival_pericenter_altitude = 2000e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+arrival_pericenter_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -3.  # degrees
 
 # Jupiter arrival conditions

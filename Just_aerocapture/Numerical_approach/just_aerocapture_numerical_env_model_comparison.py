@@ -19,12 +19,18 @@ from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.math import interpolators
 
 # Problem-specific imports
+from JupiterTrajectory_GlobalParameters import *
 import CapsuleEntryUtilities as Util
+import class_AerocaptureNumericalProblem as ae_model
+
 
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
 fly_galileo = True
+
+integrator_settings_index = -4
+
 
 
 use_benchmark = True
@@ -74,6 +80,9 @@ maximum_duration = 85 * constants.JULIAN_DAY  # s
 # Set vehicle properties
 # capsule_density = 250.0  # kg m-3
 
+decision_variable_range = [[0.],
+                           [0.]]
+
 
 ###########################################################################
 # CREATE ENVIRONMENT ######################################################
@@ -93,6 +102,10 @@ simulation_results = dict()
 output_interpolation_step = constants.JULIAN_DAY  # s
 
 for model_test in range(number_of_models):
+
+    aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
+                                                               model_test, integrator_settings_index,
+                                                               fly_galileo=fly_galileo, arc_to_compute=-1,)
 
     # Define settings for celestial bodies
     bodies_to_create = ['Jupiter']
