@@ -17,10 +17,10 @@ from handle_functions import eccentricity_vector_from_cartesian_state
 
 show_requirement_lines = False
 plot_eccentricity_wrt_final_values = False  # works but makes no sense
-choose_combination_case = 0
+choose_combination_case = 5
 seed_number = 50  # default 50
 rescale_y_axis_units = 1e-3  # allowed values are 1, 1e3, 1e-3
-rescale_x_axis_units = 1e-3  # allowed values are 1, 1e3, 1e-3
+rescale_x_axis_units = 1  # allowed values are 1, 1e3, 1e-3
 
 combination_dictionary = {
     'Initial_RSW_Position': [1,2,3],        'Initial_RSW_Velocity': [5,6,7],

@@ -26,10 +26,10 @@ from UncertaintyStudy_GlobalVariables import *
 
 # SET PARAMETERS:  arc 0: from 0 to 7   arc 1: from 8 to 17   arc 12: from 18 to 27
 uncertainty_to_analyze = 0
-seed_number = 50  # default 50
+seed_number = 100  # default 50
 
-rescale_y_axis_units = 1e-3  # allowed values are 1, 1e3 (mm/s), 1e-3 (km/s)
-rescale_x_axis_units = 1e-3  # allowed values are 1, 1e3 (mm),   1e-3 (km)
+rescale_y_axis_units = 1  # allowed values are 1, 1e3 (mm/s), 1e-3 (km/s)
+rescale_x_axis_units = 1  # allowed values are 1, 1e3 (mm),   1e-3 (km)
 
 
 # # from 0 to 3

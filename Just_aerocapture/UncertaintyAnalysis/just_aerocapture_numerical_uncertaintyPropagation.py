@@ -29,7 +29,7 @@ from UncertaintyStudy_GlobalVariables import *
 
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
-seed_number = 100  # default 50
+seed_number = 50  # default 50
 
 just_evaluate_some_uncertainties = False
 
