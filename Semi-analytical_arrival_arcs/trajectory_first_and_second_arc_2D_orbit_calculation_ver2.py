@@ -93,66 +93,16 @@ second_arc_arrival_radius = jupiter_radius + arrival_pericenter_altitude
 # REGULA FALSI #########################################################################################################
 
 if not skip_regula_falsi:
-    interval_left_boundary_a = 0.
-    interval_right_boundary_b = np.pi
-
-    fpa_a = calculate_fpa_from_flyby_geometry(sigma_angle=interval_left_boundary_a,
-                                              arc_1_initial_velocity=first_arc_departure_velocity,
-                                              arc_1_initial_radius=first_arc_departure_radius,
-                                              delta_hoh=delta_angle_from_hohmann_trajectory,
-                                              arc_2_final_radius=second_arc_arrival_radius,
-                                              flyby_moon=choose_flyby_moon,
-                                              flyby_epoch=moon_epoch_of_flyby
-                                              )
-
-    f_a = fpa_a - flight_path_angle_at_atmosphere_entry
-
-    fpa_b = calculate_fpa_from_flyby_geometry(sigma_angle=interval_right_boundary_b,
-                                              arc_1_initial_velocity=first_arc_departure_velocity,
-                                              arc_1_initial_radius=first_arc_departure_radius,
-                                              delta_hoh=delta_angle_from_hohmann_trajectory,
-                                              arc_2_final_radius=second_arc_arrival_radius,
-                                              flyby_moon=choose_flyby_moon,
-                                              flyby_epoch=moon_epoch_of_flyby
-                                              )
-
-    f_b = fpa_b - flight_path_angle_at_atmosphere_entry
-
-    if f_a * f_b > 0:
-        raise Exception('Interval has either zero or multiple zeroes')
-
-    a_int = interval_left_boundary_a
-    b_int = interval_right_boundary_b
-
-    tolerance = 1e-5
-    max_iter = 200
-    i = 0
-    for i in range(max_iter):
-        c_point = (a_int * f_b - b_int * f_a) / (f_b - f_a)
-
-        fpa_c = calculate_fpa_from_flyby_geometry(sigma_angle=c_point,
-                                                  arc_1_initial_velocity=first_arc_departure_velocity,
-                                                  arc_1_initial_radius=first_arc_departure_radius,
-                                                  delta_hoh=delta_angle_from_hohmann_trajectory,
-                                                  arc_2_final_radius=second_arc_arrival_radius,
-                                                  flyby_moon=choose_flyby_moon,
-                                                  flyby_epoch=moon_epoch_of_flyby
-                                                  )
-        f_c = fpa_c - flight_path_angle_at_atmosphere_entry
-
-        if abs(f_c) < tolerance:
-            # Root found
-            break
-
-        if f_a * f_c > 0:
-            a_int = c_point
-            f_a = f_c
-        else:
-            b_int = c_point
-            f_b = f_c
-
-
-    # Found root
+    tolerance = 1e-12
+    c_point, f_c, i = regula_falsi_illinois((0.,np.pi),calculate_fpa_from_flyby_geometry,
+                                                     flight_path_angle_at_atmosphere_entry, tolerance, illinois_addition=True,
+                                                     arc_1_initial_velocity=first_arc_departure_velocity,
+                                                     arc_1_initial_radius=first_arc_departure_radius,
+                                                     delta_hoh=delta_angle_from_hohmann_trajectory,
+                                                     arc_2_final_radius=second_arc_arrival_radius,
+                                                     flyby_moon=choose_flyby_moon,
+                                                     flyby_epoch=moon_epoch_of_flyby
+                                                     )
     sigma_angle = c_point
     calculated_fpa = f_c + flight_path_angle_at_atmosphere_entry
 
@@ -212,8 +162,35 @@ flyby_final_position = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis
 
 flyby_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, flyby_alpha_angle), flyby_initial_velocity_vector)
 
-second_arc_departure_position = moon_position + flyby_final_position
-second_arc_departure_velocity_vector = moon_velocity + flyby_final_velocity_vector
+flyby_pericenter = mu_moon / (flyby_v_inf_t ** 2) * (
+                np.sqrt(1 + (B_parameter ** 2 * flyby_v_inf_t ** 4) / (mu_moon ** 2)) - 1)
+flyby_altitude = flyby_pericenter - moon_radius
+if flyby_altitude < 0:
+    print(f'Flyby impact! Altitude: {flyby_altitude / 1e3} km     Sigma: {sigma_angle * 180 / np.pi} deg')
+#     arc_2_final_fpa = arc_2_final_fpa + 1000
+flyby_orbital_energy = orbital_energy(LA.norm(flyby_initial_position), flyby_v_inf_t, mu_parameter=mu_moon)
+flyby_sma = - mu_moon/(2*flyby_orbital_energy)
+flyby_eccentricity = 1 - flyby_pericenter/flyby_sma
+
+true_anomaly_boundary = 2 * np.pi - delta_angle + beta_angle
+true_anomaly_boundary = true_anomaly_boundary if true_anomaly_boundary < 2* np.pi else true_anomaly_boundary - 2*np.pi
+true_anomaly_range = np.array([-true_anomaly_boundary, true_anomaly_boundary])
+flyby_elapsed_time = delta_t_from_delta_true_anomaly(true_anomaly_range,
+                                                     eccentricity=flyby_eccentricity,
+                                                     semi_major_axis=flyby_sma,
+                                                     mu_parameter=mu_moon)
+flyby_final_epoch = moon_epoch_of_flyby + flyby_elapsed_time
+moon_flyby_final_state = spice_interface.get_body_cartesian_state_at_epoch(
+    target_body_name=choose_flyby_moon,
+    observer_body_name="Jupiter",
+    reference_frame_name=global_frame_orientation,
+    aberration_corrections="NONE",
+    ephemeris_time=flyby_final_epoch)
+moon_final_position = moon_flyby_final_state[0:3]
+moon_final_velocity = moon_flyby_final_state[3:6]
+
+second_arc_departure_position = moon_final_position + flyby_final_position
+second_arc_departure_velocity_vector = moon_final_velocity + flyby_final_velocity_vector
 
 second_arc_departure_radius = LA.norm(second_arc_departure_position)
 second_arc_departure_velocity = LA.norm(second_arc_departure_velocity_vector)
@@ -292,6 +269,7 @@ true_anomaly_limit = true_anomaly_from_radius(moon_SOI_radius, flyby_eccentricit
 true_anomaly_range = np.array([-true_anomaly_limit, true_anomaly_limit])
 delta_t_flyby = delta_t_from_delta_true_anomaly(true_anomaly_range, flyby_eccentricity, flyby_sma, mu_moon)
 print(f'\nFlyby elapsed time: {delta_t_flyby/3600} hrs')
+print(f'\nFlyby elapsed time check: {flyby_elapsed_time/3600} hrs') # It worksss
 
 flyby_pericenter_position = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, beta_angle), -unit_vector(moon_velocity)) * flyby_pericenter
 

@@ -94,6 +94,7 @@ def cartesian_2d_from_polar(r, theta):
     y = r * np.sin(theta)
     return x, y
 
+
 def cartesian_3d_from_polar(r, latitude, longitude):
     # singularity per latitude 90 degrees
     x = r * np.cos(latitude) * np.cos(longitude)
@@ -102,21 +103,41 @@ def cartesian_3d_from_polar(r, latitude, longitude):
     return x, y, z
 
 
+def longitude_from_cartesian(position_state: np.ndarray, verbose: bool = True):
+    if len(position_state) != 3:
+        raise Exception("wrong vector length")
+    if position_state[2] != 0:
+        position_state[2] = 0
+        if verbose:
+            warnings.warn("z component adjusted, you didnt input an equatorial vector")
+    vector_normal_axis = np.cross(x_axis, position_state)
+    is_positive = True if np.dot(vector_normal_axis,z_axis) > 0 else False
+    longitude = np.arccos(np.dot(x_axis, unit_vector(position_state)))
+    if is_positive:
+        return longitude
+    else:
+        return - longitude
+
+
 ########################################################################################################################
 # ASTRODYNAMICS HELPER FUNCTIONS #######################################################################################
 ########################################################################################################################
 
 
-def orbital_energy(radius: float, velocity: float):
-    return velocity ** 2 / 2 - jupiter_gravitational_parameter / radius
+def orbital_energy(radius: float, velocity: float, mu_parameter:float):
+    return velocity ** 2 / 2 - mu_parameter / radius
+
+def angular_momentum(radius:float, velocity:float, flight_path_angle:float):
+    angular_momentum = radius * velocity * np.cos(flight_path_angle)
+    return angular_momentum
 
 
-def velocity_from_energy(energy: float, radius: float):
-    return np.sqrt(2 * (energy + jupiter_gravitational_parameter / radius))
+def velocity_from_energy(energy: float, radius: float, mu_parameter:float):
+    return np.sqrt(2 * (energy + mu_parameter / radius))
 
 
 def true_anomaly_from_radius(radius,eccentricity,sma):
-    """ WARNING: the solutions of ths function are 2! +theta and -theta"""
+    """ WARNING: the solutions of ths function are 2! +theta and -theta, but only +theta is retrieved"""
     theta = np.arccos(np.clip(1/eccentricity * (sma*(1-eccentricity**2)/radius - 1), -1, 1))
     return theta
 
@@ -331,7 +352,8 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
                                       delta_hoh: float,
                                       arc_2_final_radius: float,
                                       flyby_moon,
-                                      flyby_epoch
+                                      flyby_epoch,
+                                      equatorial_approximation: bool = False
                                       # mu_moon: float,
                                       # moon_SOI: float,
                                       # moon_state_at_flyby: np.ndarray,
@@ -347,6 +369,10 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
 
     moon_position = moon_flyby_state[0:3]
     moon_velocity = moon_flyby_state[3:6]
+
+    if equatorial_approximation:
+        moon_position[2] = 0.
+        moon_velocity[2] = 0.
 
     mu_moon = galilean_moons_data[flyby_moon]['mu']
     moon_SOI = galilean_moons_data[flyby_moon]['SOI_Radius']
@@ -388,7 +414,7 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     #     delta_minus_2pi = - delta_minus_2pi + 2 * np.pi
     # delta_angle = 2 * np.pi - delta_minus_2pi
 
-    delta_angle = np.arccos(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)))
+    delta_angle = np.arccos(np.clip(np.dot(unit_vector(-moon_velocity), unit_vector(flyby_initial_position)), -1, 1))
     if np.dot(np.cross(-moon_velocity, flyby_initial_position), flyby_axis) < 0:
         delta_angle = 2 * np.pi - delta_angle
 
@@ -409,8 +435,39 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
 
     flyby_final_velocity_vector = rotate_vectors_by_given_matrix(rotation_matrix(flyby_axis, alpha_angle), flyby_initial_velocity_vector)
 
-    arc_2_departure_position = moon_position + flyby_final_position
-    arc_2_departure_velocity_vector = moon_velocity + flyby_final_velocity_vector
+    flyby_pericenter = mu_moon / (flyby_v_inf_t ** 2) * (
+                np.sqrt(1 + (B_parameter ** 2 * flyby_v_inf_t ** 4) / (mu_moon ** 2)) - 1)
+    flyby_altitude = flyby_pericenter - moon_radius
+    if flyby_altitude < 0:
+        print(f'Flyby impact! Altitude: {flyby_altitude / 1e3} km     Sigma: {sigma_angle * 180 / np.pi} deg')
+        return -1
+    #     arc_2_final_fpa = arc_2_final_fpa + 1000
+    flyby_orbital_energy = orbital_energy(LA.norm(flyby_initial_position), flyby_v_inf_t, mu_parameter=mu_moon)
+    flyby_sma = - mu_moon/(2*flyby_orbital_energy)
+    flyby_eccentricity = 1 - flyby_pericenter/flyby_sma
+
+    true_anomaly_boundary = 2 * np.pi - delta_angle + beta_angle
+    true_anomaly_boundary = true_anomaly_boundary if true_anomaly_boundary < 2* np.pi else true_anomaly_boundary - 2*np.pi
+    true_anomaly_range = np.array([-true_anomaly_boundary, true_anomaly_boundary])
+    flyby_elapsed_time = delta_t_from_delta_true_anomaly(true_anomaly_range,
+                                                         eccentricity=flyby_eccentricity,
+                                                         semi_major_axis=flyby_sma,
+                                                         mu_parameter=mu_moon)
+    flyby_final_epoch = flyby_epoch + flyby_elapsed_time
+    moon_flyby_final_state = spice_interface.get_body_cartesian_state_at_epoch(
+        target_body_name=flyby_moon,
+        observer_body_name="Jupiter",
+        reference_frame_name=global_frame_orientation,
+        aberration_corrections="NONE",
+        ephemeris_time=flyby_final_epoch)
+    moon_final_position = moon_flyby_final_state[0:3]
+    moon_final_velocity = moon_flyby_final_state[3:6]
+    if equatorial_approximation:
+        moon_final_position[2] = 0.
+        moon_final_velocity[2] = 0.
+
+    arc_2_departure_position = moon_final_position + flyby_final_position
+    arc_2_departure_velocity_vector = moon_final_velocity + flyby_final_velocity_vector
 
     arc_2_departure_radius = LA.norm(arc_2_departure_position)
     arc_2_departure_velocity = LA.norm(arc_2_departure_velocity_vector)
@@ -421,14 +478,6 @@ def calculate_fpa_from_flyby_geometry(sigma_angle: float,
     arc_2_arrival_velocity = np.sqrt(2 * (arc_2_energy + jupiter_gravitational_parameter / arc_2_final_radius))
 
     arc_2_final_fpa = - np.arccos(np.clip(arc_2_h/(arc_2_final_radius * arc_2_arrival_velocity), -1, 1))
-
-    root_argument = 1 + (B_parameter ** 2 * flyby_v_inf_t ** 4) / (mu_moon ** 2)
-    flyby_pericenter = mu_moon / (flyby_v_inf_t ** 2) * (np.sqrt(root_argument) - 1)
-    flyby_altitude = flyby_pericenter - moon_radius
-    if flyby_altitude < 0:
-        print(f'Flyby impact! Altitude: {flyby_altitude/1e3} km     Sigma: {sigma_angle*180/np.pi} deg')
-        return -1
-    #     arc_2_final_fpa = arc_2_final_fpa + 1000
 
     return arc_2_final_fpa
 
@@ -937,6 +986,15 @@ def convective_heat_flux_girija(density, velocity, radius):
     convective_hfx = k_constant * (density/radius)**0.5 * velocity**3
     return convective_hfx
 
+
+def entry_velocity_from_interplanetary(interplanetary_arrival_velocity_in_jupiter_frame):
+    pre_ae_departure_radius = jupiter_SOI_radius
+    pre_ae_departure_velocity_norm = interplanetary_arrival_velocity_in_jupiter_frame
+    pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure_velocity_norm)
+    pre_ae_arrival_radius = jupiter_radius + atmospheric_entry_altitude
+    pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius)
+    return pre_ae_arrival_velocity_norm
+
 ########################################################################################################################
 # ZERO-FINDING METHODS #################################################################################################
 ########################################################################################################################
@@ -947,6 +1005,7 @@ def regula_falsi_illinois(interval_boundaries: tuple,
                           zero_value: float = 0.,
                           tolerance: float = 1e-15,
                           max_iter: int = 1000,
+                          illinois_addition: bool = True,
                           **kwargs) -> tuple:
 
     a_int, b_int = interval_boundaries[0], interval_boundaries[1]
@@ -969,8 +1028,8 @@ def regula_falsi_illinois(interval_boundaries: tuple,
             # Root found
             break
 
-        if f_c < 0:
-            if ass_a:
+        if f_a * f_c > 0:
+            if ass_a and illinois_addition:
                 # m_ab = 1 - f_c / f_a
                 # if m_ab < 0:
                 m_ab = 0.5
@@ -979,8 +1038,8 @@ def regula_falsi_illinois(interval_boundaries: tuple,
             f_a = f_c
             ass_a, ass_b = True, False
 
-        if f_c > 0:
-            if ass_b:
+        if f_b * f_c > 0:
+            if ass_b and illinois_addition:
                 # m_ab = 1-f_c/f_b
                 # if m_ab < 0:
                 m_ab = 0.5

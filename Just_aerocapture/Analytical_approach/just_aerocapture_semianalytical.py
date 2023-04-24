@@ -5,7 +5,7 @@ The orbit is planar and flybys occur at the center of mass of the moons
 
 do_regula_falsi_function_debugging = False
 
-choose_equations_order = 1
+choose_equations_order = 2
 
 # PROBLEM PARAMETERS ###################################################################################################
 # (Consider moving to related script in case other ones using this library need different parameters)
@@ -36,10 +36,10 @@ second_arc_number_of_points = number_of_epochs_to_plot
 pre_ae_departure_radius = jupiter_SOI_radius
 pre_ae_departure_velocity_norm = interplanetary_arrival_velocity_in_jupiter_frame
 
-pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure_velocity_norm)
+pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure_velocity_norm, jupiter_gravitational_parameter)
 
 pre_ae_arrival_radius = jupiter_radius + arrival_pericenter_altitude
-pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius)
+pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius, jupiter_gravitational_parameter)
 
 pre_ae_angular_momentum_norm = pre_ae_arrival_radius * pre_ae_arrival_velocity_norm * np.cos(flight_path_angle_at_atmosphere_entry)
 pre_ae_angular_momentum = z_axis * pre_ae_angular_momentum_norm
@@ -50,8 +50,8 @@ pre_ae_eccentricity = np.sqrt(1 - pre_ae_semilatus_rectum / pre_ae_semimajor_axi
 
 pre_ae_arrival_position = x_axis * pre_ae_arrival_radius
 
-initial_state_vector = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
-                                              interplanetary_arrival_velocity_in_jupiter_frame, verbose=True)
+# initial_state_vector = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
+#                                               interplanetary_arrival_velocity_in_jupiter_frame, verbose=True)
 
 # AEROCAPTURE ##########################################################################################################
 
@@ -103,7 +103,7 @@ p_ae_departure_fpa = atmospheric_exit_fpa
 p_ae_departure_radius = pre_ae_arrival_radius
 p_ae_departure_position = atmospheric_entry_final_position
 
-p_ae_orbital_energy = orbital_energy(p_ae_departure_radius, p_ae_departure_velocity_norm)
+p_ae_orbital_energy = orbital_energy(p_ae_departure_radius, p_ae_departure_velocity_norm, jupiter_gravitational_parameter)
 
 p_ae_orbital_axis = z_axis
 

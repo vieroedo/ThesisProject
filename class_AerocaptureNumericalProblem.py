@@ -225,7 +225,7 @@ class AerocaptureNumericalProblem:
         self.bodies_function = lambda: bodies
 
     def create_body_settings_environment(self):
-        bodies_to_create = ['Jupiter']
+        bodies_to_create = ['Jupiter', 'Sun']
         global_frame_origin = 'Jupiter'
         global_frame_orientation = 'ECLIPJ2000'
 

@@ -16,9 +16,9 @@ from tudatpy.kernel import numerical_simulation
 def entry_velocity_from_interplanetary(interplanetary_arrival_velocity_in_jupiter_frame):
     pre_ae_departure_radius = jupiter_SOI_radius
     pre_ae_departure_velocity_norm = interplanetary_arrival_velocity_in_jupiter_frame
-    pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure_velocity_norm)
-    pre_ae_arrival_radius = jupiter_radius + Util.atmospheric_entry_altitude
-    pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius)
+    pre_ae_orbital_energy = orbital_energy(pre_ae_departure_radius, pre_ae_departure_velocity_norm, jupiter_gravitational_parameter)
+    pre_ae_arrival_radius = jupiter_radius + atmospheric_entry_altitude
+    pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius, jupiter_gravitational_parameter)
     return pre_ae_arrival_velocity_norm
 
 
@@ -27,10 +27,9 @@ class AerocaptureSemianalyticalModel:
     def __init__(self,
                  decision_variable_range,
                  atmospheric_entry_initial_position: np.ndarray,
-                 number_of_epochs_to_plot: int,
+                 orbit_datapoints: int,
                  equations_order: int,
-                 epoch: float = 1000.,
-                 orbit_datapoints: int = 100
+                 epoch: float = 1000.
                  ):
         """
                 Constructor for the AerocaptureSemianalyticalSecondOrder class.
@@ -46,7 +45,7 @@ class AerocaptureSemianalyticalModel:
         self.decision_variable_range = decision_variable_range
         self.atmospheric_entry_initial_position = atmospheric_entry_initial_position
         self.initial_epoch = epoch
-        self.number_of_epochs_to_plot = number_of_epochs_to_plot
+        # self.number_of_epochs_to_plot = number_of_epochs_to_plot
         self.orbit_datapoints = orbit_datapoints
         if equations_order == 1 or equations_order == 2:
             self.equations_order = equations_order
@@ -197,7 +196,7 @@ class AerocaptureSemianalyticalModel:
         self.state_history_function = lambda: dict(zip(ae_range_angles,cartesian_states))
         self.dependent_variable_history_function = lambda: dict(zip(ae_range_angles, dependent_variables))
         self.aerocapture_parameters_function = lambda: [atmospheric_exit_fpa, atmospheric_exit_velocity_norm,
-                                       final_distance_travelled, minimum_altitude, atmospheric_entry_final_position]
+                                       final_distance_travelled, minimum_altitude, atmospheric_entry_final_position, atmospheric_entry_final_phase_angle]
 
         # Add the objective and constraint values into the fitness vector
         fitness = 0.0

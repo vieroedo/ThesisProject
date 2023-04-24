@@ -15,14 +15,14 @@ do_regula_falsi_function_debugging = False
 
 # Atmospheric entry conditions
 arrival_pericenter_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -1.5  # degrees
+flight_path_angle_at_atmosphere_entry = -2.5  # degrees
 
 # Jupiter arrival conditions
 interplanetary_arrival_velocity_in_jupiter_frame = 5600  # m/s
-delta_angle_from_hohmann_trajectory = 1.02  # degrees
+delta_angle_from_hohmann_trajectory = 0.92 #1.02  # degrees
 
 # First flyby parameters
-choose_flyby_moon = 'Callisto'
+choose_flyby_moon = 'Io'
 safety_altitude_flyby = 0.
 
 # Post-aerocapture flyby parameters
@@ -302,7 +302,7 @@ tau_entry, tau_minimum_altitude, tau_exit, a1, a2, a3 = calculate_tau_boundaries
 tau_linspace = np.linspace(tau_entry, tau_exit, 100)
 
 # (radius, velocity, flight_path_angle, density, drag, lift, wall_heat_flux)
-aerocapture_quantities = second_order_approximation_aerocapture(tau_linspace,tau_minimum_altitude, a1, a2, a3,
+aerocapture_quantities, heh = second_order_approximation_aerocapture(tau_linspace,tau_minimum_altitude, a1, a2, a3,
                                                                 atmospheric_entry_altitude+jupiter_radius,
                                                                 atmospheric_entry_velocity_norm, atmospheric_entry_fpa,
                                                                 K_hypersonic=0.000315)
@@ -381,7 +381,7 @@ third_arc_departure_fpa = atmospheric_exit_fpa
 third_arc_departure_radius = second_arc_arrival_radius
 third_arc_departure_position = atmospheric_entry_final_position
 
-third_arc_orbital_energy = orbital_energy(third_arc_departure_radius, third_arc_departure_velocity_norm)
+third_arc_orbital_energy = orbital_energy(third_arc_departure_radius, third_arc_departure_velocity_norm, jupiter_gravitational_parameter)
 
 third_arc_orbital_axis = unit_vector(second_arc_angular_momentum)
 
@@ -596,13 +596,13 @@ for moon in moons:
 
 
 # Post other quantities
-print(f'\n\nFirst arc orbital specific energy: {first_arc_orbital_energy/1e3:.3f} kJ/m')
-print(f'Second arc orbital specific energy: {second_arc_orbital_energy/1e3:.3f} kJ/m')
-print(f'Third arc orbital specific energy: {third_arc_orbital_energy/1e3:.3f} kJ/m')
-print(f'Fourth arc orbital specific energy: {fourth_arc_orbital_energy/1e3:.3f} kJ/m')
-print(f'Arcs 1-2 delta orbital specific energy: {abs(first_arc_orbital_energy-second_arc_orbital_energy)/1e3:.3f} kJ/m')
-print(f'Arcs 2-3 delta orbital specific energy: {abs(second_arc_orbital_energy-third_arc_orbital_energy)/1e3:.3f} kJ/m')
-print(f'Arcs 3-4 delta orbital specific energy: {abs(third_arc_orbital_energy-fourth_arc_orbital_energy)/1e3:.3f} kJ/m')
+print(f'\n\nFirst arc orbital specific energy: {first_arc_orbital_energy/1e3:.3f} kJ/kg')
+print(f'Second arc orbital specific energy: {second_arc_orbital_energy/1e3:.3f} kJ/kg')
+print(f'Third arc orbital specific energy: {third_arc_orbital_energy/1e3:.3f} kJ/kg')
+print(f'Fourth arc orbital specific energy: {fourth_arc_orbital_energy/1e3:.3f} kJ/kg')
+print(f'Arcs 1-2 delta orbital specific energy: {abs(first_arc_orbital_energy-second_arc_orbital_energy)/1e3:.3f} kJ/kg')
+print(f'Arcs 2-3 delta orbital specific energy: {abs(second_arc_orbital_energy-third_arc_orbital_energy)/1e3:.3f} kJ/kg')
+print(f'Arcs 3-4 delta orbital specific energy: {abs(third_arc_orbital_energy-fourth_arc_orbital_energy)/1e3:.3f} kJ/kg')
 
 
 ########################################################################################################################

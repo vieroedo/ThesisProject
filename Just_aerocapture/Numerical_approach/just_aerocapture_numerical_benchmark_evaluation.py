@@ -19,8 +19,11 @@ from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.math import interpolators
 
 # Problem-specific imports
+from JupiterTrajectory_GlobalParameters import *
 import CapsuleEntryUtilities as Util
+import class_AerocaptureNumericalProblem as ae_model
 
+plt.rc('font', size=15)
 # check_benchmarks = False
 # generate_benchmarks_bool = False
 
@@ -31,17 +34,19 @@ use_benchmark = True
 # if use_benchmark is True ####################################################
 generate_benchmarks = True
 
-playwith_benchmark = False
+playwith_benchmark = True
 silence_benchmark_related_plots = True
+
+benchmark_accuracy_requirement = 10 # m
 
 plot_error_wrt_benchmark = True
 
-benchmark_portion_to_evaluate = 3  # 0, 1, 2, 3 (3 means all three together)
+benchmark_portion_to_evaluate = 1  # 0, 1, 2, 3 (3 means all three together)
 
 # If you play with benchmarks
-lower_limit = 10e3
-upper_limit = 160e3
-no_of_entries = 31
+lower_limit = 5
+upper_limit = 50
+no_of_entries = 11
 
 # If you set a single step_size
 choose_step_size = 40e3
@@ -62,6 +67,8 @@ global_truncation_error_power = 8  # 7
 #####################################################################################
 
 
+
+
 current_dir = os.path.dirname(__file__)
 
 # Load spice kernels
@@ -75,7 +82,7 @@ spice_interface.load_standard_kernels()
 #                     0.4559143679738996]
 
 # Atmospheric entry conditions
-atmospheric_entry_interface_altitude = 400e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+atmospheric_entry_interface_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -2.1  # degrees
 
 
@@ -86,7 +93,7 @@ flight_path_angle_at_atmosphere_entry = -2.1  # degrees
 # Set simulation start epoch
 simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
 # Set termination conditions
-maximum_duration = 85 * constants.JULIAN_DAY  # s
+# maximum_duration = 85 * constants.JULIAN_DAY  # s
 # termination_altitude = 270.0E3  # m
 # Set vehicle properties
 # capsule_density = 250.0  # kg m-3
@@ -109,8 +116,8 @@ body_settings = environment_setup.get_default_body_settings(
     global_frame_orientation)
 
 # Add Jupiter exponential atmosphere
-jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
-jupiter_1bar_density = 0.16  # kg/m^3
+# jupiter_scale_height = 27e3  # m      https://web.archive.org/web/20111013042045/http://nssdc.gsfc.nasa.gov/planetary/factsheet/jupiterfact.html
+# jupiter_1bar_density = 0.16  # kg/m^3
 density_scale_height = jupiter_scale_height
 density_at_zero_altitude = jupiter_1bar_density
 body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.exponential(
@@ -131,12 +138,12 @@ bodies = environment_setup.create_system_of_bodies(body_settings)
 bodies.create_empty_body('Capsule')
 
 # Set mass of vehicle
-bodies.get_body('Capsule').mass = 2000  # kg
+bodies.get_body('Capsule').mass = vehicle_mass  # kg
 
 # Create aerodynamic coefficients interface (drag and lift only)
-reference_area = 5.  # m^2
-drag_coefficient = 1.2
-lift_coefficient = 0.6
+reference_area = vehicle_reference_area  # m^2
+drag_coefficient = vehicle_cd
+lift_coefficient = vehicle_cl
 aero_coefficient_settings = environment_setup.aerodynamic_coefficients.constant(
         reference_area, [drag_coefficient, 0.0, lift_coefficient])  # [Drag, Side-force, Lift]
 environment_setup.add_aerodynamic_coefficient_interface(
@@ -148,7 +155,7 @@ environment_setup.add_aerodynamic_coefficient_interface(
 ###########################################################################
 
 # Retrieve termination settings
-termination_settings = Util.get_termination_settings(simulation_start_epoch, maximum_duration)
+termination_settings = Util.get_termination_settings(simulation_start_epoch)
 # Retrieve dependent variables to save
 dependent_variables_to_save = Util.get_dependent_variable_save_settings(bodies)
 # Check whether there is any
@@ -426,7 +433,7 @@ if use_benchmark:
         axx.set_xscale('log')
         axx.set_xlabel('time step (s)')
         axx.set_ylabel('maximum position error norm (m)')
-        axx.axhline(y=0.1, color='r',linestyle=':')
+        axx.axhline(y=benchmark_accuracy_requirement, color='r',linestyle=':')
         plt.show()
 
     if playwith_benchmark or benchmark_portion_to_evaluate != 3:
