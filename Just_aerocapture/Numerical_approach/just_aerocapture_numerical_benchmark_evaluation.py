@@ -169,11 +169,8 @@ are_dependent_variables_to_save = False if not dependent_variables_to_save else 
 # Get current propagator, and define propagation settings
 current_propagator = propagation_setup.propagator.unified_state_model_quaternions
 current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude,
-                                                           bodies,
-                                                           termination_settings,
-                                                           dependent_variables_to_save,
-                                                           current_propagator)
+                                                           atmospheric_entry_interface_altitude, bodies,
+                                                           termination_settings, dependent_variables_to_save)
 
 
 settings_index = -4
@@ -304,11 +301,9 @@ if use_benchmark:
     for benchmark_step_size in benchmark_step_sizes:
         t0 = pt()
         propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude,
-                                                           bodies,
+                                                           atmospheric_entry_interface_altitude, bodies,
                                                            Util.get_termination_settings(simulation_start_epoch),
-                                                           dependent_variables_to_save,
-                                                           current_propagator)
+                                                           dependent_variables_to_save)
         if playwith_benchmark:
             step_size_name = '_stepsize_' + str(benchmark_step_size)
 
@@ -440,11 +435,9 @@ if use_benchmark:
         quit()
 
 current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude,
-                                                           bodies,
+                                                           atmospheric_entry_interface_altitude, bodies,
                                                            Util.get_termination_settings(simulation_start_epoch),
-                                                           dependent_variables_to_save,
-                                                           current_propagator)
+                                                           dependent_variables_to_save)
 
 # Create Shape Optimization Problem object
 dynamics_simulator = numerical_simulation.SingleArcSimulator(

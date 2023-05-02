@@ -110,9 +110,10 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
     actual_arc_to_compute = arcs_to_compute_actually[uncertainty_nr]
 
     # Create aerocapture problem with model and integration settings of choice.
-    aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch,decision_variable_range,
+    aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
                                                                choose_model, integrator_settings_index,
-                                                               fly_galileo, arc_to_compute=actual_arc_to_compute)
+                                                               fly_galileo=fly_galileo,
+                                                               arc_to_compute=actual_arc_to_compute)
 
     # Initialize dictionary to store the results of the simulation
     simulation_results = dict()
@@ -314,7 +315,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         aerocapture_problem.set_bodies(bodies)
 
         initial_state_deviation_inertial = np.zeros(6)
-        trajectory_initial_state = Util.get_initial_state(trajectory_parameters[1], atmospheric_entry_altitude,
+        trajectory_initial_state = Util.get_initial_state(trajectory_parameters[1], atmospheric_entry_altitude, z_axis,
                                                           trajectory_parameters[0])
         rotation_matrix = frame_conversion.rsw_to_inertial_rotation_matrix(trajectory_initial_state)
         if run > 0 and uncertainty_properties[0] == 'InitialPosition':
@@ -347,7 +348,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         # CREATE PROPAGATOR SETTINGS ##############################################
         ###########################################################################
 
-        aerocapture_problem.fitness([interplanetary_arrival_velocity, flight_path_angle_at_atmosphere_entry])
+        aerocapture_problem.fitness([interplanetary_arrival_velocity, flight_path_angle_at_atmosphere_entry,simulation_start_epoch])
         dynamics_simulator = aerocapture_problem.get_last_run_dynamics_simulator()
 
         ### OUTPUT OF THE SIMULATION ###

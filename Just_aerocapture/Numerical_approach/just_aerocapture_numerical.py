@@ -22,6 +22,7 @@ from tudatpy.kernel.math import interpolators
 from JupiterTrajectory_GlobalParameters import *
 import CapsuleEntryUtilities as Util
 import class_AerocaptureNumericalProblem as ae_model
+from handle_functions import *
 
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
@@ -113,8 +114,11 @@ if use_benchmark:
     if generate_benchmarks:
 
         bodies = aerocapture_problem.get_bodies()
-        propagator_settings = aerocapture_problem.create_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                                             interplanetary_arrival_velocity)
+        initial_state = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
+                                               z_axis, interplanetary_arrival_velocity)
+        termination_settings = aerocapture_problem.create_termination_settings(simulation_start_epoch)
+        propagator_settings = aerocapture_problem.create_propagator_settings(initial_state,termination_settings)
+
         benchmark_list, final_epoch, final_state = Util.generate_benchmarks(benchmark_step_size,
                                                                             simulation_start_epoch,
                                                                             bodies,
@@ -198,7 +202,7 @@ if use_benchmark:
 # RUN SIMULATION ##########################################################
 ###########################################################################
 
-aerocapture_problem.fitness([interplanetary_arrival_velocity, flight_path_angle_at_atmosphere_entry])
+aerocapture_problem.fitness([interplanetary_arrival_velocity, flight_path_angle_at_atmosphere_entry,simulation_start_epoch])
 dynamics_simulator = aerocapture_problem.get_last_run_dynamics_simulator()
 
 

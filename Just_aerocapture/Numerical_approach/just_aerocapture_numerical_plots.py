@@ -20,6 +20,7 @@ from tudatpy.kernel import numerical_simulation
 from tudatpy.kernel.math import interpolators
 
 import CapsuleEntryUtilities as Util
+from JupiterTrajectory_GlobalParameters import *
 # import handle_functions as hanfun
 
 # Make everything big
@@ -399,7 +400,7 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
     curr_eccentricity = LA.norm(curr_eccentricity_vector)
 
     curr_angular_momentum = LA.norm(np.cross(curr_position, curr_velocity))
-    curr_orbital_energy = Util.orbital_energy(LA.norm(curr_position), LA.norm(curr_velocity))
+    curr_orbital_energy = Util.orbital_energy(LA.norm(curr_position), LA.norm(curr_velocity), jupiter_gravitational_parameter)
 
     curr_orbit_sma = - Util.jupiter_gravitational_parameter / (2 * curr_orbital_energy)
 
@@ -422,7 +423,7 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
         initial_orbit_pericenter_velocity = curr_angular_momentum / initial_orbit_pericenter
         target_sma = initial_orbit_pericenter / (1-0.98)
         target_energy = - Util.jupiter_gravitational_parameter / (2 * target_sma)
-        target_velocity = Util.velocity_from_energy(target_energy,initial_orbit_pericenter)
+        target_velocity = Util.velocity_from_energy(target_energy,initial_orbit_pericenter,jupiter_gravitational_parameter)
         delta_v = initial_orbit_pericenter_velocity - target_velocity
         print(f'Initial pericenter velocity: {initial_orbit_pericenter_velocity/1e3:.3f} km/s')
         print(f'Target pericenter velocity: {target_velocity / 1e3:.3f} km/s   (target orbit eccentricity: 0.98)')
@@ -436,8 +437,8 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
         propellant_mass = vehicle_mass - final_mass
         print(f'Which corresponds to a propellant mass of {propellant_mass:.3f} kg, for a propellant mass fraction of {propellant_mass/vehicle_mass:.5f}')
 
-v_initial = Util.velocity_from_energy(states_dict['initial'], initial_orbit_pericenter)
-v_final = Util.velocity_from_energy(states_dict['final'], initial_orbit_pericenter)
+v_initial = Util.velocity_from_energy(states_dict['initial'], initial_orbit_pericenter,jupiter_gravitational_parameter)
+v_final = Util.velocity_from_energy(states_dict['final'], initial_orbit_pericenter,jupiter_gravitational_parameter)
 delta_v2 = v_initial - v_final
 delta_E = states_dict['final'] - states_dict['initial']
 print(f'\nThe difference in orbital specific energy is {abs(delta_E/1e3):.3f} kJ/kg')

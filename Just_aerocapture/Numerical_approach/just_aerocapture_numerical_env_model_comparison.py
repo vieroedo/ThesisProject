@@ -105,7 +105,7 @@ for model_test in range(number_of_models):
 
     aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
                                                                model_test, integrator_settings_index,
-                                                               fly_galileo=fly_galileo, arc_to_compute=-1,)
+                                                               fly_galileo=fly_galileo, arc_to_compute=-1)
 
     # Define settings for celestial bodies
     bodies_to_create = ['Jupiter']
@@ -221,12 +221,10 @@ for model_test in range(number_of_models):
 
         t0 = pt()
         propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude,
-                                                           bodies,
+                                                           atmospheric_entry_interface_altitude, bodies,
                                                            Util.get_termination_settings(simulation_start_epoch,
                                                                                          galileo_termination_settings=fly_galileo),
                                                            dependent_variables_to_save,
-                                                           current_propagator,
                                                            galileo_propagator_settings=fly_galileo,
                                                            model_choice=selected_model)
 
@@ -314,12 +312,10 @@ for model_test in range(number_of_models):
 
 
     current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                               atmospheric_entry_interface_altitude,
-                                                               bodies,
+                                                               atmospheric_entry_interface_altitude, bodies,
                                                                Util.get_termination_settings(simulation_start_epoch,
                                                                                              galileo_termination_settings=fly_galileo),
                                                                dependent_variables_to_save,
-                                                               current_propagator,
                                                                galileo_propagator_settings=fly_galileo)
 
     # Create Shape Optimization Problem object
