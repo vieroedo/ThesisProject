@@ -61,7 +61,7 @@ def rotate_vectors_by_given_matrix(rot_matrix: np.ndarray, vector: np.ndarray):
     Returns a vector (or array of vectors) rotated according to the chosen rotation matrix.
     In case of an array of vectors, the shape of the object is (n,3), where n is the number of vectors.
     """
-
+    # vector_got_transposed = False
     vector_shape = np.shape(vector)
 
     if len(vector_shape) == 1:
@@ -72,6 +72,7 @@ def rotate_vectors_by_given_matrix(rot_matrix: np.ndarray, vector: np.ndarray):
     elif len(vector_shape) == 2:
         if vector_shape[0] != 3:
             vector = vector.T  # makes the vector with shape (3,n)
+            # vector_got_transposed = True
         if len(vector[:, 0]) != 3:
             raise Exception('Vector for rotation must have three components!')
 
@@ -127,18 +128,24 @@ def longitude_from_cartesian(position_state: np.ndarray, verbose: bool = True):
 def orbital_energy(radius: float, velocity: float, mu_parameter:float):
     return velocity ** 2 / 2 - mu_parameter / radius
 
+
 def angular_momentum(radius:float, velocity:float, flight_path_angle:float):
-    angular_momentum = radius * velocity * np.cos(flight_path_angle)
-    return angular_momentum
+    return radius * velocity * np.cos(flight_path_angle)
+
+
+def orbital_period(semimajor_axis:float, mu_parameter:float):
+    return 2*np.pi*np.sqrt(semimajor_axis**3/mu_parameter)
 
 
 def velocity_from_energy(energy: float, radius: float, mu_parameter:float):
     return np.sqrt(2 * (energy + mu_parameter / radius))
 
 
-def true_anomaly_from_radius(radius,eccentricity,sma):
+def true_anomaly_from_radius(radius,eccentricity,sma, silence=False):
     """ WARNING: the solutions of ths function are 2! +theta and -theta, but only +theta is retrieved"""
     theta = np.arccos(np.clip(1/eccentricity * (sma*(1-eccentricity**2)/radius - 1), -1, 1))
+    if not silence:
+        warnings.warn('The solutions of this function are 2! +theta and -theta, but only +theta is returned')
     return theta
 
 
@@ -156,10 +163,11 @@ def radius_from_true_anomaly(true_anomaly, eccentricity, sma, planet_SoI = jupit
 def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
                                     eccentricity: float,
                                     semi_major_axis: float,
-                                    mu_parameter: float) -> float:
+                                    mu_parameter: float,
+                                    verbose:bool = False) -> float:
     """
 
-    :param true_anomaly_range: vector containing initial and final true anomalies (interval width must be < 2*pi)
+    :param true_anomaly_range: vector containing initial and final true anomalies
     :param eccentricity: eccentricity of the orbit
     :param semi_major_axis: sma of the orbit. If the orbit is parabolic, it indicates the p parameter
     :param mu_parameter: central body grav parameter
@@ -167,26 +175,75 @@ def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
     """
     if not len(true_anomaly_range) == 2:
         raise Exception('The true_anomaly_range must be a ndarray with size (2,)')
+    if eccentricity < 0 or mu_parameter < 0:
+        raise Exception('invalid eccentricity or gravitational parameter')
+
+    if true_anomaly_range[1]-true_anomaly_range[0] > 0:
+        forward_calculation = True
+    elif true_anomaly_range[1]-true_anomaly_range[0] == 0:
+        return 0.
+    else:
+        forward_calculation = False
 
     if eccentricity > 1:
+        theta_extreme = np.arccos(-1/eccentricity)
+        if forward_calculation:
+            if true_anomaly_range[0] < -theta_extreme or true_anomaly_range[1] > theta_extreme:
+                raise Exception('Invalid true anomaly range for the hyperbola')
+        else:
+            if true_anomaly_range[1] < -theta_extreme or true_anomaly_range[0] > theta_extreme:
+                raise Exception('Invalid true anomaly range for the hyperbola')
+
         arctanh_argument = np.tan(true_anomaly_range/2) * np.sqrt((eccentricity - 1)/(eccentricity + 1))
         eccentric_anomaly_range = 2 * np.arctanh(arctanh_argument)
         mean_anomaly_range = eccentricity * np.sinh(eccentric_anomaly_range) - eccentric_anomaly_range
         angular_velocity = np.sqrt(mu_parameter/-semi_major_axis**3)
+
+        addition_to_elapsed_time = 0.
+        revolutions_no = 0
     elif eccentricity == 1:
+        if forward_calculation:
+            if true_anomaly_range[0] < -np.pi or true_anomaly_range[1] > np.pi:
+                raise Exception('Invalid true anomaly range for the parabola')
+        else:
+            if true_anomaly_range[0] < -np.pi or true_anomaly_range[1] > np.pi:
+                raise Exception('Invalid true anomaly range for the parabola')
         p_parameter = semi_major_axis
         mean_anomaly_range = 1/2 * (np.tan(true_anomaly_range/2) + np.tan(true_anomaly_range/2)**3/3)
-        angular_velocity =  np.sqrt(mu_parameter/p_parameter**3)
+        angular_velocity = np.sqrt(mu_parameter/p_parameter**3)
         # warnings.warn('Not implemented for parabolic orbits lol')
+        addition_to_elapsed_time = 0.
+        revolutions_no = 0
     else:
+        if abs(true_anomaly_range[1] - true_anomaly_range[0]) == 2 * np.pi:
+            return orbital_period(semi_major_axis, mu_parameter)
+
+        revolutions_no = int((true_anomaly_range[1] - true_anomaly_range[0]) / (2 * np.pi))
+        if forward_calculation:
+            true_anomaly_range[1] = true_anomaly_range[1] - revolutions_no * 2 * np.pi
+        else:
+            true_anomaly_range[0] = true_anomaly_range[0] - revolutions_no * 2 * np.pi
+
         arctan_argument = np.tan(true_anomaly_range / 2) * np.sqrt((1-eccentricity) / (1+eccentricity))
         eccentric_anomaly_range = 2 * np.arctan(arctan_argument)
         mean_anomaly_range = eccentric_anomaly_range - eccentricity * np.sin(eccentric_anomaly_range)
         angular_velocity = np.sqrt(mu_parameter/semi_major_axis**3)
 
+        addition_to_elapsed_time = orbital_period(semi_major_axis,mu_parameter)*revolutions_no
+
     time_range = mean_anomaly_range / angular_velocity
 
-    return time_range[1] - time_range[0]
+    single_orbit_arc_elapsed_time = (time_range[1] - time_range[0])
+
+    if forward_calculation and single_orbit_arc_elapsed_time < 0:
+        single_orbit_arc_elapsed_time = orbital_period(semi_major_axis,mu_parameter) - abs(single_orbit_arc_elapsed_time)
+
+    elapsed_time = single_orbit_arc_elapsed_time + addition_to_elapsed_time
+
+    if verbose:
+        print(f'Number of revolutions: {revolutions_no}     Elapsed time: {elapsed_time} s      Orbital period: {orbital_period(semi_major_axis,mu_parameter)} s')
+        print(f'ohwell {(time_range[1] - time_range[0])}')
+    return elapsed_time
 
 
 def eccentricity_vector_from_cartesian_state(cartesian_state: np.ndarray) -> np.ndarray:
