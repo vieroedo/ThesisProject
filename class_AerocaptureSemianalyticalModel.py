@@ -155,6 +155,17 @@ class AerocaptureSemianalyticalModel:
         ae_wall_hfx = aerocapture_quantities[6]
         ae_range_angles = aerocapture_quantities[7]
 
+        # Numerically calculate elapsed time - trapezoidal integration
+        integrand_function = ae_radii / (ae_velocities*np.cos(ae_fpas))
+        delta_t = np.trapz(integrand_function, ae_range_angles)
+
+        # Simple integration
+        # delta_t_coarse = 0
+        # theta_0 = 0
+        # for no,theta in enumerate(ae_range_angles):
+        #     delta_t_coarse = delta_t_coarse + integrand_function[no]*(theta-theta_0)
+        #     theta_0 = theta
+
         # Atmosphere exit fpa
         atmospheric_exit_fpa = ae_fpas[-1]
 
@@ -196,7 +207,7 @@ class AerocaptureSemianalyticalModel:
         self.state_history_function = lambda: dict(zip(ae_range_angles,cartesian_states))
         self.dependent_variable_history_function = lambda: dict(zip(ae_range_angles, dependent_variables))
         self.aerocapture_parameters_function = lambda: [atmospheric_exit_fpa, atmospheric_exit_velocity_norm,
-                                       final_distance_travelled, minimum_altitude, atmospheric_entry_final_position, atmospheric_entry_final_phase_angle]
+                                       final_distance_travelled, minimum_altitude, atmospheric_entry_final_position, atmospheric_entry_final_phase_angle, delta_t]
 
         # Add the objective and constraint values into the fitness vector
         fitness = 0.0
