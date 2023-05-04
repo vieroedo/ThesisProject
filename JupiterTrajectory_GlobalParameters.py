@@ -63,6 +63,7 @@ jupiter_atmosphere_exponential_layered_model = {
 # Orbital and physical data of galilean moons in SI units
 # Moons: 'Io' 'Europa' 'Ganymede' 'Callisto'
 # Entries for each moon: 'SMA' 'Mass' 'Radius' 'Orbital_Period' 'SOI_Radius' 'mu' 'g_0'
+moons_optimization_parameter_dict = {1: 'Io', 2: 'Europa', 3: 'Ganymede', 4: 'Callisto'}
 galilean_moons_data = {
                        'Io': {'SMA': 421.77e6,
                               'Mass': 893.3e20,
