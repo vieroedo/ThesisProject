@@ -194,15 +194,10 @@ class JupiterArrivalProblem:
                                                                         self.time_buffer)
             # initial_propagation_time = self.epoch
             dependent_variables_to_save = Util.get_dependent_variable_save_settings(bodies)
-            propagator_settings = Util.get_propagator_settings(
-                trajectory_parameters,
-                bodies,
-                initial_propagation_time,
-                self.specific_impulse,
-                self.vehicle_mass,
-                termination_settings,
-                dependent_variables_to_save,
-                current_propagator=propagation_setup.propagator.unified_state_model_quaternions)
+            propagator_settings = Util.get_propagator_settings(trajectory_parameters, bodies, initial_propagation_time,
+                                                               self.specific_impulse,
+                                                               current_propagator=self.vehicle_mass,
+                                                               galileo_propagator_settings=dependent_variables_to_save)
 
 
             # Create simulation object and propagate dynamics

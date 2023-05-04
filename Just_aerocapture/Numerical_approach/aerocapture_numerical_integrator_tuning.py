@@ -160,7 +160,8 @@ are_dependent_variables_to_save = False if not dependent_variables_to_save else 
 current_propagator = propagation_setup.propagator.unified_state_model_quaternions
 current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
                                                            atmospheric_entry_interface_altitude, bodies,
-                                                           termination_settings, dependent_variables_to_save)
+                                                           termination_settings,
+                                                           current_propagator=dependent_variables_to_save)
 
 # from -5 to +2
 number_of_settings = range(-5, 2)

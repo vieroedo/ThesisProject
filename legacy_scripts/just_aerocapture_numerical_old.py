@@ -215,7 +215,7 @@ if use_benchmark:
                                                        atmospheric_entry_interface_altitude, bodies,
                                                        Util.get_termination_settings(simulation_start_epoch,
                                                                                      galileo_termination_settings=fly_galileo),
-                                                       dependent_variables_to_save,
+                                                       current_propagator=dependent_variables_to_save,
                                                        galileo_propagator_settings=fly_galileo,
                                                        model_choice=choose_model)
 
@@ -306,7 +306,7 @@ current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_
                                                            atmospheric_entry_interface_altitude, bodies,
                                                            Util.get_termination_settings(simulation_start_epoch,
                                                                                          galileo_termination_settings=fly_galileo),
-                                                           dependent_variables_to_save,
+                                                           current_propagator=dependent_variables_to_save,
                                                            galileo_propagator_settings=fly_galileo)
 
 # Create Shape Optimization Problem object

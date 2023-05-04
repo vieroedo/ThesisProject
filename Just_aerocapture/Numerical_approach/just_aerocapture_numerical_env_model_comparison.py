@@ -224,7 +224,7 @@ for model_test in range(number_of_models):
                                                            atmospheric_entry_interface_altitude, bodies,
                                                            Util.get_termination_settings(simulation_start_epoch,
                                                                                          galileo_termination_settings=fly_galileo),
-                                                           dependent_variables_to_save,
+                                                           current_propagator=dependent_variables_to_save,
                                                            galileo_propagator_settings=fly_galileo,
                                                            model_choice=selected_model)
 
@@ -315,7 +315,7 @@ for model_test in range(number_of_models):
                                                                atmospheric_entry_interface_altitude, bodies,
                                                                Util.get_termination_settings(simulation_start_epoch,
                                                                                              galileo_termination_settings=fly_galileo),
-                                                               dependent_variables_to_save,
+                                                               current_propagator=dependent_variables_to_save,
                                                                galileo_propagator_settings=fly_galileo)
 
     # Create Shape Optimization Problem object
