@@ -106,7 +106,8 @@ def get_galileo_initial_state() -> np.ndarray:
 
 
 def get_initial_state(atmosphere_entry_fpa: float,
-                      atmosphere_entry_altitude: float = atmospheric_entry_altitude,
+                      atmosphere_entry_altitude: float,
+                      orbit_axis: np.ndarray,
                       jupiter_arrival_v_inf: float = 5600,
                       perturb_fpa: float = 0.,
                       perturb_entry_velocity_magnitude: float = 0.,
@@ -133,6 +134,7 @@ def get_initial_state(atmosphere_entry_fpa: float,
     -------
     initial_state_vector : np.ndarray
         The initial state of the vehicle expressed in inertial coordinates.
+        :param orbit_axis:
     """
 
     if perturb_entry_velocity_magnitude != 0. and not start_at_entry_interface:
@@ -149,11 +151,11 @@ def get_initial_state(atmosphere_entry_fpa: float,
     departure_velocity_norm = jupiter_arrival_v_inf
 
     # Calculate orbital energy
-    initial_orbital_energy = orbital_energy(departure_radius, departure_velocity_norm)
+    initial_orbital_energy = orbital_energy(departure_radius, departure_velocity_norm, jupiter_gravitational_parameter)
 
     # Calculate arrival radius and speed
     arrival_radius = jupiter_radius + atmosphere_entry_altitude
-    arrival_velocity_norm = velocity_from_energy(initial_orbital_energy, arrival_radius) + perturb_entry_velocity_magnitude
+    arrival_velocity_norm = velocity_from_energy(initial_orbital_energy, arrival_radius, jupiter_gravitational_parameter) + perturb_entry_velocity_magnitude
 
     # Calculate angular momentum
     angular_momentum_norm = arrival_radius * arrival_velocity_norm * np.cos(arrival_fpa)
@@ -168,7 +170,7 @@ def get_initial_state(atmosphere_entry_fpa: float,
     arrival_position = x_axis * arrival_radius
 
     # Calculate arrival velocity for the atmospheric entry interface start case
-    arr_vel_rotation_matrix = rotation_matrix(z_axis, np.pi / 2 - arrival_fpa)
+    arr_vel_rotation_matrix = rotation_matrix(orbit_axis, np.pi / 2 - arrival_fpa)
     arrival_velocity = arrival_velocity_norm * \
                        rotate_vectors_by_given_matrix(arr_vel_rotation_matrix, unit_vector(arrival_position))
 
@@ -190,7 +192,7 @@ def get_initial_state(atmosphere_entry_fpa: float,
     delta_true_anomaly = arrival_true_anomaly - departure_true_anomaly
 
     # Calculate the departure position of the spacecraft
-    pos_rotation_matrix = rotation_matrix(z_axis, -delta_true_anomaly)
+    pos_rotation_matrix = rotation_matrix(orbit_axis, -delta_true_anomaly)
     departure_position = rotate_vectors_by_given_matrix(pos_rotation_matrix, unit_vector(
         arrival_position)) * departure_radius
 
@@ -199,7 +201,7 @@ def get_initial_state(atmosphere_entry_fpa: float,
         angular_momentum_norm / (departure_radius * departure_velocity_norm))
 
     # Calculate departure velocity
-    vel_rotation_matrix = rotation_matrix(z_axis, np.pi / 2 - departure_fpa)
+    vel_rotation_matrix = rotation_matrix(orbit_axis, np.pi / 2 - departure_fpa)
     departure_velocity = rotate_vectors_by_given_matrix(vel_rotation_matrix, unit_vector(
         departure_position)) * departure_velocity_norm
 
@@ -487,26 +489,36 @@ def get_integrator_settings(settings_index: int,
 
     return integrator_settings
 
+# def get_propagator_settings(atm_entry_fpa: float,
+#                             atm_entry_alt: float,
+#                             bodies,
+#                             termination_settings,
+#                             dependent_variables_to_save,
+#                             orbit_axis,
+#                             current_propagator=propagation_setup.propagator.unified_state_model_quaternions,
+#                             jupiter_interpl_excees_vel: float = 5600.,
+#                             initial_state_perturbation=np.zeros(6),
+#                             entry_parameters_perturbation=np.zeros(2),
+#                             galileo_propagator_settings: bool = False,
+#                             start_at_entry_interface: bool = False,
+#                             # start_at_exit_interface: bool = False,
+#                             model_choice: int = 0,
+#                             verbose: bool = False):
 
-def get_propagator_settings(atm_entry_fpa: float,
-                            atm_entry_alt: float,
+
+def get_propagator_settings(initial_state,
                             bodies,
                             termination_settings,
                             dependent_variables_to_save,
+                            moon_of_flyby='',
                             current_propagator=propagation_setup.propagator.unified_state_model_quaternions,
-                            jupiter_interpl_excees_vel: float = 5600.,
-                            initial_state_perturbation=np.zeros(6),
-                            entry_parameters_perturbation=np.zeros(2),
                             galileo_propagator_settings: bool = False,
-                            start_at_entry_interface: bool = False,
-                            # start_at_exit_interface: bool = False,
                             model_choice: int = 0,
                             verbose: bool = False):
     """
-    :param atm_entry_fpa:
-        Trajectory parameter: Entry flight path angle at Jupiter's atmosphere
-    :param atm_entry_alt:
-        Trajectory parameter: Entry altitude at Jupiter's atmosphere. Currently set to 450 km.
+    :param moon_of_flyby:
+    :param initial_state:
+        initial state of the propagation. it includes possible perturbations applied for uncertainty studies
     :param bodies:
         list of the bodies of the environment
     :param termination_settings:
@@ -515,16 +527,8 @@ def get_propagator_settings(atm_entry_fpa: float,
         list of the dependent variables to be saved
     :param current_propagator:
         propagation scheme to be used. USM with quaternions is currently in use.
-    :param jupiter_interpl_excees_vel:
-        initial velocity of the propagation
-    :param initial_state_perturbation:
-        perturbation of the initial state in cartesian coordinates
-    :param entry_parameters_perturbation:
-        perturbation of the entry parameters. They are: [entry_velocity_norm, entry_fpa]
     :param galileo_propagator_settings:
         choose whether or not to retrieve the propagator settings of the Galileo trajectory
-    :param start_at_entry_interface:
-        starts the propagation at the atmospheric entry interface, instead of the edge of Jupiter's SOI
     :param model_choice:
         choose the environment model of the propagation
     :param verbose:
@@ -539,20 +543,21 @@ def get_propagator_settings(atm_entry_fpa: float,
     central_bodies = ['Jupiter']
 
     # Define accelerations for the nominal case and for other variations of the model
-    if model_choice == 0:
-        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
-                                                        propagation_setup.acceleration.aerodynamic()]}
-    elif model_choice == 1:
+    if model_choice in [0, 1]:
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
                                                         propagation_setup.acceleration.aerodynamic()]}
     elif model_choice == 2:
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(2, 0),
                                                         propagation_setup.acceleration.aerodynamic()]}
-    elif model_choice == 3 or model_choice == 4:
+    elif model_choice in [3, 4]:
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.spherical_harmonic_gravity(8, 0),
                                                         propagation_setup.acceleration.aerodynamic()]}
     else:
         return -1
+
+    if moon_of_flyby != '':
+        acceleration_settings_on_vehicle[moon_of_flyby] = [propagation_setup.acceleration.point_mass_gravity()]
+
 
     # Create global accelerations' dictionary
     acceleration_settings = {'Capsule': acceleration_settings_on_vehicle}
@@ -574,14 +579,14 @@ def get_propagator_settings(atm_entry_fpa: float,
     #     'Jupiter', '', 'Capsule_Fixed', aero_angles)
     # environment_setup.add_rotation_model(bodies, 'Capsule', rotation_model_settings)
 
+
+
     # Retrieve initial state
-    initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, jupiter_interpl_excees_vel,
-                                      start_at_entry_interface=start_at_entry_interface,
-                                      # start_at_exit_interface=start_at_exit_interface,
-                                      perturb_entry_velocity_magnitude=entry_parameters_perturbation[0],
-                                      perturb_fpa=entry_parameters_perturbation[1],
-                                      verbose=verbose) \
-                    + initial_state_perturbation
+    # initial_state = get_initial_state(atm_entry_fpa, atm_entry_alt, orbit_axis, jupiter_interpl_excees_vel,
+    #                                   perturb_fpa=entry_parameters_perturbation[1],
+    #                                   perturb_entry_velocity_magnitude=entry_parameters_perturbation[0],
+    #                                   start_at_entry_interface=start_at_entry_interface, verbose=verbose) \
+    #                 + initial_state_perturbation
 
     # Retrieve galileo probe entry initial state instead if needed
     if galileo_propagator_settings:
