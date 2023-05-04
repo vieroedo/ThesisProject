@@ -11,6 +11,8 @@ from tudatpy.kernel import constants
 from tudatpy.kernel.numerical_simulation import propagation_setup
 from tudatpy.kernel import numerical_simulation
 
+import class_InitialStateTargeting as ist
+
 
 class AerocaptureNumericalProblem:
 
@@ -19,6 +21,8 @@ class AerocaptureNumericalProblem:
                  decision_variable_range,
                  environment_model: int = 0,
                  integrator_settings_index: int = -4,
+                 # post_ae_flyby_moon: str = '',
+                 do_flyby: bool = False,
                  fly_galileo: bool = False,
                  arc_to_compute: int = -1,
                  initial_state_perturbation=np.zeros(6),
@@ -49,7 +53,7 @@ class AerocaptureNumericalProblem:
                 """
 
         # Set arguments as attributes
-        self.simulation_start_epoch = simulation_start_epoch
+        self.flyby_occurs = do_flyby
         self.decision_variable_range = decision_variable_range
         self.galileo_mission_case = fly_galileo
         self.arc_to_compute = arc_to_compute
@@ -97,16 +101,17 @@ class AerocaptureNumericalProblem:
             raise Exception('Entry parameters cannot be perturbed when the propagation does not start at atmospheric entry.'
                             'Set the perturbation of the entry parameters to 0 or the propagation to start at the entry interface.')
 
+
         body_settings = self.create_body_settings_environment()
         bodies = self.create_bodies_environment(body_settings)
         bodies = self.add_aerodynamic_interface(bodies)
         self.bodies_function = lambda: bodies
 
-        integrator_settings = self.create_integrator_settings()
-        self.integrator_settings_function = lambda: integrator_settings
-
-        termination_settings = self.create_termination_settings()
-        self.termination_settings_function = lambda: termination_settings
+        # integrator_settings = self.create_integrator_settings()
+        # self.integrator_settings_function = lambda: integrator_settings
+        #
+        # termination_settings = self.create_termination_settings()
+        # self.termination_settings_function = lambda: termination_settings
 
         # self.dynamics_simulator_function = lambda: None
 
@@ -196,19 +201,25 @@ class AerocaptureNumericalProblem:
     def get_bodies(self):
         return self.bodies_function()
 
-    def get_integrator_settings(self):
-        integrator_settings = self.integrator_settings_function
-        return integrator_settings
-
-    def get_termination_settings(self):
-        termination_settings = self.termination_settings_function
-        return termination_settings
+    # def get_integrator_settings(self):
+    #     integrator_settings = self.integrator_settings_function
+    #     return integrator_settings
+    #
+    # def get_termination_settings(self):
+    #     termination_settings = self.termination_settings_function
+    #     return termination_settings
 
     def get_initial_state_perturbation(self):
         return self.initial_state_perturbation
 
-    def set_termination_settings(self, termination_settings):
-        self.termination_settings_function = lambda: termination_settings
+    # def set_termination_settings(self, termination_settings):
+    #     self.termination_settings_function = lambda: termination_settings
+
+    def get_simulation_start_epoch(self):
+        return self.simulation_start_epoch
+
+    def get_initial_state(self):
+        return self.initial_state
 
     def set_environment_model(self, choose_model, verbose = True):
         self.environment_model = choose_model
@@ -225,7 +236,11 @@ class AerocaptureNumericalProblem:
         self.bodies_function = lambda: bodies
 
     def create_body_settings_environment(self):
-        bodies_to_create = ['Jupiter', 'Sun']
+        if self.flyby_occurs:
+            bodies_to_create = ['Jupiter', 'Sun',
+                                'Io', 'Europa', 'Ganymede', 'Callisto']
+        else:
+            bodies_to_create = ['Jupiter', 'Sun']
         global_frame_origin = 'Jupiter'
         global_frame_orientation = 'ECLIPJ2000'
 
@@ -301,37 +316,42 @@ class AerocaptureNumericalProblem:
 
         return bodies
 
-    def create_integrator_settings(self):
+    def create_integrator_settings(self, simulation_start_epoch):
         integrator_settings = Util.get_integrator_settings(self.integrator_settings_index,
-                                                           self.simulation_start_epoch,
+                                                           simulation_start_epoch,
                                                            galileo_integration_settings=self.galileo_mission_case,
                                                            galileo_step_size=0.1)
 
         return integrator_settings
 
-    def create_propagator_settings(self,
-                                   entry_fpa,
-                                   interplanetary_arrival_velocity,
-                                   initial_state_perturbation = np.zeros(6),
-                                   entry_parameters_perturbation = np.zeros(2)):
+    def create_propagator_settings(self, initial_state,
+                                   termination_settings,
+                                   moon_of_flyby=''
+                                   # entry_fpa,
+                                   # interplanetary_arrival_velocity,
+                                   # orbit_axis,
+                                   # initial_state_perturbation = np.zeros(6),
+                                   # entry_parameters_perturbation = np.zeros(2)
+                                   ):
+        if moon_of_flyby == '' and self.flyby_occurs:
+            raise Exception('The current instance is set to have a flyby. please select a moon.')
+
         dependent_variables_to_save = Util.get_dependent_variable_save_settings(self.bodies_function())
-        atm_entry_alt = Util.atmospheric_entry_altitude
-        propagator_settings = Util.get_propagator_settings(entry_fpa,
-                                                           atm_entry_alt,
-                                                           self.bodies_function(),
-                                                           self.termination_settings_function(),
+        # propagator_settings = Util.get_propagator_settings(entry_fpa, atm_entry_alt, self.bodies_function(),
+        #                                                    self.termination_settings_function(),
+        #                                                    dependent_variables_to_save,
+        #                                                    galileo_propagator_settings=self.galileo_mission_case,
+        #                                                    model_choice=self.environment_model)
+        #                                                    # start_at_exit_interface=self._start_at_exit_interface)
+        propagator_settings = Util.get_propagator_settings(initial_state, self.bodies_function(), termination_settings,
                                                            dependent_variables_to_save,
-                                                           jupiter_interpl_excees_vel=interplanetary_arrival_velocity,
-                                                           initial_state_perturbation=initial_state_perturbation,
-                                                           entry_parameters_perturbation=entry_parameters_perturbation,
-                                                           model_choice=self.environment_model,
+                                                           moon_of_flyby=moon_of_flyby,
                                                            galileo_propagator_settings=self.galileo_mission_case,
-                                                           start_at_entry_interface=self._start_at_entry_interface)
-                                                           # start_at_exit_interface=self._start_at_exit_interface)
+                                                           model_choice=self.environment_model)
         return propagator_settings
 
-    def create_termination_settings(self, entry_fpa=0., bodies=None):
-        termination_settings = Util.get_termination_settings(self.simulation_start_epoch,
+    def create_termination_settings(self, simulation_start_epoch, entry_fpa=0., bodies=None):
+        termination_settings = Util.get_termination_settings(simulation_start_epoch,
                                                              galileo_termination_settings=self.galileo_mission_case,
                                                              stop_before_aerocapture=self._stop_before_aerocapture,
                                                              stop_after_aerocapture=self._stop_after_aerocapture,
@@ -375,14 +395,18 @@ class AerocaptureNumericalProblem:
         Parameters
         ----------
         orbital_parameters : list of floats
-            List of orbital parameters to be optimized.
+            List of orbital parameters to be optimized:
+                0: interplanetary arrival velocity
+                1: atmospheric entry flight path angle
+                2: epoch of moon flyby
+                3: moon of flyby [0: None, 1: 'Io', 2: 'Europa', 3: 'Ganymede, 4: 'Callisto']
+                4: flyby impact parameter B
         Returns
         -------
         fitness : float
             Fitness value, for optimization.
         """
         bodies = self.bodies_function()
-        integrator_settings = self.integrator_settings_function()
 
         # Delete existing capsule
         # bodies.remove_body('Capsule')
@@ -390,17 +414,74 @@ class AerocaptureNumericalProblem:
         # aerodynamic_analysis = Util.add_capsule_to_body_system(bodies,
         #                            shape_parameters,
         #                            self.capsule_density)
+        orbital_parameters_length = len(orbital_parameters)
+        # moons_dict = {1: 'Io', 2: 'Europa', 3: 'Ganymede', 4: 'Callisto'}
 
         interplanetary_arrival_velocity = orbital_parameters[0]
         atm_entry_fpa = orbital_parameters[1]
 
+        if orbital_parameters_length > 3:
+            flyby_moon_no = orbital_parameters[3]
+        elif orbital_parameters_length == 3:
+            flyby_moon_no = 0
+        else:
+            raise Exception('Wrong number of orbital parameters inserted.')
+
+        if 1 <= flyby_moon_no <= 4:
+            if not self.flyby_occurs:
+                raise Exception('Current instance is set to have no flyby. change settings')
+            flyby_epoch = orbital_parameters[2]
+            flyby_moon = moons_optimization_parameter_dict[flyby_moon_no]
+            B_parameter = orbital_parameters[4]
+
+            flyby_moon_state = spice_interface.get_body_cartesian_state_at_epoch(
+                target_body_name=flyby_moon,
+                observer_body_name="Jupiter",
+                reference_frame_name=global_frame_orientation,
+                aberration_corrections="NONE",
+                ephemeris_time=flyby_epoch)
+            moon_position = flyby_moon_state[0:3]
+            moon_velocity = flyby_moon_state[3:6]
+            moon_orbital_axis = unit_vector(np.cross(moon_position,moon_velocity))
+            moon_eccentricity_vector = eccentricity_vector_from_cartesian_state(flyby_moon_state)
+
+            orbital_axis = moon_orbital_axis
+            initial_state_targeting_problem = ist.InitialStateTargeting(atmosphere_entry_fpa=atm_entry_fpa,
+                                                                        atmosphere_entry_altitude=atmospheric_entry_altitude,
+                                                                        B_parameter=B_parameter,flyby_moon=flyby_moon,
+                                                                        flyby_epoch=flyby_epoch,
+                                                                        jupiter_arrival_v_inf=interplanetary_arrival_velocity,
+                                                                        perturb_fpa=self.entry_parameters_perturbation[1],
+                                                                        perturb_entry_velocity_magnitude=self.entry_parameters_perturbation[0],
+                                                                        start_at_entry_interface=self.start_at_entry_interface)
+
+            simulation_start_epoch = initial_state_targeting_problem.get_simulation_start_epoch()
+            initial_state = initial_state_targeting_problem.get_initial_state()
+
+            self.simulation_start_epoch = simulation_start_epoch
+            self.initial_state = initial_state
+
+        elif flyby_moon_no == 0:
+            if self.flyby_occurs:
+                raise Exception('Current instance is set to have a post-aerocapture flyby. change settings')
+            flyby_moon = ''
+            orbital_axis = z_axis
+            simulation_start_epoch = orbital_parameters[2]
+            initial_state = Util.get_initial_state(atm_entry_fpa,atmospheric_entry_altitude,
+                                                   orbital_axis,interplanetary_arrival_velocity,
+                                                   self.entry_parameters_perturbation[1],
+                                                   self.entry_parameters_perturbation[0],
+                                                   self.start_at_entry_interface) + self.initial_state_perturbation
+        else:
+            raise Exception('Wrong value for flyby_moon')
+
+        integrator_settings = self.create_integrator_settings(simulation_start_epoch)
         # if self._stop_before_aerocapture or self._stop_after_aerocapture:
-        self.set_termination_settings(self.create_termination_settings(atm_entry_fpa, bodies))
+        termination_settings = self.create_termination_settings(simulation_start_epoch, atm_entry_fpa, bodies)
 
         # Create propagator settings
-        propagator_settings = self.create_propagator_settings(atm_entry_fpa, interplanetary_arrival_velocity,
-                                                              self.initial_state_perturbation,
-                                                              self.entry_parameters_perturbation)
+        propagator_settings = self.create_propagator_settings(initial_state, termination_settings,
+                                                              moon_of_flyby=flyby_moon)
 
         # Create simulation object and propagate dynamics
         dynamics_simulator = numerical_simulation.SingleArcSimulator(
@@ -418,5 +499,3 @@ class AerocaptureNumericalProblem:
         # Add the objective and constraint values into the fitness vector
         fitness = 0.0
         return [fitness]
-
-
