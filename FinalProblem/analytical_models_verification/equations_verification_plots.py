@@ -107,7 +107,7 @@ for variable_no, decision_variable_investigated in enumerate(decision_variable_n
             fig_orbit = plt.figure()
             ax_orbit = plt.axes(projection='3d')
 
-            ax_orbit = plot_jupiter_and_galilean_orbits(ax_orbit, plot_orbits=False, title_addition=f'\nDecision variable: {decision_variable_investigated}     Value: {variable_linspace[run]}         Moon: {current_moon}')
+            ax_orbit = plot_jupiter_and_galilean_orbits(ax_orbit, plot_orbits=False, title_addition=f'Decision variable: {decision_variable_investigated}     Value: {variable_linspace[run]}         Moon: {current_moon}')
             ax_orbit = plot_galilean_moon(ax_orbit, current_moon, simulation_flyby_epoch)
             ax_orbit = set_axis_limits(ax_orbit)
             ax_orbit.plot3D(x_pos_num, y_pos_num, z_pos_num, color='gray')

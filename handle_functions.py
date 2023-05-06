@@ -1143,7 +1143,9 @@ def secant_method(function: Callable,
 # PLOTTING FUNCTIONS ###################################################################################################
 ########################################################################################################################
 
-def plot_jupiter_and_galilean_orbits(ax, plot_orbits=True, title_addition = ''):
+
+def plot_jupiter_and_galilean_orbits(ax, plot_orbits=True, title_addition=''):
+
     # draw jupiter
     u, v = np.mgrid[0:2 * np.pi:20j, 0:np.pi:10j]
     x = jupiter_radius * np.cos(u) * np.sin(v)
@@ -1155,7 +1157,7 @@ def plot_jupiter_and_galilean_orbits(ax, plot_orbits=True, title_addition = ''):
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
     ax.set_zlabel('z (m)')
-    ax.set_title('Jupiter aerocapture trajectory' + title_addition)
+    ax.set_title('Jupiter aerocapture trajectory\n' + title_addition)
 
     # draw galilean moons' orbits
     if plot_orbits:
