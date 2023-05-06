@@ -110,10 +110,8 @@ second_arc_delta_true_anomaly = atmospheric_entry_true_anomaly - first_flyby_tru
 
 
 # aerocapture
-aerocapture_analytical_problem = ae_analytical.AerocaptureSemianalyticalModel([0.,0.],
-                                                           x_axis*atmospheric_entry_altitude,
-                                                           orbit_datapoints=100, equations_order=2,
-                                                           epoch=first_flyby_initial_epoch+second_arc_delta_t)
+aerocapture_analytical_problem = ae_analytical.AerocaptureSemianalyticalModel([0., 0.], orbit_datapoints=100,
+                                                                              equations_order=2)
 aerocapture_analytical_problem.fitness([interplanetary_arrival_velocity, flight_path_angle_at_atmospheric_entry])
 aerocapture_problem_parameters = aerocapture_analytical_problem.aerocapture_parameters_function()
 
@@ -125,12 +123,12 @@ atmospheric_exit_velocity_norm = aerocapture_problem_parameters[1]
 minimum_altitude = aerocapture_problem_parameters[3]
 # Travelled distance (assumed at surface)
 final_distance_travelled = aerocapture_problem_parameters[2]
-# Final position after aerocapture
-atmospheric_entry_final_position = aerocapture_problem_parameters[4]
+# Final radius after aerocapture
+atmospheric_exit_radius = aerocapture_problem_parameters[4]
 # Aerocapture phase angle
 atmospheric_entry_phase_angle = aerocapture_problem_parameters[5]
 
-atmospheric_exit_radius = jupiter_radius + atmospheric_entry_altitude
+# atmospheric_exit_radius = jupiter_radius + atmospheric_entry_altitude
 
 aerocapture_delta_t = 0  # considered instantaneous
 aerocapture_delta_true_anomaly = atmospheric_entry_phase_angle

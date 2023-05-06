@@ -17,7 +17,6 @@ import class_InitialStateTargeting as ist
 class AerocaptureNumericalProblem:
 
     def __init__(self,
-                 simulation_start_epoch: float,
                  decision_variable_range,
                  environment_model: int = 0,
                  integrator_settings_index: int = -4,
@@ -107,6 +106,7 @@ class AerocaptureNumericalProblem:
         bodies = self.add_aerodynamic_interface(bodies)
         self.bodies_function = lambda: bodies
 
+        self.trajectory_is_feasible = None
         # integrator_settings = self.create_integrator_settings()
         # self.integrator_settings_function = lambda: integrator_settings
         #
@@ -350,12 +350,12 @@ class AerocaptureNumericalProblem:
                                                            model_choice=self.environment_model)
         return propagator_settings
 
-    def create_termination_settings(self, simulation_start_epoch, entry_fpa=0., bodies=None):
+    def create_termination_settings(self, simulation_start_epoch, entry_fpa_deg=0., bodies=None):
         termination_settings = Util.get_termination_settings(simulation_start_epoch,
                                                              galileo_termination_settings=self.galileo_mission_case,
                                                              stop_before_aerocapture=self._stop_before_aerocapture,
                                                              stop_after_aerocapture=self._stop_after_aerocapture,
-                                                             entry_fpa=entry_fpa, bodies=bodies)
+                                                             entry_fpa_deg=entry_fpa_deg, bodies=bodies)
         return termination_settings
 
     def get_entry_heat_fluxes(self, return_history_dictionary = False):
@@ -398,8 +398,8 @@ class AerocaptureNumericalProblem:
             List of orbital parameters to be optimized:
                 0: interplanetary arrival velocity
                 1: atmospheric entry flight path angle
-                2: epoch of moon flyby
-                3: moon of flyby [0: None, 1: 'Io', 2: 'Europa', 3: 'Ganymede, 4: 'Callisto']
+                2: moon of flyby [0: None, 1: 'Io', 2: 'Europa', 3: 'Ganymede, 4: 'Callisto']
+                3: epoch of moon flyby
                 4: flyby impact parameter B
         Returns
         -------
@@ -417,11 +417,11 @@ class AerocaptureNumericalProblem:
         orbital_parameters_length = len(orbital_parameters)
         # moons_dict = {1: 'Io', 2: 'Europa', 3: 'Ganymede', 4: 'Callisto'}
 
-        interplanetary_arrival_velocity = orbital_parameters[0]
-        atm_entry_fpa = orbital_parameters[1]
+        interplanetary_arrival_velocity = orbital_parameters[0]  # m/s
+        atm_entry_fpa_deg = orbital_parameters[1]  # deg
 
         if orbital_parameters_length > 3:
-            flyby_moon_no = orbital_parameters[3]
+            flyby_moon_no = orbital_parameters[2]
         elif orbital_parameters_length == 3:
             flyby_moon_no = 0
         else:
@@ -430,7 +430,7 @@ class AerocaptureNumericalProblem:
         if 1 <= flyby_moon_no <= 4:
             if not self.flyby_occurs:
                 raise Exception('Current instance is set to have no flyby. change settings')
-            flyby_epoch = orbital_parameters[2]
+            flyby_epoch = orbital_parameters[3]
             flyby_moon = moons_optimization_parameter_dict[flyby_moon_no]
             B_parameter = orbital_parameters[4]
 
@@ -445,15 +445,20 @@ class AerocaptureNumericalProblem:
             moon_orbital_axis = unit_vector(np.cross(moon_position,moon_velocity))
             moon_eccentricity_vector = eccentricity_vector_from_cartesian_state(flyby_moon_state)
 
-            orbital_axis = moon_orbital_axis
-            initial_state_targeting_problem = ist.InitialStateTargeting(atmosphere_entry_fpa=atm_entry_fpa,
+
+            initial_state_targeting_problem = ist.InitialStateTargeting(atmosphere_entry_fpa=atm_entry_fpa_deg,
                                                                         atmosphere_entry_altitude=atmospheric_entry_altitude,
-                                                                        B_parameter=B_parameter,flyby_moon=flyby_moon,
+                                                                        B_parameter=B_parameter, flyby_moon=flyby_moon,
                                                                         flyby_epoch=flyby_epoch,
                                                                         jupiter_arrival_v_inf=interplanetary_arrival_velocity,
                                                                         perturb_fpa=self.entry_parameters_perturbation[1],
                                                                         perturb_entry_velocity_magnitude=self.entry_parameters_perturbation[0],
                                                                         start_at_entry_interface=self.start_at_entry_interface)
+
+            if initial_state_targeting_problem.trajectory_is_feasible == False:
+                self.trajectory_is_feasible = False
+            else:
+                self.trajectory_is_feasible = True
 
             simulation_start_epoch = initial_state_targeting_problem.get_simulation_start_epoch()
             initial_state = initial_state_targeting_problem.get_initial_state()
@@ -466,9 +471,9 @@ class AerocaptureNumericalProblem:
                 raise Exception('Current instance is set to have a post-aerocapture flyby. change settings')
             flyby_moon = ''
             orbital_axis = z_axis
-            simulation_start_epoch = orbital_parameters[2]
-            initial_state = Util.get_initial_state(atm_entry_fpa,atmospheric_entry_altitude,
-                                                   orbital_axis,interplanetary_arrival_velocity,
+            simulation_start_epoch = orbital_parameters[2]  # it's correct cs the third one is time when no flyby happens
+            initial_state = Util.get_initial_state(atm_entry_fpa_deg, atmospheric_entry_altitude,
+                                                   orbital_axis, interplanetary_arrival_velocity,
                                                    self.entry_parameters_perturbation[1],
                                                    self.entry_parameters_perturbation[0],
                                                    self.start_at_entry_interface) + self.initial_state_perturbation
@@ -477,7 +482,7 @@ class AerocaptureNumericalProblem:
 
         integrator_settings = self.create_integrator_settings(simulation_start_epoch)
         # if self._stop_before_aerocapture or self._stop_after_aerocapture:
-        termination_settings = self.create_termination_settings(simulation_start_epoch, atm_entry_fpa, bodies)
+        termination_settings = self.create_termination_settings(simulation_start_epoch, atm_entry_fpa_deg, bodies)
 
         # Create propagator settings
         propagator_settings = self.create_propagator_settings(initial_state, termination_settings,

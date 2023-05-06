@@ -43,19 +43,27 @@ class InitialStateTargeting:
         self.verbose = verbose
 
         self.initial_state = self.calculate_initial_state()
-        self.simulation_start_epoch = self.get_simulation_start_epoch()
+        if type(self.initial_state) == float or type(self.initial_state) == int:
+            if self.initial_state == -1:
+                self.trajectory_is_feasible = False
+                self.escape_trajectory = False
+            elif self.initial_state == -2:
+                self.trajectory_is_feasible = True
+                self.escape_trajectory = True
+            else:
+                self.simulation_start_epoch = self.get_simulation_start_epoch()
+                self.trajectory_is_feasible = True
+                self.escape_trajectory = False
+
+        else:
+            self.trajectory_is_feasible = True
+            self.escape_trajectory = False
 
         self.entire_trajectory_cartesian_states = None
         self.final_orbit_cartesian_states = None
         self.trajectory_state_history = None
 
     def calculate_initial_state(self):
-
-        # if self.B_parameter < 0:
-        #     prograde_flyby = False
-        # else:
-        #     prograde_flyby = True
-        # B_parameter_abs = abs(self.B_parameter)
 
         flyby_moon_state = spice_interface.get_body_cartesian_state_at_epoch(
             target_body_name=self.flyby_moon,
@@ -67,7 +75,7 @@ class InitialStateTargeting:
         moon_velocity = flyby_moon_state[3:6]
         moon_orbital_axis = unit_vector(np.cross(moon_position, moon_velocity))
         moon_eccentricity_vector = eccentricity_vector_from_cartesian_state(flyby_moon_state)
-        # moon_orbital_energy = orbital_energy(LA.norm(moon_position), LA.norm(moon_velocity), jupiter_gravitational_parameter)
+        moon_orbital_energy = orbital_energy(LA.norm(moon_position), LA.norm(moon_velocity), jupiter_gravitational_parameter)
         moon_sma = galilean_moons_data[self.flyby_moon]['SMA']
         moon_period = galilean_moons_data[self.flyby_moon]['Orbital_Period']
         moon_SOI = galilean_moons_data[self.flyby_moon]['SOI_Radius']
@@ -94,40 +102,39 @@ class InitialStateTargeting:
 
         # Calculate angular momentum
         angular_momentum_norm = arrival_radius * arrival_velocity_norm * np.cos(arrival_fpa)
-        # angular_momentum = z_axis * angular_momentum_norm
+        # angular_momentum = orbital_axis * angular_momentum_norm
 
         # Calculate other orbit elements
         semilatus_rectum = angular_momentum_norm ** 2 / jupiter_gravitational_parameter
         semimajor_axis = - jupiter_gravitational_parameter / (2 * initial_orbital_energy)
         eccentricity = np.sqrt(1 - semilatus_rectum / semimajor_axis)
 
+        departure_fpa = -np.arccos(angular_momentum_norm/(departure_radius*departure_velocity_norm))
+
         # Set arrival position on x axis
-        arrival_position = x_axis * arrival_radius
+        fake_arrival_position = x_axis * arrival_radius
 
         # Calculate arrival velocity for the atmospheric entry interface start case - X AXIS reference
         arr_vel_rotation_matrix = rotation_matrix(orbital_axis, np.pi / 2 - arrival_fpa)
-        arrival_velocity = arrival_velocity_norm * \
-                           rotate_vectors_by_given_matrix(arr_vel_rotation_matrix, unit_vector(arrival_position))
+        fake_arrival_velocity = arrival_velocity_norm * \
+                           rotate_vectors_by_given_matrix(arr_vel_rotation_matrix, unit_vector(fake_arrival_position))
 
-        aerocapture_analytical_problem = ae_analytical.AerocaptureSemianalyticalModel([0., 0.],
-                                                                                      atmospheric_entry_initial_position=arrival_position,
-                                                                                      orbit_datapoints=200,
-                                                                                      equations_order=2)
+        aerocapture_analytical_problem = ae_analytical.AerocaptureSemianalyticalModel([0., 0.], orbit_datapoints=200,
+                                                                                      equations_order=2,
+                                                                                      atmospheric_interface_altitude=atmospheric_entry_altitude)
         orbital_parameters = [departure_velocity_norm, arrival_fpa]
         aerocapture_analytical_problem.fitness(orbital_parameters)
-
-        self.raw_aerocapture_state_history = aerocapture_analytical_problem.get_cartesian_state_history()
 
         aerocapture_problem_parameters = aerocapture_analytical_problem.aerocapture_parameters_function()
         # Atmosphere exit fpa
         atmospheric_exit_fpa = aerocapture_problem_parameters[0]
         # Atmosphere exit velocity
         atmospheric_exit_velocity_norm = aerocapture_problem_parameters[1]
-        # Final position after aerocapture
-        atmospheric_entry_final_position = aerocapture_problem_parameters[4]
+        # Final radius after aerocapture
+        atmospheric_exit_radius = aerocapture_problem_parameters[4]
         # Phase angle of the atmospehric entry
         atmospheric_entry_final_phase_angle = aerocapture_problem_parameters[5]
-
+        # Elapsed time of the atmospheric entry
         aerocapture_elapsed_time = aerocapture_problem_parameters[6]
 
         self.aerocapture_problem_parameters = aerocapture_problem_parameters
@@ -151,6 +158,12 @@ class InitialStateTargeting:
         rot_matrix = rotation_matrix(orbital_axis, np.pi / 2 - second_arc_arrival_fpa)
         second_arc_arrival_velocity = rotate_vectors_by_given_matrix(rot_matrix, unit_vector(
             moon_position)) * second_arc_arrival_velocity_norm
+
+        second_arc_apocenter = second_arc_semimajor_axis*(1+second_arc_eccentricity)
+        if second_arc_apocenter < 0:
+            return -2
+        elif second_arc_apocenter < moon_sma + moon_SOI:
+            return -1
 
         flyby_initial_velocity_vector = second_arc_arrival_velocity - moon_velocity
         flyby_v_inf_t = LA.norm(flyby_initial_velocity_vector)
@@ -212,7 +225,7 @@ class InitialStateTargeting:
 
 
         # true_anomaly_boundary = 2 * np.pi - delta_angle + beta_angle
-        true_anomaly_boundary = position_rot_angle/2
+        true_anomaly_boundary = true_anomaly_from_radius(LA.norm(flyby_initial_position),flyby_eccentricity,flyby_sma)
         true_anomaly_boundary = true_anomaly_boundary if true_anomaly_boundary < 2 * np.pi else true_anomaly_boundary - 2 * np.pi
         true_anomaly_range = np.array([-true_anomaly_boundary, true_anomaly_boundary])
         flyby_elapsed_time = delta_t_from_delta_true_anomaly(true_anomaly_range,
@@ -233,7 +246,7 @@ class InitialStateTargeting:
         # moon_final_velocity = flyby_moon_state[3:6]
 
         if self.B_parameter > moon_SOI-150000:
-            ...
+            ...  # just to stop here when debugging
 
 
         fourth_arc_departure_position = flyby_final_position + moon_final_position
@@ -281,7 +294,7 @@ class InitialStateTargeting:
 
         second_arc_initial_position = rotate_vectors_by_given_matrix(
             rotation_matrix(orbital_axis, -second_arc_delta_true_anomaly),
-            unit_vector(second_arc_final_position)) * arrival_radius
+            unit_vector(second_arc_final_position)) * atmospheric_exit_radius
 
         first_arc_final_position = rotate_vectors_by_given_matrix(
             rotation_matrix(orbital_axis, -aerocapture_delta_phase_angle),
@@ -295,6 +308,10 @@ class InitialStateTargeting:
         first_arc_initial_position = rotate_vectors_by_given_matrix(
             rotation_matrix(orbital_axis, -first_arc_delta_true_anomaly),
             unit_vector(first_arc_final_position)) * jupiter_SOI_radius
+
+        first_arc_initial_velocity = rotate_vectors_by_given_matrix(
+            rotation_matrix(orbital_axis, np.pi/2-departure_fpa),
+            unit_vector(first_arc_initial_position)) * departure_velocity_norm
 
         # circ_vel_at_atm_entry = np.sqrt(
         #     jupiter_gravitational_parameter / (jupiter_radius + atmosphere_entry_altitude))
@@ -344,7 +361,7 @@ class InitialStateTargeting:
         # Calculate the departure position of the spacecraft
         pos_rotation_matrix = rotation_matrix(orbital_axis, -delta_true_anomaly)
         departure_position = rotate_vectors_by_given_matrix(pos_rotation_matrix, unit_vector(
-            moon_position)) * departure_radius
+            second_arc_final_position)) * departure_radius
 
         # Calculate departure fpa (useful to obtain departure velocity)
         departure_fpa = - np.arccos(
@@ -355,21 +372,31 @@ class InitialStateTargeting:
         departure_velocity = rotate_vectors_by_given_matrix(vel_rotation_matrix, unit_vector(
             departure_position)) * departure_velocity_norm
 
+        # line_of_nodes = unit_vector(np.cross(z_axis, orbital_axis))
+        # inclination = np.arccos(orbital_axis[2] / LA.norm(orbital_axis))
+        # rot_matrix = rotation_matrix(line_of_nodes, inclination)
+        # rotated_departure_position = rotate_vectors_by_given_matrix(rot_matrix, departure_position)  # (200,3)
+        # rotated_departure_velocity = rotate_vectors_by_given_matrix(rot_matrix, departure_velocity)  # (200,3)
+
+
         # Build the initial state vector
         initial_state_vector = np.concatenate((departure_position, departure_velocity))
 
         # Build the atmospheric entry interface state vector
         if self.start_at_entry_interface:
-            initial_state_vector = np.concatenate((arrival_position, arrival_velocity))
+            # rot_matrix = rotation_matrix(line_of_nodes, inclination)
+            # rotated_arrival_position = rotate_vectors_by_given_matrix(rot_matrix, arrival_position)  # (200,3)
+            # rotated_arrival_velocity = rotate_vectors_by_given_matrix(rot_matrix, arrival_velocity)  # (200,3)
+            initial_state_vector = np.concatenate((first_arc_final_position, first_arc_final_velocity))
 
-        self.orbit_data = ...
+        # self.orbit_data = ...
 
         self.arcs_dictionary = {
             'First': (
                 jupiter_SOI_radius, first_arc_final_position, eccentricity, semimajor_axis,
                 arrival_fpa, first_arc_final_velocity,initial_orbital_energy),
             'Second': (
-                LA.norm(atmospheric_entry_final_position), second_arc_final_position, second_arc_eccentricity,
+                atmospheric_exit_radius, second_arc_final_position, second_arc_eccentricity,
                 second_arc_semimajor_axis,
                 second_arc_arrival_fpa,second_arc_arrival_velocity, second_arc_orbital_energy),
             # 'Third': (
@@ -380,6 +407,8 @@ class InitialStateTargeting:
         self.final_orbit_data = [fourth_arc_eccentricity, fourth_arc_semimajor_axis,fourth_arc_departure_velocity, fourth_arc_departure_position,fourth_arc_orbital_energy]
 
         self.simulation_start_epoch = self.flyby_epoch - total_elapsed_time
+
+        self.raw_aerocapture_state_history = aerocapture_analytical_problem.get_cartesian_state_history(first_arc_final_position, orbital_axis)
 
         # Print the state vector for debugging
         if self.verbose:
@@ -395,6 +424,11 @@ class InitialStateTargeting:
 
     def get_trajectory_cartesian_states(self):
         return self.entire_trajectory_cartesian_states, self.final_orbit_cartesian_states
+
+    def get_trajectory_state_history(self):
+        if self.trajectory_state_history is None:
+            self.create_state_history()
+        return self.trajectory_state_history
 
     def create_state_history(self):
         flyby_moon_state = spice_interface.get_body_cartesian_state_at_epoch(
@@ -432,7 +466,7 @@ class InitialStateTargeting:
         arc_cartesian_state_history = {}
         total_state_history = {}
 
-        arc_final_epoch = self.simulation_start_epoch
+        arc_final_epoch = self.simulation_start_epoch # the first arc does not have a previous arc with a final epoch, so final_epoch is set as sim start epoch
 
         for arc in arcs_dictionary.keys():
             if arc == 'First':
@@ -453,6 +487,8 @@ class InitialStateTargeting:
             arc_arrival_velocity = arcs_dictionary[arc][5]
             arc_orbital_energy = arcs_dictionary[arc][6]
 
+            arc_eccentricity_vector = eccentricity_vector_from_cartesian_state(np.concatenate((arc_arrival_position,arc_arrival_velocity)))
+
             orbital_axis = unit_vector(np.cross(arc_arrival_position, arc_arrival_velocity))
             line_of_nodes = unit_vector(np.cross(z_axis, orbital_axis))
 
@@ -469,45 +505,59 @@ class InitialStateTargeting:
             # Calculate phase angle of first arc
             arc_phase_angle = arc_arrival_true_anomaly - arc_departure_true_anomaly
 
-            # End and start conditions w.r.t. x axis are the same, so we take the position at the node
-            arc_arrival_position_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(arc_arrival_position), x_axis))
-
-            # Check if such angle is greater than np.pi or not, and set it accordingly
-            if np.dot(np.cross(x_axis, arc_arrival_position), z_axis) < 0:
-                arc_arrival_position_angle_wrt_x_axis = - arc_arrival_position_angle_wrt_x_axis + 2 * np.pi
+            # # End and start conditions w.r.t. x axis are the same, so we take the position at the node
+            # arc_arrival_position_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(arc_arrival_position), x_axis))
+            #
+            # # Check if such angle is greater than np.pi or not, and set it accordingly
+            # if np.dot(np.cross(x_axis, arc_arrival_position), z_axis) < 0:
+            #     arc_arrival_position_angle_wrt_x_axis = - arc_arrival_position_angle_wrt_x_axis #+ 2 * np.pi
 
             # Calculate coordinate points of the first arc to be plotted
             arc_true_anomaly_vector = np.linspace(arc_departure_true_anomaly, arc_arrival_true_anomaly,
                                                           arc_number_of_points)
             radius_vector = radius_from_true_anomaly(arc_true_anomaly_vector, arc_eccentricity,
                                                      arc_semimajor_axis)
-            arc_true_anomaly_plot = np.linspace(arc_arrival_position_angle_wrt_x_axis - arc_phase_angle,
-                                                arc_arrival_position_angle_wrt_x_axis, arc_number_of_points)
+            # arc_true_anomaly_plot = np.linspace(arc_arrival_position_angle_wrt_x_axis - arc_phase_angle,
+            #                                     arc_arrival_position_angle_wrt_x_axis, arc_number_of_points)
+
+            arc_rotated_position_states = np.zeros((len(radius_vector),3))
+            for i in range(len(radius_vector)):
+                rot_matrix_pos = rotation_matrix(orbital_axis,arc_true_anomaly_vector[i])
+                arc_rotated_position_states[i,:] = rotate_vectors_by_given_matrix(rot_matrix_pos, unit_vector(arc_eccentricity_vector)) * radius_vector[i]
+
 
             epochs_vector = np.zeros(len(arc_true_anomaly_vector))
             for i in range(len(epochs_vector)):
                 epochs_vector[i] = initial_epoch + delta_t_from_delta_true_anomaly(np.array([arc_true_anomaly_vector[0],arc_true_anomaly_vector[i]]),arc_eccentricity,arc_semimajor_axis,jupiter_gravitational_parameter)
 
-            # Calculate first arc cartesian coordinates in trajectory frame
-            x_arc, y_arc = cartesian_2d_from_polar(radius_vector, arc_true_anomaly_plot)
-            z_arc = np.zeros(len(x_arc))
+            # # Calculate first arc cartesian coordinates in trajectory frame
+            # x_arc, y_arc = cartesian_2d_from_polar(radius_vector, arc_true_anomaly_plot)
+            # z_arc = np.zeros(len(x_arc))
+            #
+            # # Create matrix with point coordinates
+            # arc_position_states = np.vstack((x_arc, y_arc, z_arc)).T
+            #
+            # rot_matrix = rotation_matrix(line_of_nodes, inclination)
+            # arc_rotated_position_states = rotate_vectors_by_given_matrix(rot_matrix, arc_position_states)  # (200,3)
 
-            # Create matrix with point coordinates
-            arc_position_states = np.vstack((x_arc, y_arc, z_arc)).T
 
-            rot_matrix = rotation_matrix(line_of_nodes, inclination)
-            arc_rotated_position_states = rotate_vectors_by_given_matrix(rot_matrix, arc_position_states)  # (200,3)
+            flight_path_angles = np.arctan(arc_eccentricity*np.sin(arc_true_anomaly_vector)/(1+arc_eccentricity*np.cos(arc_true_anomaly_vector)))
+            velocity_magnitudes = velocity_from_energy(arc_orbital_energy,radius_vector,jupiter_gravitational_parameter)
 
-            flight_path_angle = np.arctan(arc_eccentricity*np.sin(arc_true_anomaly_vector)/(1+arc_eccentricity*np.cos(arc_true_anomaly_vector)))
-            velocity_magnitude = velocity_from_energy(arc_orbital_energy,radius_vector,jupiter_gravitational_parameter)
+            # arc_velocity_states = np.zeros(np.shape(arc_position_states))
+            # for i in range(len(arc_true_anomaly_vector)):
+            #     rot_matrix = rotation_matrix(z_axis,np.pi/2-flight_path_angles[i])
+            #     arc_velocity_states[i,:] = rotate_vectors_by_given_matrix(rot_matrix,unit_vector(arc_position_states[i,:]))*velocity_magnitudes[i]
+            #
+            # rot_matrix = rotation_matrix(line_of_nodes, inclination)
+            # arc_rotated_velocity_states = rotate_vectors_by_given_matrix(rot_matrix, arc_velocity_states)  # (200,3)
 
-            arc_velocity_states = np.zeros(np.shape(arc_position_states))
-            for i in range(len(arc_true_anomaly_vector)):
-                rot_matrix = rotation_matrix(z_axis,np.pi/2-flight_path_angle[i])
-                arc_velocity_states[i,:] = rotate_vectors_by_given_matrix(rot_matrix,unit_vector(arc_position_states[i,:]))*velocity_magnitude[i]
+            arc_rotated_velocity_states = np.zeros(np.shape(arc_rotated_position_states))
+            for i in range(len(flight_path_angles)):
+                rot_matrix_vel = rotation_matrix(orbital_axis,np.pi/2 - flight_path_angles[i])
+                arc_rotated_velocity_states[i,:] = rotate_vectors_by_given_matrix(rot_matrix_vel, unit_vector(arc_rotated_position_states[i,:])) * velocity_magnitudes[i]
 
-            rot_matrix = rotation_matrix(line_of_nodes, inclination)
-            arc_rotated_velocity_states = rotate_vectors_by_given_matrix(rot_matrix, arc_velocity_states)  # (200,3)
+
 
             arc_cartesian_state_history[arc] = np.concatenate((arc_rotated_position_states, arc_rotated_velocity_states), axis=1)
             arc_state_history_temp = dict(zip(epochs_vector,arc_cartesian_state_history[arc]))
@@ -528,17 +578,19 @@ class InitialStateTargeting:
         final_orbit_reference_position = self.final_orbit_data[3]
         final_orbit_orbital_energy = self.final_orbit_data[4]
 
+        # final_orbit_eccentricity_vector = eccentricity_vector_from_cartesian_state(np.concatenate((final_orbit_reference_position,final_orbit_reference_velocity)))
+
         final_orbit_orbital_axis = unit_vector(np.cross(final_orbit_reference_position, final_orbit_reference_velocity))
         final_orbit_line_of_nodes = unit_vector(np.cross(z_axis, final_orbit_orbital_axis))
 
         reference_cartesian_state = np.concatenate((final_orbit_reference_position,final_orbit_reference_velocity))
-        eccentricity_vector = eccentricity_vector_from_cartesian_state(reference_cartesian_state)
+        final_orbit_eccentricity_vector = eccentricity_vector_from_cartesian_state(reference_cartesian_state)
 
-        final_orbit_pericenter_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(eccentricity_vector), x_axis))
-
-        # Check if such angle is greater than np.pi or not, and set it accordingly
-        if np.dot(np.cross(x_axis, eccentricity_vector), z_axis) < 0:
-            final_orbit_pericenter_angle_wrt_x_axis = - final_orbit_pericenter_angle_wrt_x_axis + 2 * np.pi
+        # final_orbit_pericenter_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(final_orbit_eccentricity_vector), x_axis))
+        #
+        # # Check if such angle is greater than np.pi or not, and set it accordingly
+        # if np.dot(np.cross(x_axis, final_orbit_eccentricity_vector), z_axis) < 0:
+        #     final_orbit_pericenter_angle_wrt_x_axis = - final_orbit_pericenter_angle_wrt_x_axis + 2 * np.pi
 
         # if escape_orbit or flyby_induced_escape:
         #     true_anomaly_limit = np.arccos(-1 / final_orbit_eccentricity) - 0.1
@@ -551,15 +603,19 @@ class InitialStateTargeting:
         # else:
         post_flyby_true_anomaly = true_anomaly_from_radius(LA.norm(final_orbit_reference_position),final_orbit_eccentricity,final_orbit_semimajor_axis)
 
-        final_orbit_true_anomaly_vector = np.linspace(-np.pi, np.pi, final_orbit_number_of_points)
-        final_orbit_true_anomaly_vector = np.linspace(post_flyby_true_anomaly, 2*np.pi + post_flyby_true_anomaly, final_orbit_number_of_points)
+        # final_orbit_true_anomaly_vector = np.linspace(-np.pi, np.pi, final_orbit_number_of_points)
+        if final_orbit_eccentricity < 1:
+            final_orbit_true_anomaly_vector = np.linspace(post_flyby_true_anomaly, 2*np.pi + post_flyby_true_anomaly, final_orbit_number_of_points)
+        else:
+            soi_edge_true_anomaly = true_anomaly_from_radius(jupiter_SOI_radius,final_orbit_eccentricity,final_orbit_semimajor_axis)
+            final_orbit_true_anomaly_vector = np.linspace(post_flyby_true_anomaly, soi_edge_true_anomaly, final_orbit_number_of_points)
 
 
         final_orbit_radius_vector = radius_from_true_anomaly(final_orbit_true_anomaly_vector, final_orbit_eccentricity,
                                                              final_orbit_semimajor_axis)
-        final_orbit_true_anomaly_plot = np.linspace(
-            final_orbit_pericenter_angle_wrt_x_axis + final_orbit_true_anomaly_vector[0],
-            final_orbit_pericenter_angle_wrt_x_axis + final_orbit_true_anomaly_vector[-1], final_orbit_number_of_points)
+        # final_orbit_true_anomaly_plot = np.linspace(
+        #     final_orbit_pericenter_angle_wrt_x_axis + final_orbit_true_anomaly_vector[0],
+        #     final_orbit_pericenter_angle_wrt_x_axis + final_orbit_true_anomaly_vector[-1], final_orbit_number_of_points)
 
         final_orbit_epochs_vector = np.zeros(len(final_orbit_true_anomaly_vector))
         # final_orbit_initial_epoch  (gets calculated above)
@@ -568,27 +624,39 @@ class InitialStateTargeting:
                 np.array([final_orbit_true_anomaly_vector[0], final_orbit_true_anomaly_vector[i]]), final_orbit_eccentricity,
                 final_orbit_semimajor_axis, jupiter_gravitational_parameter)
 
-        # Calculate first arc cartesian coordinates in trajectory frame
-        x_final_orbit, y_final_orbit = cartesian_2d_from_polar(final_orbit_radius_vector, final_orbit_true_anomaly_plot)
-        z_final_orbit = np.zeros(len(x_final_orbit))
+        # # Calculate first arc cartesian coordinates in trajectory frame
+        # x_final_orbit, y_final_orbit = cartesian_2d_from_polar(final_orbit_radius_vector, final_orbit_true_anomaly_plot)
+        # z_final_orbit = np.zeros(len(x_final_orbit))
+        #
+        # final_orbit_inclination = np.arccos(final_orbit_orbital_axis[2] / LA.norm(final_orbit_orbital_axis))
+        #
+        # final_orbit_position_states = np.vstack((x_final_orbit, y_final_orbit, z_final_orbit)).T
+        # rot_matrix = rotation_matrix(final_orbit_line_of_nodes, final_orbit_inclination)
+        # final_orbit_rotated_position_states = rotate_vectors_by_given_matrix(rot_matrix, final_orbit_position_states)
 
-        final_orbit_inclination = np.arccos(final_orbit_orbital_axis[2] / LA.norm(final_orbit_orbital_axis))
+        final_orbit_rotated_position_states = np.zeros((len(final_orbit_radius_vector),3))
+        for i in range(len(final_orbit_radius_vector)):
+            rot_matrix_pos = rotation_matrix(final_orbit_orbital_axis, final_orbit_true_anomaly_vector[i])
+            final_orbit_rotated_position_states[i, :] = rotate_vectors_by_given_matrix(rot_matrix_pos,unit_vector(final_orbit_eccentricity_vector)) * final_orbit_radius_vector[i]
 
-        final_orbit_position_states = np.vstack((x_final_orbit, y_final_orbit, z_final_orbit)).T
-        rot_matrix = rotation_matrix(final_orbit_line_of_nodes, final_orbit_inclination)
-        final_orbit_rotated_position_states = rotate_vectors_by_given_matrix(rot_matrix, final_orbit_position_states)
 
-        final_orbit_flight_path_angle = np.arctan(final_orbit_eccentricity * np.sin(final_orbit_true_anomaly_vector) / (
+        final_orbit_flight_path_angles = np.arctan(final_orbit_eccentricity * np.sin(final_orbit_true_anomaly_vector) / (
                     1 + final_orbit_eccentricity * np.cos(final_orbit_true_anomaly_vector)))
-        final_orbit_velocity_magnitude = velocity_from_energy(final_orbit_orbital_energy, final_orbit_radius_vector, jupiter_gravitational_parameter)
+        final_orbit_velocity_magnitudes = velocity_from_energy(final_orbit_orbital_energy, final_orbit_radius_vector, jupiter_gravitational_parameter)
 
-        final_orbit_velocity_states = np.zeros(np.shape(final_orbit_position_states))
+        # final_orbit_velocity_states = np.zeros(np.shape(final_orbit_position_states))
+        # for i in range(len(final_orbit_true_anomaly_vector)):
+        #     rot_matrix = rotation_matrix(z_axis, np.pi / 2 - final_orbit_flight_path_angles[i])
+        #     final_orbit_velocity_states[i, :] = rotate_vectors_by_given_matrix(rot_matrix,unit_vector(final_orbit_position_states[i, :])) * final_orbit_velocity_magnitudes[i]
+        #
+        # rot_matrix = rotation_matrix(final_orbit_line_of_nodes, final_orbit_inclination)
+        # final_orbit_rotated_velocity_states = rotate_vectors_by_given_matrix(rot_matrix, final_orbit_velocity_states)  # (200,3)
+
+        final_orbit_rotated_velocity_states = np.zeros(np.shape(final_orbit_rotated_position_states))
         for i in range(len(final_orbit_true_anomaly_vector)):
-            rot_matrix = rotation_matrix(z_axis, np.pi / 2 - final_orbit_flight_path_angle[i])
-            final_orbit_velocity_states[i, :] = rotate_vectors_by_given_matrix(rot_matrix,unit_vector(final_orbit_position_states[i, :])) * final_orbit_velocity_magnitude[i]
-
-        rot_matrix = rotation_matrix(final_orbit_line_of_nodes, final_orbit_inclination)
-        final_orbit_rotated_velocity_states = rotate_vectors_by_given_matrix(rot_matrix, final_orbit_velocity_states)  # (200,3)
+            rot_matrix = rotation_matrix(final_orbit_orbital_axis, np.pi / 2 - final_orbit_flight_path_angles[i])
+            final_orbit_rotated_velocity_states[i, :] = rotate_vectors_by_given_matrix(rot_matrix, unit_vector(
+                final_orbit_rotated_position_states[i, :])) * final_orbit_velocity_magnitudes[i]
 
         final_orbit_cartesian_states = np.concatenate((final_orbit_rotated_position_states, final_orbit_rotated_velocity_states), axis=1)
 
@@ -600,28 +668,34 @@ class InitialStateTargeting:
         second_arc_cartesian_state_history = arcs_cartesian_state_history_values[1]
 
         first_arc_final_position = first_arc_cartesian_state_history[-1, 0:3]
-        # End and start conditions w.r.t. x axis are the same, so we take the position at the node
-        first_arc_arrival_position_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(first_arc_final_position), x_axis))
 
-        # Check if such angle is greater than np.pi or not, and set it accordingly
-        if np.dot(np.cross(x_axis, first_arc_final_position), z_axis) < 0:
-            first_arc_arrival_position_angle_wrt_x_axis = - first_arc_arrival_position_angle_wrt_x_axis + 2 * np.pi
+        # # End and start conditions w.r.t. x axis are the same, so we take the position at the node
+        # first_arc_arrival_position_angle_wrt_x_axis = np.arccos(np.dot(unit_vector(first_arc_final_position), x_axis))
+        #
+        # # Check if such angle is greater than np.pi or not, and set it accordingly
+        # if np.dot(np.cross(x_axis, first_arc_final_position), z_axis) < 0:
+        #     first_arc_arrival_position_angle_wrt_x_axis = - first_arc_arrival_position_angle_wrt_x_axis + 2 * np.pi
 
-        rot_matrix = rotation_matrix(z_axis,first_arc_arrival_position_angle_wrt_x_axis)
-        raw_ae_cartesian_sh = np.vstack(list(self.raw_aerocapture_state_history.values()))
-        raw_ae_position = raw_ae_cartesian_sh[:,0:3]
-        raw_ae_velocity = raw_ae_cartesian_sh[:,3:6]
-        x_rotated_ae_position = rotate_vectors_by_given_matrix(rot_matrix,raw_ae_position)
-        x_rotated_ae_velocity = rotate_vectors_by_given_matrix(rot_matrix,raw_ae_velocity)
+        # Aerocapture is computed wrt x axis in this case
+        # rot_matrix = rotation_matrix(z_axis,first_arc_arrival_position_angle_wrt_x_axis)
+        # raw_ae_cartesian_sh = np.vstack(list(self.raw_aerocapture_state_history.values()))
+        # raw_ae_position = raw_ae_cartesian_sh[:,0:3]
+        # raw_ae_velocity = raw_ae_cartesian_sh[:,3:6]
+        # x_rotated_ae_position = rotate_vectors_by_given_matrix(rot_matrix,raw_ae_position)
+        # x_rotated_ae_velocity = rotate_vectors_by_given_matrix(rot_matrix,raw_ae_velocity)
+        #
+        # rot_matrix = rotation_matrix(final_orbit_line_of_nodes,final_orbit_inclination)
+        # rotated_ae_position = rotate_vectors_by_given_matrix(rot_matrix,x_rotated_ae_position)
+        # rotated_ae_velocity = rotate_vectors_by_given_matrix(rot_matrix,x_rotated_ae_velocity)
 
-        rot_matrix = rotation_matrix(final_orbit_line_of_nodes,final_orbit_inclination)
-        rotated_ae_position = rotate_vectors_by_given_matrix(rot_matrix,x_rotated_ae_position)
-        rotated_ae_velocity = rotate_vectors_by_given_matrix(rot_matrix,x_rotated_ae_velocity)
+        # rotate from first_arc_final_position along first_arc_orbital_axis
 
-        aerocapture_state_history = np.concatenate((rotated_ae_position, rotated_ae_velocity), axis=1)
 
-        self.trajectory_state_history = total_state_history
-        self.entire_trajectory_cartesian_states = np.vstack((first_arc_cartesian_state_history, aerocapture_state_history, second_arc_cartesian_state_history))
+        aerocapture_cartesian_state_history = np.vstack(list(self.raw_aerocapture_state_history.values()))
+            # np.concatenate((rotated_ae_position, rotated_ae_velocity), axis=1)
+
+        self.trajectory_state_history = total_state_history # LACK AE STATE HISTORY
+        self.entire_trajectory_cartesian_states = np.vstack((first_arc_cartesian_state_history, aerocapture_cartesian_state_history, second_arc_cartesian_state_history))
         self.final_orbit_cartesian_states = final_orbit_cartesian_states
 
 

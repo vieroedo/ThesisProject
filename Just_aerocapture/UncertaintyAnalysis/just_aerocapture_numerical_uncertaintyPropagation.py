@@ -110,9 +110,8 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
     actual_arc_to_compute = arcs_to_compute_actually[uncertainty_nr]
 
     # Create aerocapture problem with model and integration settings of choice.
-    aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
-                                                               choose_model, integrator_settings_index,
-                                                               fly_galileo=fly_galileo,
+    aerocapture_problem = ae_model.AerocaptureNumericalProblem(decision_variable_range, choose_model,
+                                                               integrator_settings_index, fly_galileo=fly_galileo,
                                                                arc_to_compute=actual_arc_to_compute)
 
     # Initialize dictionary to store the results of the simulation

@@ -63,7 +63,8 @@ atmospheric_entry_altitude = arrival_pericenter_altitude
 atmospheric_entry_initial_position = pre_ae_arrival_position
 
 
-aerocapture_analytical_problem = AerocaptureSemianalyticalModel([0,1000],atmospheric_entry_initial_position,number_of_epochs_to_plot,choose_equations_order)
+aerocapture_analytical_problem = AerocaptureSemianalyticalModel([0, 1000], number_of_epochs_to_plot,
+                                                                choose_equations_order)
 aerocapture_analytical_problem.fitness([interplanetary_arrival_velocity_in_jupiter_frame, atmospheric_entry_fpa])
 
 # aerocapture_parameters:
@@ -78,8 +79,10 @@ atmospheric_exit_velocity_norm = aerocapture_problem_parameters[1]
 minimum_altitude = aerocapture_problem_parameters[3]
 # Travelled distance (assumed at surface)
 final_distance_travelled = aerocapture_problem_parameters[2]
-# Final position after aerocapture
-atmospheric_entry_final_position = aerocapture_problem_parameters[4]
+# Final radius after aerocapture
+atmospheric_exit_radius = aerocapture_problem_parameters[4]
+# Final (total) phase angle of the aerocapture phase
+atmospheric_exit_phase_angle = aerocapture_problem_parameters[5]
 
 # Aerocapture cartesian states and dependent variables
 entry_cartesian_states = np.vstack(list(aerocapture_analytical_problem.get_cartesian_state_history().values()))
@@ -98,9 +101,13 @@ ae_range_angles = dependent_variables[:,7]
 print('\n Atmosphere exit conditions:\n'
       f'- exit velocity: {atmospheric_exit_velocity_norm/1e3:.3f} km/s')
 
+atmosph_entry_rot_matrix = rotation_matrix(pre_ae_angular_momentum, atmospheric_exit_phase_angle)
+atmospheric_entry_final_position = rotate_vectors_by_given_matrix(atmosph_entry_rot_matrix,
+                                                                  atmospheric_entry_initial_position)
+
 p_ae_departure_velocity_norm = atmospheric_exit_velocity_norm
 p_ae_departure_fpa = atmospheric_exit_fpa
-p_ae_departure_radius = pre_ae_arrival_radius
+p_ae_departure_radius = atmospheric_exit_radius
 p_ae_departure_position = atmospheric_entry_final_position
 
 p_ae_orbital_energy = orbital_energy(p_ae_departure_radius, p_ae_departure_velocity_norm, jupiter_gravitational_parameter)

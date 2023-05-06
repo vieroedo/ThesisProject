@@ -141,7 +141,7 @@ def velocity_from_energy(energy: float, radius: float, mu_parameter:float):
     return np.sqrt(2 * (energy + mu_parameter / radius))
 
 
-def true_anomaly_from_radius(radius,eccentricity,sma, silence=False):
+def true_anomaly_from_radius(radius,eccentricity,sma, silence=True):
     """ WARNING: the solutions of ths function are 2! +theta and -theta, but only +theta is retrieved"""
     theta = np.arccos(np.clip(1/eccentricity * (sma*(1-eccentricity**2)/radius - 1), -1, 1))
     if not silence:
@@ -1138,3 +1138,66 @@ def secant_method(function: Callable,
         raise Warning('Secant method has not converged: max number of iterations reached.')
 
     return x_1, f__x_1, i
+
+########################################################################################################################
+# PLOTTING FUNCTIONS ###################################################################################################
+########################################################################################################################
+
+def plot_jupiter_and_galilean_orbits(ax, plot_orbits=True, title_addition = ''):
+    # draw jupiter
+    u, v = np.mgrid[0:2 * np.pi:20j, 0:np.pi:10j]
+    x = jupiter_radius * np.cos(u) * np.sin(v)
+    y = jupiter_radius * np.sin(u) * np.sin(v)
+    z = jupiter_radius * np.cos(v)
+    ax.plot_wireframe(x, y, z, color="saddlebrown")
+
+    # label axes and figure
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_title('Jupiter aerocapture trajectory' + title_addition)
+
+    # draw galilean moons' orbits
+    if plot_orbits:
+        for moon in galilean_moons_data.keys():
+            moon_sma = galilean_moons_data[moon]['SMA']
+            theta_angle = np.linspace(0, 2 * np.pi, 200)
+            x_m = moon_sma * np.cos(theta_angle)
+            y_m = moon_sma * np.sin(theta_angle)
+            z_m = np.zeros(len(theta_angle))
+            ax.plot3D(x_m, y_m, z_m, 'b')
+
+    return ax
+
+def set_axis_limits(ax):
+    # set proper plot axis limits
+    xyzlim = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()]).T
+    XYZlim = np.asarray([min(xyzlim[0]), max(xyzlim[1])])
+    ax.set_xlim3d(XYZlim)
+    ax.set_ylim3d(XYZlim)
+    ax.set_zlim3d(XYZlim * 0.75)
+    ax.set_aspect('auto')
+    return ax
+
+def plot_galilean_moon(ax, galilean_moon, epoch):
+    if galilean_moon not in ['Io', 'Europa', 'Ganymede', 'Callisto']:
+        raise Exception('wrong name for galilea moon')
+
+    flyby_moon_state = spice_interface.get_body_cartesian_state_at_epoch(
+        target_body_name=galilean_moon,
+        observer_body_name="Jupiter",
+        reference_frame_name=global_frame_orientation,
+        aberration_corrections="NONE",
+        ephemeris_time=epoch)
+    moon_radius = galilean_moons_data[galilean_moon]['Radius']
+
+    # draw moon
+    u, v = np.mgrid[0:2 * np.pi:20j, 0:np.pi:10j]
+    x_0 = flyby_moon_state[0]
+    y_0 = flyby_moon_state[1]
+    z_0 = flyby_moon_state[2]
+    x = x_0 + moon_radius * np.cos(u) * np.sin(v)
+    y = y_0 + moon_radius * np.sin(u) * np.sin(v)
+    z = z_0 + moon_radius * np.cos(v)
+    ax.plot_wireframe(x, y, z, color="b")
+    return ax

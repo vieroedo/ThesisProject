@@ -103,9 +103,9 @@ output_interpolation_step = constants.JULIAN_DAY  # s
 
 for model_test in range(number_of_models):
 
-    aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
-                                                               model_test, integrator_settings_index,
-                                                               fly_galileo=fly_galileo, arc_to_compute=-1)
+    aerocapture_problem = ae_model.AerocaptureNumericalProblem(decision_variable_range, model_test,
+                                                               integrator_settings_index, fly_galileo=fly_galileo,
+                                                               arc_to_compute=-1)
 
     # Define settings for celestial bodies
     bodies_to_create = ['Jupiter']

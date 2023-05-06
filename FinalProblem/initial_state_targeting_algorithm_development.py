@@ -105,10 +105,8 @@ def get_initial_state_with_flyby(atmosphere_entry_fpa: float,
     arrival_velocity = arrival_velocity_norm * \
                        rotate_vectors_by_given_matrix(arr_vel_rotation_matrix, unit_vector(arrival_position))
 
-    aerocapture_analytical_problem = ae_analytical.AerocaptureSemianalyticalModel([0.,0.],
-                                                                       atmospheric_entry_initial_position=arrival_position,
-                                                                       orbit_datapoints=200,
-                                                                       equations_order=2)
+    aerocapture_analytical_problem = ae_analytical.AerocaptureSemianalyticalModel([0., 0.], orbit_datapoints=200,
+                                                                                  equations_order=2)
     orbital_parameters = [departure_velocity_norm,arrival_fpa]
     aerocapture_analytical_problem.fitness(orbital_parameters)
 
@@ -123,7 +121,7 @@ def get_initial_state_with_flyby(atmosphere_entry_fpa: float,
     # Travelled distance (assumed at surface)
     final_distance_travelled = aerocapture_problem_parameters[2]
     # Final position after aerocapture
-    atmospheric_entry_final_position = aerocapture_problem_parameters[4]
+    atmospheric_exit_radius = aerocapture_problem_parameters[4]
     # Phase angle of the atmospehric entry
     atmospheric_entry_final_phase_angle = aerocapture_problem_parameters[5]
 
@@ -291,8 +289,8 @@ def get_initial_state_with_flyby(atmosphere_entry_fpa: float,
         jupiter_SOI_radius, first_arc_final_position, eccentricity, semimajor_axis,
         arrival_fpa),
         'Second': (
-        LA.norm(atmospheric_entry_final_position), second_arc_final_position, second_arc_eccentricity, second_arc_semimajor_axis,
-        second_arc_arrival_fpa),
+            atmospheric_exit_radius, second_arc_final_position, second_arc_eccentricity, second_arc_semimajor_axis,
+            second_arc_arrival_fpa),
         # 'Third': (
         # moon_sma, third_arc_final_position, third_arc_eccentricity, third_arc_semimajor_axis,
         # third_arc_arrival_fpa),

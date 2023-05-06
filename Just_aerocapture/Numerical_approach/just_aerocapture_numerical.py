@@ -78,9 +78,9 @@ decision_variable_range = [[0.],
 # inertial_state_deviation = np.array([0.00000,0.00000,0.00000,-8.51131,-2.95697,4.91416])
 inertial_state_deviation = np.zeros(6)
 
-aerocapture_problem = ae_model.AerocaptureNumericalProblem(simulation_start_epoch, decision_variable_range,
-                                                           choose_model, integrator_settings_index,
-                                                           fly_galileo=fly_galileo, arc_to_compute=-1,
+aerocapture_problem = ae_model.AerocaptureNumericalProblem(decision_variable_range, choose_model,
+                                                           integrator_settings_index, fly_galileo=fly_galileo,
+                                                           arc_to_compute=-1,
                                                            initial_state_perturbation=inertial_state_deviation)
 are_dependent_variables_to_save = True
 
