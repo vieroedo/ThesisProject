@@ -225,7 +225,7 @@ def get_termination_settings(simulation_start_epoch: float,
                              stop_before_aerocapture: bool = False,
                              stop_after_aerocapture: bool = False,
                              start_at_atmospheric_entry: bool=False,
-                             entry_fpa: float = 0.,
+                             entry_fpa_deg: float = 0.,
                              bodies = None) \
         -> tudatpy.kernel.numerical_simulation.propagation_setup.propagator.PropagationTerminationSettings:
     """
@@ -258,7 +258,7 @@ def get_termination_settings(simulation_start_epoch: float,
         Propagation termination settings object.
         :param start_at_atmospheric_entry:
     """
-    entry_fpa = np.deg2rad(entry_fpa)
+    entry_fpa_deg = np.deg2rad(entry_fpa_deg)
 
     # Return terminatino altitude for the Galileo mission
     if galileo_termination_settings:
@@ -337,9 +337,9 @@ def get_termination_settings(simulation_start_epoch: float,
     if stop_before_aerocapture or stop_after_aerocapture:
 
 
-        entry_fpa_limit_value = entry_fpa
+        entry_fpa_limit_value = entry_fpa_deg
         if stop_after_aerocapture:
-            exit_fpa = - entry_fpa
+            exit_fpa = - entry_fpa_deg
             entry_fpa_limit_value = exit_fpa
 
         # def custom_condition(time:float) -> bool:
