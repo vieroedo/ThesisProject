@@ -54,7 +54,7 @@ class AerocaptureSemianalyticalModel:
         self.state_history_function = None
         self.last_run_entry_parameters = None
 
-    def get_cartesian_state_history(self, aerocapture_initial_position: np.ndarray, orbital_axis: np.ndarray) -> dict:
+    def get_cartesian_state_history(self, aerocapture_initial_position: np.ndarray, aerocapture_initial_epoch: float, orbital_axis: np.ndarray) -> dict:
         """
         Returns the full history of the propagated state, converted to Cartesian states
         Parameters
@@ -63,9 +63,10 @@ class AerocaptureSemianalyticalModel:
         Returns
         -------
         dict
+        :param aerocapture_initial_epoch:
         """
 
-        self.create_cartesian_state_history(aerocapture_initial_position, orbital_axis)
+        self.create_cartesian_state_history(aerocapture_initial_position,aerocapture_initial_epoch, orbital_axis)
         return self.state_history_function()
 
     def get_dependent_variables_history(self) -> dict:
@@ -78,12 +79,13 @@ class AerocaptureSemianalyticalModel:
         -------
         dict
         """
+        warnings.warn('label epochs are have as t=0 the beginning of the aerocapture phase')
         return self.dependent_variable_history_function()
 
     def get_bounds(self):
         return self.decision_variable_range
 
-    def create_cartesian_state_history(self, aerocapture_initial_position: np.ndarray, orbital_axis: np.ndarray):
+    def create_cartesian_state_history(self, aerocapture_initial_position: np.ndarray, aerocapture_initial_epoch:float, orbital_axis: np.ndarray):
         if np.shape(orbital_axis) != (3,):
             raise Exception('Wrong orbital axis inserted')
         if np.shape(aerocapture_initial_position) != (3,):
@@ -109,6 +111,7 @@ class AerocaptureSemianalyticalModel:
         ae_velocities = dependent_variables[:, 1]
         ae_radii = dependent_variables[:, 2]
         ae_range_angles = dependent_variables[:, 7]
+        ae_time_vector = np.array(list(self.dependent_variable_history_function().keys())) + aerocapture_initial_epoch
 
         # x_unal, y_unal, z_unal = cartesian_3d_from_polar(ae_radii,np.zeros(len(ae_radii)),ae_range_angles)
         #
@@ -135,8 +138,9 @@ class AerocaptureSemianalyticalModel:
             entry_velocities_rot_matrix = rotation_matrix(orbital_axis, np.pi/2 - ae_fpas[i])
             velocity_states[i,:] = rotate_vectors_by_given_matrix(entry_velocities_rot_matrix, unit_vector(position_states[i, :])) * ae_velocities[i]
 
+
         cartesian_states = np.concatenate((position_states, velocity_states), axis=1)
-        self.state_history_function = lambda: dict(zip(ae_range_angles, cartesian_states))
+        self.state_history_function = lambda: dict(zip(ae_time_vector, cartesian_states))
 
 
     def fitness(self,
@@ -216,6 +220,14 @@ class AerocaptureSemianalyticalModel:
         integrand_function = ae_radii / (ae_velocities*np.cos(ae_fpas))
         delta_t = np.trapz(integrand_function, ae_range_angles)
 
+        elapsed_time_vector = np.zeros(len(ae_range_angles))
+        elapsed_time_vector[0] = 0.
+        for i in range(len(elapsed_time_vector)-1):
+            integrand_function_temp = ae_radii[i:i+2] / (ae_velocities[i:i+2] * np.cos(ae_fpas[i:i+2]))
+            delta_t_temp = np.trapz(integrand_function_temp, ae_range_angles[i:i+2])
+            elapsed_time_vector[i+1] = elapsed_time_vector[i] + delta_t_temp
+        ae_time_vector = elapsed_time_vector
+
         # Simple integration
         # delta_t_coarse = 0
         # theta_0 = 0
@@ -238,7 +250,7 @@ class AerocaptureSemianalyticalModel:
         dependent_variables = np.vstack((ae_fpas, ae_velocities, ae_radii, ae_densities, ae_drag, ae_lift, ae_wall_hfx, ae_range_angles)).T
 
         # The range angle is the independent variable
-        self.dependent_variable_history_function = lambda: dict(zip(ae_range_angles, dependent_variables))
+        self.dependent_variable_history_function = lambda: dict(zip(ae_time_vector, dependent_variables))
         self.aerocapture_parameters_function = lambda: [atmospheric_exit_fpa, atmospheric_exit_velocity_norm,
                                                         final_distance_travelled, minimum_altitude, atmospheric_exit_radius, atmospheric_entry_final_phase_angle, delta_t]
 
