@@ -90,6 +90,49 @@ def rotate_vectors_by_given_matrix(rot_matrix: np.ndarray, vector: np.ndarray):
                         'or a 2-D array of vectors with shape (n,3) where "n" is the number of vectors')
 
 
+def rotate_vector(vector, axis, angle):
+    vector_shape = np.shape(vector)
+    # angle_len = len(angle) if type(angle) is not np.float64 else 0
+    try:
+        angle_len = len(angle)
+    except:
+        angle_len = 0
+
+    if angle_len == 0:
+        rot_matrix = rotation_matrix(axis, angle)
+        rotated_vector = rotate_vectors_by_given_matrix(rot_matrix, vector)
+        return rotated_vector
+    elif len(vector_shape)==1 and angle_len>1:
+        rotated_vectors = np.zeros((angle_len,3))
+        for i in range(angle_len):
+            rot_matrix = rotation_matrix(axis, angle[i])
+            rotated_vectors[i,:] = rotate_vectors_by_given_matrix(rot_matrix, vector)
+        return rotated_vectors
+    elif len(vector_shape)==2 and angle_len>1:
+        rotated_vectors = np.zeros((angle_len, 3))
+        if vector_shape[1] != 3:
+            vector = vector.T # the vector has shape (n,3) now any case
+        if len(vector[:,0]) != angle_len:
+            raise Exception("number of vectors and values for rotationa angles must coincide!")
+        for i in range(angle_len):
+            rot_matrix = rotation_matrix(axis, angle[i])
+            rotated_vectors[i, :] = rotate_vectors_by_given_matrix(rot_matrix, vector[i,:])
+        return rotated_vectors
+    else:
+        raise Exception('wrong shape for angles or vectors')
+
+
+def velocity_vector_from_position(position, axis, fpa, velocity_mag):
+    if len(np.shape(position)) == 2:
+        try:
+            velocity_mag = velocity_mag.reshape((len(velocity_mag),1))
+        except:
+            raise Exception('idk something is wrong in here')
+    velocity_unit_vector = rotate_vector(unit_vector(position), axis, np.pi / 2 - fpa)
+    velocity_vector = velocity_unit_vector * velocity_mag
+    return velocity_vector
+
+
 def cartesian_2d_from_polar(r, theta):
     x = r * np.cos(theta)
     y = r * np.sin(theta)
@@ -141,12 +184,29 @@ def velocity_from_energy(energy: float, radius: float, mu_parameter:float):
     return np.sqrt(2 * (energy + mu_parameter / radius))
 
 
-def true_anomaly_from_radius(radius,eccentricity,sma, silence=True):
-    """ WARNING: the solutions of ths function are 2! +theta and -theta, but only +theta is retrieved"""
+def fpa_from_angular_momentum(angular_momentum, radius, velocity, is_fpa_positive):
+    if is_fpa_positive:
+        return np.arccos(angular_momentum/(radius*velocity))
+    else:
+        return - np.arccos(angular_momentum / (radius * velocity))
+
+
+def fpa_from_cartesian_state(position_vec, velocity_vec):
+    # returns values within [-np.pi/2, np.pi/2]
+    return np.arcsin(np.dot(unit_vector(position_vec), unit_vector(velocity_vec)))
+
+
+def true_anomaly_from_radius(radius,eccentricity,sma, return_positive, silence=True):
+    """ WARNING: the solutions of ths function are 2! +theta and -theta, but only +theta is retrieved
+    :param return_positive:
+    """
     theta = np.arccos(np.clip(1/eccentricity * (sma*(1-eccentricity**2)/radius - 1), -1, 1))
     if not silence:
         warnings.warn('The solutions of this function are 2! +theta and -theta, but only +theta is returned')
-    return theta
+    if return_positive:
+        return theta
+    else:
+        return - theta
 
 
 def radius_from_true_anomaly(true_anomaly, eccentricity, sma, planet_SoI = jupiter_SOI_radius):
@@ -1013,7 +1073,7 @@ def galileo_heat_fluxes_park(entry_altitudes):
     :return:
     q_r boundary-layer edge, q_r wall, q_c wall
     '''
-    galileo_heat_fluxes = np.loadtxt(handle_functions_directory + '/Just_aerocapture/GalileoMission/heat_fluxes_galileo_low_altitudes.txt')
+    galileo_heat_fluxes = np.loadtxt(handle_functions_directory + '/Just_aerocapture/Numerical_approach/GalileoMission/heat_fluxes_galileo_low_altitudes.txt')
     qr_boundary_layer_edge = galileo_heat_fluxes[:, 4] * 1e7  # W/m^2
     qr_wall = galileo_heat_fluxes[:, 5] * 1e7  # W/m^2
     qc_wall = galileo_heat_fluxes[:, 6] * 1e7  # W/m^2
@@ -1202,4 +1262,13 @@ def plot_galilean_moon(ax, galilean_moon, epoch):
     y = y_0 + moon_radius * np.sin(u) * np.sin(v)
     z = z_0 + moon_radius * np.cos(v)
     ax.plot_wireframe(x, y, z, color="b")
+    return ax
+
+def plot_grid(ax, tick_size):
+    # Show the major grid lines with dark grey lines
+    ax.grid(visible=True, which='major', color='#666666', linestyle='-')
+    # Show the minor grid lines with very faint and almost transparent grey lines
+    ax.minorticks_on()
+    ax.grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+    ax.tick_params(axis='both', which='major', labelsize=tick_size)
     return ax
