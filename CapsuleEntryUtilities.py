@@ -187,8 +187,8 @@ def get_initial_state(atmosphere_entry_fpa: float,
               f'- eccentricity: {eccentricity:.10f} ')
 
     # Calculate delta true anomaly spanned by the spacecraft
-    departure_true_anomaly = true_anomaly_from_radius(departure_radius, eccentricity, semimajor_axis)
-    arrival_true_anomaly = true_anomaly_from_radius(arrival_radius, eccentricity,semimajor_axis)
+    departure_true_anomaly = true_anomaly_from_radius(departure_radius, eccentricity, semimajor_axis, True)
+    arrival_true_anomaly = true_anomaly_from_radius(arrival_radius, eccentricity, semimajor_axis, True)
     delta_true_anomaly = arrival_true_anomaly - departure_true_anomaly
 
     # Calculate the departure position of the spacecraft
@@ -555,8 +555,8 @@ def get_propagator_settings(initial_state,
     else:
         return -1
 
-    if moon_of_flyby != '':
-        acceleration_settings_on_vehicle[moon_of_flyby] = [propagation_setup.acceleration.point_mass_gravity()]
+    # if moon_of_flyby != '':
+    #     acceleration_settings_on_vehicle[moon_of_flyby] = [propagation_setup.acceleration.point_mass_gravity()]
 
 
     # Create global accelerations' dictionary
