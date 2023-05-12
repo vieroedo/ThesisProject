@@ -24,13 +24,14 @@ from JupiterTrajectory_GlobalParameters import *
 # import handle_functions as hanfun
 
 # Make everything big
-plt.rc('font', size=15)
+plt.rc('font', size=12)
 
-show_galileo_flight = False
-plot_galileo_tabulated_data = False
+show_galileo_flight = True
+plot_galileo_tabulated_data = True
 plot_heatfluxes_in_dep_var_plots = False
 
 plot_figures_for_thesis = False
+plot_figures_for_traj_validation = True
 
 current_dir = os.path.dirname(__file__)
 if show_galileo_flight:
@@ -621,13 +622,16 @@ if plot_galileo_tabulated_data:
     flight_fpa = galileo_flight_data[:,3]
     flight_mach_no = galileo_flight_data[:,6]
     flight_cd = galileo_flight_data[:,9]
+    flight_mass = galileo_flight_data[:,4]
 
     entry_altitudes = altitude[entry_epochs_cells].reshape(atm_entry_vector_length)
     flight_heat_fluxes = Util.galileo_heat_fluxes_park(entry_altitudes)
 
     flight_density = Util.jupiter_atmosphere_density_model(flight_altitude)
 
-    flight_drag = 0.5 * flight_cd * flight_density * Util.galileo_ref_area * (flight_velocity)**2 / Util.galileo_mass
+    # flight_drag = 0.5 * flight_cd * flight_density * Util.galileo_ref_area * (flight_velocity)**2 / Util.galileo_mass
+    flight_drag = 0.5 * flight_cd * flight_density * Util.galileo_ref_area * (flight_velocity)**2 / flight_mass
+
 
     # epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(atm_entry_vector_length)
     # epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
@@ -722,7 +726,67 @@ if plot_galileo_tabulated_data:
         processed_data_error = data_error * data_error_scaling_factor[k]
         ax_gm[k].plot(flight_epochs_plot, processed_data_error)
         ax_gm[k].set_ylabel(y_labels[k])
-    ax_gm[-1].set_xlabel('elapsed time [s]')
+    ax_gm[-1].set_xlabel('Elapsed time [s]')
+
+    if plot_figures_for_traj_validation:
+
+        fig_traj_val_1, ax_traj_val_1 = plt.subplots(3, 1, figsize=(6, 5), sharex='col')
+        fig_traj_val_2, ax_traj_val_2 = plt.subplots(3, 1, figsize=(6, 5), sharex='col')
+
+        ax_traj_val_1[-1].set_xlabel('Elapsed time [s]')
+        ax_traj_val_2[-1].set_xlabel('Elapsed time [s]')
+
+
+        # epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(atm_entry_vector_length)
+        # epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
+
+        ax_traj_val_1[0].plot(epochs_plot_ae_phase, drag_acc_mod, label='drag')
+        ax_traj_val_1[0].plot(epochs_plot_ae_phase, lift_acc_mod, label='lift')
+        ax_traj_val_1[0].plot(epochs_plot_ae_phase, grav_acc[entry_epochs_cells].reshape(atm_entry_vector_length),
+                      label='gravity')
+        ax_traj_val_1[0].set(ylabel='acceleration [m/s^2]')
+        ax_traj_val_1[0].legend()
+
+        ax_traj_val_1[1].plot(epochs_plot_ae_phase, altitude[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
+        ax_traj_val_1[1].axhline(y=atmosphere_altitude_interfaces[0] / 1e3, color='grey', linestyle='dotted')
+        ax_traj_val_1[1].axhline(y=atmosphere_altitude_interfaces[1] / 1e3, color='grey', linestyle='dotted')
+        ax_traj_val_1[1].set(ylabel='altitude [km]')
+
+        ax_traj_val_1[2].plot(epochs_plot_ae_phase,
+                      flight_path_angle[entry_epochs_cells].reshape(atm_entry_vector_length) * 180 / np.pi)
+        ax_traj_val_1[2].axhline(y=atmosphere_fpa_interfaces[0] * 180 / np.pi, color='grey', linestyle='dotted')
+        ax_traj_val_1[2].axhline(y=atmosphere_fpa_interfaces[1] * 180 / np.pi, color='grey', linestyle='dotted')
+        ax_traj_val_1[2].set(ylabel='f.p.a. [deg]')
+
+        ax_traj_val_2[0].plot(epochs_plot_ae_phase, mach_number[entry_epochs_cells].reshape(atm_entry_vector_length))
+        ax_traj_val_2[0].set(ylabel='Mach number [-]')
+
+        ax_traj_val_2[1].plot(epochs_plot_ae_phase, atmospheric_density[entry_epochs_cells].reshape(atm_entry_vector_length))
+        ax_traj_val_2[1].set(ylabel=r'Density [kg/m$^3$]', yscale='log')
+
+        ax_traj_val_2[2].plot(epochs_plot_ae_phase, airspeed[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
+        ax_traj_val_2[2].set(ylabel='Airspeed [km/s]')
+
+        # ax_traj_val_2[6].plot(epochs_plot_ae_phase,
+        #               inertial_fpa[entry_epochs_cells].reshape(atm_entry_vector_length) * 180 / np.pi)
+        # ax_traj_val_2[6].axhline(y=atmosphere_fpa_interfaces[0] * 180 / np.pi, color='grey', linestyle='dotted')
+        # ax_traj_val_2[6].axhline(y=atmosphere_fpa_interfaces[1] * 180 / np.pi, color='grey', linestyle='dotted')
+        # ax_traj_val_2[6].set(ylabel='f.p.a. inertial [deg]')
+
+
+        ax_traj_val_1[0].plot(flight_epochs_plot, flight_drag[starting_cell:], color='grey', label='galileo drag',
+                      linestyle=linestyle_string)
+        ax_traj_val_1[0].legend()
+        ax_traj_val_1[1].plot(flight_epochs_plot, flight_altitude[starting_cell:] / 1e3, color='grey',
+                      linestyle=linestyle_string)
+        ax_traj_val_1[2].plot(flight_epochs_plot, flight_fpa[starting_cell:], color='grey', linestyle=linestyle_string)
+        ax_traj_val_2[0].plot(flight_epochs_plot, flight_mach_no[starting_cell:], color='grey', linestyle=linestyle_string)
+        ax_traj_val_2[1].plot(flight_epochs_plot, flight_density[starting_cell:], color='grey', linestyle=linestyle_string)
+        ax_traj_val_2[2].plot(flight_epochs_plot, flight_velocity[starting_cell:] / 1e3, color='grey',
+                      linestyle=linestyle_string)
+        fig_traj_val_1.tight_layout()
+        fig_traj_val_2.tight_layout()
+
 
 
 high_radiation_altitude_cells = np.where(altitude < Util.galilean_moons_data['Ganymede']['SMA'])

@@ -27,7 +27,7 @@ from handle_functions import *
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
-fly_galileo = False
+fly_galileo = True
 choose_model = 0 # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
 integrator_settings_index = -4
 
