@@ -477,6 +477,8 @@ class AerocaptureNumericalProblem:
                                                    self.entry_parameters_perturbation[1],
                                                    self.entry_parameters_perturbation[0],
                                                    self.start_at_entry_interface) + self.initial_state_perturbation
+            self.simulation_start_epoch = simulation_start_epoch
+            self.initial_state = initial_state
         else:
             raise Exception('Wrong value for flyby_moon')
 
