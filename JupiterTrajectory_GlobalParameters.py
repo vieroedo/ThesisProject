@@ -106,8 +106,8 @@ galileo_cd = 1.05 #1.02
 galileo_cl = 0.
 
 # Galileo entry interface parameters
-galileo_entry_velocity = 59.92e3  # m/s  # galileo entry velocity wrt atmosphere: 47.4054 km/s     59.6e3
-galileo_entry_fpa = np.deg2rad(-6.64)  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg   -6.69
+galileo_entry_velocity = 59.58e3  # m/s  # galileo entry velocity wrt atmosphere: 47.4054 km/s     59.6e3
+galileo_entry_fpa = np.deg2rad(-6.69)  # rad  # galileo entry fpa wrt atmosphere: -8.4104 deg   -6.69
 galileo_entry_latitude = np.deg2rad(6.57)  # rad
 galileo_entry_longitude = np.deg2rad(4.88)  # rad
 galileo_entry_heading = np.deg2rad(-2.6111)  # rad
