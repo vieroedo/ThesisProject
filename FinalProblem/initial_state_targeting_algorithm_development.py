@@ -220,14 +220,16 @@ def get_initial_state_with_flyby(atmosphere_entry_fpa: float,
     second_arc_final_position = moon_position + flyby_initial_position
 
     # Calculate delta true anomaly spanned by the spacecraft
-    first_arc_departure_true_anomaly = - true_anomaly_from_radius(departure_radius, eccentricity, semimajor_axis)
-    first_arc_arrival_true_anomaly = - true_anomaly_from_radius(arrival_radius, eccentricity,semimajor_axis)
+    first_arc_departure_true_anomaly = - true_anomaly_from_radius(departure_radius, eccentricity, semimajor_axis, True)
+    first_arc_arrival_true_anomaly = - true_anomaly_from_radius(arrival_radius, eccentricity, semimajor_axis, True)
     first_arc_delta_true_anomaly = first_arc_arrival_true_anomaly - first_arc_departure_true_anomaly
 
     aerocapture_delta_phase_angle = atmospheric_entry_final_phase_angle
 
-    second_arc_departure_true_anomaly = true_anomaly_from_radius(arrival_radius,second_arc_eccentricity,second_arc_semimajor_axis)
-    second_arc_arrival_true_anomaly = true_anomaly_from_radius(moon_sma, second_arc_eccentricity, second_arc_semimajor_axis)
+    second_arc_departure_true_anomaly = true_anomaly_from_radius(arrival_radius, second_arc_eccentricity,
+                                                                 second_arc_semimajor_axis, True)
+    second_arc_arrival_true_anomaly = true_anomaly_from_radius(moon_sma, second_arc_eccentricity,
+                                                               second_arc_semimajor_axis, True)
     second_arc_delta_true_anomaly = second_arc_arrival_true_anomaly - second_arc_departure_true_anomaly
 
     delta_true_anomaly = first_arc_delta_true_anomaly + aerocapture_delta_phase_angle + second_arc_delta_true_anomaly
@@ -315,10 +317,10 @@ def get_initial_state_with_flyby(atmosphere_entry_fpa: float,
         # Find true anomalies at the first arc boundaries
         arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius,
                                                                                        arc_eccentricity,
-                                                                                       arc_semimajor_axis)
+                                                                                       arc_semimajor_axis, True)
         arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius,
                                                                                          arc_eccentricity,
-                                                                                         arc_semimajor_axis)
+                                                                                         arc_semimajor_axis, True)
 
         # Calculate phase angle of first arc
         arc_phase_angle = arc_arrival_true_anomaly - arc_departure_true_anomaly
