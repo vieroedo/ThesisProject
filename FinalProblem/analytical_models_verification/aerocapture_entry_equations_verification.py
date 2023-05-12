@@ -24,7 +24,7 @@ import CapsuleEntryUtilities as Util
 import class_AerocaptureNumericalProblem as ae_model
 import class_InitialStateTargeting as ist
 
-
+check_folder_existence = True
 write_results_to_file = True
 choose_model = 0 # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
 integrator_settings_index = -4
@@ -88,10 +88,14 @@ integer_variable_names = ['FlybyMoon']
 # * Entry 4: Impact parameter of the flyby in meters
 
 
-number_of_runs = 10
+number_of_runs = 50
 
-# decision_variable_investigated =
 simulation_directory = current_dir + '/VerificationOutput'
+
+if check_folder_existence:
+    does_folder_exists = os.path.exists(simulation_directory)
+    shutil.rmtree(simulation_directory) if does_folder_exists else None
+    check_folder_existence = False
 
 aerocapture_problem = ae_model.AerocaptureNumericalProblem(decision_variable_range, choose_model,
                                                                        integrator_settings_index, do_flyby=True,
