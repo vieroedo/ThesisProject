@@ -264,7 +264,7 @@ flyby_semilatus_rectum = flyby_angular_momentum**2/mu_moon
 flyby_sma = - mu_moon / (2*flyby_orbital_energy)
 flyby_eccentricity = np.sqrt(1-flyby_semilatus_rectum/flyby_sma)
 
-true_anomaly_limit = true_anomaly_from_radius(moon_SOI_radius, flyby_eccentricity, flyby_sma)
+true_anomaly_limit = true_anomaly_from_radius(moon_SOI_radius, flyby_eccentricity, flyby_sma, True)
 
 true_anomaly_range = np.array([-true_anomaly_limit, true_anomaly_limit])
 delta_t_flyby = delta_t_from_delta_true_anomaly(true_anomaly_range, flyby_eccentricity, flyby_sma, mu_moon)
@@ -302,8 +302,10 @@ z_flyby = flyby_rotated_states[:,2] + np.ones(len(flyby_rotated_states[:,2])) * 
 ### DRAWING TRAJECTORY ARCS ############################################################################################
 
 # Find true anomalies at the second arc boundaries
-second_arc_arrival_true_anomaly = true_anomaly_from_radius(second_arc_arrival_radius, second_arc_eccentricity, second_arc_semimajor_axis)
-second_arc_departure_true_anomaly = true_anomaly_from_radius(second_arc_departure_radius, second_arc_eccentricity, second_arc_semimajor_axis)
+second_arc_arrival_true_anomaly = true_anomaly_from_radius(second_arc_arrival_radius, second_arc_eccentricity,
+                                                           second_arc_semimajor_axis, True)
+second_arc_departure_true_anomaly = true_anomaly_from_radius(second_arc_departure_radius, second_arc_eccentricity,
+                                                             second_arc_semimajor_axis, True)
 
 # Swap true anomaly signs if the trajectory is counterclockwise
 if np.dot(second_arc_angular_momentum_vector, z_axis) > 0:
@@ -314,8 +316,10 @@ if np.dot(second_arc_angular_momentum_vector, z_axis) > 0:
 second_arc_phase_angle = second_arc_arrival_true_anomaly - second_arc_departure_true_anomaly
 
 # Find true anomalies at the first arc boundaries
-first_arc_arrival_true_anomaly = - true_anomaly_from_radius(first_arc_arrival_radius, first_arc_eccentricity, first_arc_semimajor_axis)
-first_arc_departure_true_anomaly = - true_anomaly_from_radius(first_arc_departure_radius, first_arc_eccentricity, first_arc_semimajor_axis)
+first_arc_arrival_true_anomaly = - true_anomaly_from_radius(first_arc_arrival_radius, first_arc_eccentricity,
+                                                            first_arc_semimajor_axis, True)
+first_arc_departure_true_anomaly = - true_anomaly_from_radius(first_arc_departure_radius, first_arc_eccentricity,
+                                                              first_arc_semimajor_axis, True)
 
 # NOT NEEDED: Swap signs of true anomalies if needed
 if...:

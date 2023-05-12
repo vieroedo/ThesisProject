@@ -279,8 +279,10 @@ print('\nAtmospheric entry conditions:\n'
 ### DRAWING TRAJECTORY ARCS ############################################################################################
 
 # Find true anomalies at the second arc boundaries
-second_arc_arrival_true_anomaly = true_anomaly_from_radius(second_arc_arrival_radius, second_arc_eccentricity, second_arc_semimajor_axis)
-second_arc_departure_true_anomaly = true_anomaly_from_radius(second_arc_departure_radius, second_arc_eccentricity, second_arc_semimajor_axis)
+second_arc_arrival_true_anomaly = true_anomaly_from_radius(second_arc_arrival_radius, second_arc_eccentricity,
+                                                           second_arc_semimajor_axis, True)
+second_arc_departure_true_anomaly = true_anomaly_from_radius(second_arc_departure_radius, second_arc_eccentricity,
+                                                             second_arc_semimajor_axis, True)
 
 # Swap true anomaly signs if the trajectory is counterclockwise
 if np.dot(second_arc_angular_momentum_vector, z_axis) > 0:
@@ -291,8 +293,10 @@ if np.dot(second_arc_angular_momentum_vector, z_axis) > 0:
 second_arc_phase_angle = second_arc_arrival_true_anomaly - second_arc_departure_true_anomaly
 
 # Find true anomalies at the first arc boundaries
-first_arc_arrival_true_anomaly = - true_anomaly_from_radius(first_arc_arrival_radius, first_arc_eccentricity, first_arc_semimajor_axis)
-first_arc_departure_true_anomaly = - true_anomaly_from_radius(first_arc_departure_radius, first_arc_eccentricity, first_arc_semimajor_axis)
+first_arc_arrival_true_anomaly = - true_anomaly_from_radius(first_arc_arrival_radius, first_arc_eccentricity,
+                                                            first_arc_semimajor_axis, True)
+first_arc_departure_true_anomaly = - true_anomaly_from_radius(first_arc_departure_radius, first_arc_eccentricity,
+                                                              first_arc_semimajor_axis, True)
 
 # NOT NEEDED: Swap signs of true anomalies if needed
 if...:

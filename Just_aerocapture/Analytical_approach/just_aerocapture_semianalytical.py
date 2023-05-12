@@ -85,7 +85,7 @@ atmospheric_exit_radius = aerocapture_problem_parameters[4]
 atmospheric_exit_phase_angle = aerocapture_problem_parameters[5]
 
 # Aerocapture cartesian states and dependent variables
-entry_cartesian_states = np.vstack(list(aerocapture_analytical_problem.get_cartesian_state_history().values()))
+entry_cartesian_states = np.vstack(list(aerocapture_analytical_problem.get_cartesian_state_history(, 0,.values()))
 dependent_variables = np.vstack(list(aerocapture_analytical_problem.get_dependent_variables_history().values()))
 # [ae_fpas, ae_velocities, ae_radii, ae_densities, ae_drag, ae_lift, ae_wall_hfx, ae_range_angles]
 ae_fpas = dependent_variables[:,0]
@@ -144,8 +144,10 @@ else:
     p_ae_arrival_fpa = np.arccos(p_ae_angular_momentum_norm / (p_ae_arrival_radius * p_ae_arrival_velocity_norm))
     # third_arc_arrival_fpa_s = (third_arc_arrival_fpa_sol, -third_arc_arrival_fpa_sol) # we check both options
 
-    p_ae_departure_true_anomaly = true_anomaly_from_radius(p_ae_departure_radius, p_ae_eccentricity, p_ae_semimajor_axis)
-    p_ae_arrival_true_anomaly = true_anomaly_from_radius(p_ae_arrival_radius, p_ae_eccentricity, p_ae_semimajor_axis)
+    p_ae_departure_true_anomaly = true_anomaly_from_radius(p_ae_departure_radius, p_ae_eccentricity,
+                                                           p_ae_semimajor_axis, True)
+    p_ae_arrival_true_anomaly = true_anomaly_from_radius(p_ae_arrival_radius, p_ae_eccentricity, p_ae_semimajor_axis,
+                                                         True)
     # third_arc_arrival_true_anomalies = (third_arc_arrival_true_anomaly_sol, -third_arc_arrival_true_anomaly_sol)
 
     p_ae_phase_angle = p_ae_arrival_true_anomaly - p_ae_departure_true_anomaly
@@ -335,8 +337,11 @@ for arc in arcs_dictionary.keys():
     arc_arrival_fpa = arcs_dictionary[arc][4]
 
     # Find true anomalies at the first arc boundaries
-    arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius, arc_eccentricity, arc_semimajor_axis)
-    arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius, arc_eccentricity, arc_semimajor_axis)
+    arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius, arc_eccentricity,
+                                                                                   arc_semimajor_axis, True)
+    arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius,
+                                                                                     arc_eccentricity,
+                                                                                     arc_semimajor_axis, True)
 
     # Calculate phase angle of first arc
     arc_phase_angle = arc_arrival_true_anomaly - arc_departure_true_anomaly

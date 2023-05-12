@@ -85,8 +85,8 @@ print(f'Arrival orbit pericenter altitude: {(sc_sma__initial*(1-sc_eccentricity_
 print(f'Moon of choice: {choose_first_moon}    Moon Altitude: {(first_moon_sma-jupiter_radius)/1e3} km')
 print(f'Orbit pericenter - Moon SMA: {(sc_sma__initial*(1-sc_eccentricity__initial)-first_moon_sma)/1e3} km')
 
-initial_true_anomaly = - true_anomaly_from_radius(jupiter_SOI_radius, sc_eccentricity__initial, sc_sma__initial)
-first_flyby_true_anomaly = - true_anomaly_from_radius(first_moon_sma, sc_eccentricity__initial, sc_sma__initial)
+initial_true_anomaly = - true_anomaly_from_radius(jupiter_SOI_radius, sc_eccentricity__initial, sc_sma__initial, True)
+first_flyby_true_anomaly = - true_anomaly_from_radius(first_moon_sma, sc_eccentricity__initial, sc_sma__initial, True)
 
 # flyby occurs
 orbital_parameters = [interplanetary_arrival_velocity, flight_path_angle_at_atmospheric_entry, delta_angle_from_hohmann_trajectory]
@@ -102,7 +102,8 @@ atmospheric_entry_fpa = flyby_parameters[5]
 print(f'Atmospheric entry fpa: {np.rad2deg(atmospheric_entry_fpa):.3f} deg')
 print(f'Atm entry fpa initially set: {np.rad2deg(flight_path_angle_at_atmospheric_entry):.3f} deg')
 
-atmospheric_entry_true_anomaly = - true_anomaly_from_radius(atmospheric_entry_altitude, sc_eccentricity__post_flyby, sc_sma__post_flyby)
+atmospheric_entry_true_anomaly = - true_anomaly_from_radius(atmospheric_entry_altitude, sc_eccentricity__post_flyby,
+                                                            sc_sma__post_flyby, True)
 
 true_anomaly_range = np.array([first_flyby_true_anomaly, atmospheric_entry_true_anomaly])
 second_arc_delta_t = delta_t_from_delta_true_anomaly(true_anomaly_range,sc_eccentricity__post_flyby,sc_sma__post_flyby, jupiter_gravitational_parameter)
@@ -140,8 +141,10 @@ sc_semilatus_rectum__exit = sc_angular_momentum__exit ** 2 / jupiter_gravitation
 sc_sma__post_aerocapture = - jupiter_gravitational_parameter / (2 * sc_orbital_energy__exit)
 sc_eccentricity__post_aerocapture = np.sqrt(1 - sc_semilatus_rectum__exit/sc_sma__post_aerocapture)
 
-atmospheric_exit_true_anomaly = true_anomaly_from_radius(atmospheric_entry_altitude, sc_eccentricity__post_aerocapture, sc_sma__post_aerocapture)
-second_flyby_true_anomaly = true_anomaly_from_radius(second_moon_sma, sc_eccentricity__post_aerocapture, sc_sma__post_aerocapture)
+atmospheric_exit_true_anomaly = true_anomaly_from_radius(atmospheric_entry_altitude, sc_eccentricity__post_aerocapture,
+                                                         sc_sma__post_aerocapture, True)
+second_flyby_true_anomaly = true_anomaly_from_radius(second_moon_sma, sc_eccentricity__post_aerocapture,
+                                                     sc_sma__post_aerocapture, True)
 
 true_anomaly_range = np.array([atmospheric_exit_true_anomaly, second_flyby_true_anomaly])
 third_arc_delta_t = delta_t_from_delta_true_anomaly(true_anomaly_range,sc_eccentricity__post_aerocapture,sc_sma__post_aerocapture, jupiter_gravitational_parameter)

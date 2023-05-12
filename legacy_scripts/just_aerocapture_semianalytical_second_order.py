@@ -180,8 +180,10 @@ else:
     p_ae_arrival_fpa = np.arccos(p_ae_angular_momentum_norm / (p_ae_arrival_radius * p_ae_arrival_velocity_norm))
     # third_arc_arrival_fpa_s = (third_arc_arrival_fpa_sol, -third_arc_arrival_fpa_sol) # we check both options
 
-    p_ae_departure_true_anomaly = true_anomaly_from_radius(p_ae_departure_radius, p_ae_eccentricity, p_ae_semimajor_axis)
-    p_ae_arrival_true_anomaly = true_anomaly_from_radius(p_ae_arrival_radius, p_ae_eccentricity, p_ae_semimajor_axis)
+    p_ae_departure_true_anomaly = true_anomaly_from_radius(p_ae_departure_radius, p_ae_eccentricity,
+                                                           p_ae_semimajor_axis, True)
+    p_ae_arrival_true_anomaly = true_anomaly_from_radius(p_ae_arrival_radius, p_ae_eccentricity, p_ae_semimajor_axis,
+                                                         True)
     # third_arc_arrival_true_anomalies = (third_arc_arrival_true_anomaly_sol, -third_arc_arrival_true_anomaly_sol)
 
     p_ae_phase_angle = p_ae_arrival_true_anomaly - p_ae_departure_true_anomaly
@@ -371,8 +373,11 @@ for arc in arcs_dictionary.keys():
     arc_arrival_fpa = arcs_dictionary[arc][4]
 
     # Find true anomalies at the first arc boundaries
-    arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius, arc_eccentricity, arc_semimajor_axis)
-    arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius, arc_eccentricity, arc_semimajor_axis)
+    arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius, arc_eccentricity,
+                                                                                   arc_semimajor_axis, True)
+    arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius,
+                                                                                     arc_eccentricity,
+                                                                                     arc_semimajor_axis, True)
 
     # Calculate phase angle of first arc
     arc_phase_angle = arc_arrival_true_anomaly - arc_departure_true_anomaly

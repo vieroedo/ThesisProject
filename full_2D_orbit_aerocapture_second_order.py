@@ -256,8 +256,10 @@ print('\nAtmospheric entry conditions:\n'
 
 
 # Find true anomalies at the second arc boundaries
-second_arc_arrival_true_anomaly = true_anomaly_from_radius(second_arc_arrival_radius, second_arc_eccentricity, second_arc_semimajor_axis)
-second_arc_departure_true_anomaly = true_anomaly_from_radius(second_arc_departure_radius, second_arc_eccentricity, second_arc_semimajor_axis)
+second_arc_arrival_true_anomaly = true_anomaly_from_radius(second_arc_arrival_radius, second_arc_eccentricity,
+                                                           second_arc_semimajor_axis, True)
+second_arc_departure_true_anomaly = true_anomaly_from_radius(second_arc_departure_radius, second_arc_eccentricity,
+                                                             second_arc_semimajor_axis, True)
 
 # Swap true anomaly signs if the trajectory is counterclockwise
 if np.dot(second_arc_angular_momentum, z_axis) > 0:
@@ -436,8 +438,10 @@ third_arc_arrival_velocity_norm = np.sqrt(2 * (third_arc_orbital_energy + jupite
 third_arc_arrival_fpa = np.arccos(third_arc_angular_momentum_norm/(third_arc_arrival_radius*third_arc_arrival_velocity_norm))
 # third_arc_arrival_fpa_s = (third_arc_arrival_fpa_sol, -third_arc_arrival_fpa_sol) # we check both options
 
-third_arc_departure_true_anomaly = true_anomaly_from_radius(third_arc_departure_radius, third_arc_eccentricity, third_arc_semimajor_axis)
-third_arc_arrival_true_anomaly = true_anomaly_from_radius(third_arc_arrival_radius, third_arc_eccentricity, third_arc_semimajor_axis)
+third_arc_departure_true_anomaly = true_anomaly_from_radius(third_arc_departure_radius, third_arc_eccentricity,
+                                                            third_arc_semimajor_axis, True)
+third_arc_arrival_true_anomaly = true_anomaly_from_radius(third_arc_arrival_radius, third_arc_eccentricity,
+                                                          third_arc_semimajor_axis, True)
 # third_arc_arrival_true_anomalies = (third_arc_arrival_true_anomaly_sol, -third_arc_arrival_true_anomaly_sol)
 
 third_arc_phase_angle = third_arc_arrival_true_anomaly - third_arc_departure_true_anomaly
@@ -641,8 +645,11 @@ for arc in arcs_dictionary.keys():
     arc_arrival_fpa = arcs_dictionary[arc][4]
 
     # Find true anomalies at the first arc boundaries
-    arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius, arc_eccentricity, arc_semimajor_axis)
-    arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius, arc_eccentricity, arc_semimajor_axis)
+    arc_arrival_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_arrival_radius, arc_eccentricity,
+                                                                                   arc_semimajor_axis, True)
+    arc_departure_true_anomaly = np.sign(arc_arrival_fpa) * true_anomaly_from_radius(arc_departure_radius,
+                                                                                     arc_eccentricity,
+                                                                                     arc_semimajor_axis, True)
 
     # Calculate phase angle of first arc
     arc_phase_angle = arc_arrival_true_anomaly - arc_departure_true_anomaly
@@ -693,7 +700,8 @@ if escape_orbit or flyby_induced_escape:
     true_anomaly_limit = np.arccos(-1/final_orbit_eccentricity) - 0.1
     initial_true_anomaly = 0.
     if flyby_induced_escape:
-        initial_true_anomaly = true_anomaly_from_radius(LA.norm(p_ae_moon_fb_position), final_orbit_eccentricity,final_orbit_semimajor_axis)
+        initial_true_anomaly = true_anomaly_from_radius(LA.norm(p_ae_moon_fb_position), final_orbit_eccentricity,
+                                                        final_orbit_semimajor_axis, True)
     final_orbit_true_anomaly_vector = np.linspace(initial_true_anomaly, true_anomaly_limit, final_orbit_number_of_points)
 else:
     final_orbit_true_anomaly_vector = np.linspace(-np.pi, np.pi, final_orbit_number_of_points)
