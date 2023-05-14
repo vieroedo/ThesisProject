@@ -1,5 +1,5 @@
-import numpy
 import numpy as np
+import scipy as sp
 import math
 import numpy.linalg as LA
 from matplotlib import pyplot as plt
@@ -220,6 +220,17 @@ def radius_from_true_anomaly(true_anomaly, eccentricity, sma, planet_SoI = jupit
     return radius
 
 
+def eccentric_to_true_anomaly(anomaly, eccentricity):
+    """anomaly can be eccentric or hyperbolic anomaly"""
+    if eccentricity < 1:
+        return 2 * np.arctan(np.sqrt((1 + eccentricity) / (1 - eccentricity)) * np.tan(anomaly / 2))
+    if eccentricity == 1:
+        raise ValueError('no parabola implemented. eccentricity must not be equal to 1')
+    if eccentricity > 1:
+        return 2 * np.arctan(np.sqrt((eccentricity + 1) / (eccentricity - 1)) * np.tanh(anomaly / 2))
+    raise ValueError('Unexpected value of eccentricity')
+
+
 def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
                                     eccentricity: float,
                                     semi_major_axis: float,
@@ -304,6 +315,82 @@ def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
         print(f'Number of revolutions: {revolutions_no}     Elapsed time: {elapsed_time} s      Orbital period: {orbital_period(semi_major_axis,mu_parameter)} s')
         print(f'ohwell {(time_range[1] - time_range[0])}')
     return elapsed_time
+
+
+def true_anomaly_from_delta_t(time_vector: np.ndarray,
+                              eccentricity: float,
+                              semi_major_axis: float,
+                              mu_parameter: float,
+                              verbose:bool = False) -> float:
+    """"""
+    if eccentricity == 1:
+        raise ValueError('parabolas? we dont do that here. invalid value for eccentricity (e != 1)')
+
+    angular_velocity = np.sqrt(mu_parameter / abs(semi_major_axis) ** 3)
+    mean_anomaly_range = time_vector * angular_velocity
+
+    eccentric_anomaly_initial_guesses = kepler_equation_initial_guess(mean_anomaly_range, eccentricity)
+    kepler_equation_solution = sp.optimize.fsolve(kepler_equation_zeroed, eccentric_anomaly_initial_guesses, (eccentricity, mean_anomaly_range))
+    eccentric_anomaly_range = kepler_equation_solution
+
+    # eccentric_anomaly_range_test = np.zeros(2)
+    # for i in range(2):
+    #     sol = newton_rhapson(kepler_equation, kepler_equation_derivative, eccentric_anomaly_initial_guesses[i],
+    #                          mean_anomaly_range[i], eccentricity=eccentricity)
+    #     eccentric_anomaly_range_test[i] = sol[0]
+
+    true_anomaly_range = eccentric_to_true_anomaly(eccentric_anomaly_range, eccentricity)
+    delta_true_anomaly = true_anomaly_range[1] - true_anomaly_range[0]
+
+    if delta_true_anomaly < 0:
+        warnings.warn('true anomaly spanned is negative. did you put a negative time range?')
+
+    return delta_true_anomaly
+
+
+def kepler_equation(anomaly, eccentricity):
+    """anomaly can be eccentric or hyperbolic anomaly, depending on the eccentricity"""
+    if eccentricity < 0:
+        raise ValueError('Eccentricity cannot go below zero')
+    if 0 <= eccentricity < 1:
+        return anomaly - eccentricity * np.sin(anomaly)
+    if eccentricity == 1:
+        raise Exception('parabola not implemented')
+    if eccentricity > 1:
+        return eccentricity * np.sinh(anomaly) - anomaly
+    raise ValueError('Unexpected value for eccentricity')
+
+
+def kepler_equation_derivative(eccentric_anomaly, eccentricity):
+    if eccentricity < 0:
+        raise ValueError('Eccentricity cannot go below zero')
+    if 0 <= eccentricity < 1:
+        return 1 - eccentricity * np.cos(eccentric_anomaly)
+    if eccentricity == 1:
+        raise Exception('parabola not implemented')
+    if eccentricity > 1:
+        return eccentricity * np.cosh(eccentric_anomaly) - 1
+    raise ValueError('Unexpected value for eccentricity')
+
+
+def kepler_equation_initial_guess(mean_anomaly_range, eccentricity: float):
+    if type(mean_anomaly_range) in [float, np.float64]:
+        mean_anomaly_range = np.array([mean_anomaly_range])
+
+    number_of_guesses = len(mean_anomaly_range)
+
+    eccentric_anomaly_initial_guesses = np.zeros(number_of_guesses)
+    for i in range(number_of_guesses):
+        # mean_anomaly_range[i] = mean_anomaly_range[i] + 2*np.pi if mean_anomaly_range[i] < 0 else mean_anomaly_range[i]
+        if 0 < mean_anomaly_range[i] % (2 * np.pi) < np.pi or -2*np.pi < mean_anomaly_range[i] % (2 * np.pi) < -np.pi:
+            eccentric_anomaly_initial_guesses[i] = mean_anomaly_range[i] + eccentricity / 2
+        else:
+            eccentric_anomaly_initial_guesses[i] = mean_anomaly_range[i] - eccentricity / 2
+
+    return eccentric_anomaly_initial_guesses
+
+def kepler_equation_zeroed(eccentric_anomaly, eccentricity, mean_anomaly_range):
+    return kepler_equation(eccentric_anomaly, eccentricity) - mean_anomaly_range
 
 
 def eccentricity_vector_from_cartesian_state(cartesian_state: np.ndarray) -> np.ndarray:
@@ -1198,6 +1285,30 @@ def secant_method(function: Callable,
         raise Warning('Secant method has not converged: max number of iterations reached.')
 
     return x_1, f__x_1, i
+
+
+def newton_rhapson(function: Callable,
+                   derivative_function: Callable,
+                   initial_guess: float,
+                   zero_value: float=0,
+                   tolerance: float = 1e-15,
+                   max_iter: int = 1000,
+                   **kwargs):
+
+    x_value = initial_guess
+    i = 0
+
+    for i in range(max_iter):
+        x_new = x_value - (function(x_value, **kwargs) - zero_value) / derivative_function(x_value, **kwargs)
+        if abs(x_new - x_value) < tolerance:
+            x_value = x_new
+            break
+        x_value = x_new
+
+    if i == max_iter:
+        raise Warning('Newthon method has not converged: max number of iterations reached.')
+
+    return x_value, function(x_value, **kwargs), i
 
 ########################################################################################################################
 # PLOTTING FUNCTIONS ###################################################################################################
