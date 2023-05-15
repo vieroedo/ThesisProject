@@ -335,6 +335,8 @@ class AerocaptureNumericalProblem:
                                    ):
         if moon_of_flyby == '' and self.flyby_occurs:
             raise Exception('The current instance is set to have a flyby. please select a moon.')
+        if moon_of_flyby != '' and not self.flyby_occurs:
+            raise Exception('Aerocapture problem instancce declared to have no flyby. You can\'t select a moon')
 
         dependent_variables_to_save = Util.get_dependent_variable_save_settings(self.bodies_function())
         # propagator_settings = Util.get_propagator_settings(entry_fpa, atm_entry_alt, self.bodies_function(),
