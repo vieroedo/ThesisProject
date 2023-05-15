@@ -27,49 +27,49 @@ class GalileanMoon:
             ephemeris_time=self.epoch)
 
     @property
-    def get_cartesian_state(self):
+    def cartesian_state(self):
         return self._cartesian_state
 
     @property
-    def get_orbital_axis(self) -> np.ndarray:
-        moon_state = self.get_cartesian_state()
+    def orbital_axis(self) -> np.ndarray:
+        moon_state = self.cartesian_state()
         moon_position, moon_velocity = moon_state[0:3], moon_state[3:6]
         moon_orbital_axis = unit_vector(np.cross(moon_position, moon_velocity))
         return moon_orbital_axis
 
     @property
-    def get_eccentricity_vector(self) -> np.ndarray:
-        moon_state = self.get_cartesian_state()
+    def eccentricity_vector(self) -> np.ndarray:
+        moon_state = self.cartesian_state()
         return eccentricity_vector_from_cartesian_state(moon_state)
 
     @property
-    def get_orbital_energy(self):
-        moon_state = self.get_cartesian_state()
+    def orbital_energy(self):
+        moon_state = self.cartesian_state()
         moon_position, moon_velocity = moon_state[0:3], moon_state[3:6]
         return orbital_energy(LA.norm(moon_position), LA.norm(moon_velocity), jupiter_gravitational_parameter)
 
     @property
-    def get_moon_name(self):
+    def moon_name(self):
         return self._moon
 
     @property
-    def get_semimajor_axis(self):
+    def semimajor_axis(self):
         return self._semimajor_axis
 
     @property
-    def get_orbital_period(self):
+    def orbital_period(self):
         return self._orbital_period
 
     @property
-    def get_SOI_radius(self):
+    def SOI_radius(self):
         return self._SOI_radius
 
     @property
-    def get_radius(self):
+    def radius(self):
         return self._radius
 
     @property
-    def get_gravitational_parameter(self):
+    def gravitational_parameter(self):
         return self._gravitational_parameter
 
     def get_epoch(self):
