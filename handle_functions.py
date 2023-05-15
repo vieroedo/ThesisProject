@@ -16,6 +16,7 @@ from tudatpy.kernel.numerical_simulation import environment_setup
 from tudatpy.kernel.astro import element_conversion
 from tudatpy.kernel.math import interpolators
 
+
 from JupiterTrajectory_GlobalParameters import *
 
 handle_functions_directory = os.path.dirname(__file__)
@@ -102,7 +103,7 @@ def rotate_vector(vector, axis, angle):
         rot_matrix = rotation_matrix(axis, angle)
         rotated_vector = rotate_vectors_by_given_matrix(rot_matrix, vector)
         return rotated_vector
-    elif len(vector_shape)==1 and angle_len>1:
+    elif len(vector_shape) == 1 and angle_len > 1:
         rotated_vectors = np.zeros((angle_len,3))
         for i in range(angle_len):
             rot_matrix = rotation_matrix(axis, angle[i])
@@ -166,6 +167,45 @@ def longitude_from_cartesian(position_state: np.ndarray, verbose: bool = True):
 ########################################################################################################################
 # ASTRODYNAMICS HELPER FUNCTIONS #######################################################################################
 ########################################################################################################################
+CARTESIAN_STATE_NUMBER_OF_ENTRIES = 6
+PARABOLA_ECCENTRICITY = 1
+
+
+def kepler_elements_from_cartesian_state(cartesian_state: np.ndarray, mu_parameter: float):
+
+    if len(cartesian_state) != CARTESIAN_STATE_NUMBER_OF_ENTRIES:
+        raise ValueError('Unexpected value for the cartesian state inserted')
+
+    state_position = cartesian_state[0:3]
+    state_velocity = cartesian_state[3:6]
+
+    eccentricity_vector = eccentricity_vector_from_cartesian_state(cartesian_state)
+    angular_momentum_vector = np.cross(state_position,state_velocity)
+    node_vector = np.cross(z_axis,angular_momentum_vector)
+    E_orbital_energy = orbital_energy(LA.norm(state_position), LA.norm(state_velocity), mu_parameter)
+
+    eccentricity = LA.norm(eccentricity_vector)
+
+    if eccentricity == PARABOLA_ECCENTRICITY:
+        semimajor_axis = np.inf
+    else:
+        semimajor_axis = - mu_parameter/(2*E_orbital_energy)
+
+    inclination = np.arccos(angular_momentum_vector[2] / LA.norm(angular_momentum_vector))
+    longitude_of_ascending_node = np.arccos(node_vector[0]/LA.norm(node_vector))
+    argument_of_periapsis = np.arccos(np.dot(unit_vector(node_vector), unit_vector(eccentricity_vector)))
+
+    true_anomaly = np.arccos(np.dot(unit_vector(eccentricity_vector), unit_vector(state_position)))
+
+    if eccentricity_vector[2] < 0:
+        argument_of_periapsis = 2*np.pi - argument_of_periapsis
+
+    if np.dot(state_position,state_velocity) < 0:
+        true_anomaly = 2*np.pi - true_anomaly
+
+    kepler_elements_list = [semimajor_axis,eccentricity,inclination,argument_of_periapsis,longitude_of_ascending_node,true_anomaly]
+    kepler_elements = np.array(kepler_elements_list)
+    return kepler_elements
 
 
 def orbital_energy(radius: float, velocity: float, mu_parameter:float):
@@ -317,17 +357,17 @@ def delta_t_from_delta_true_anomaly(true_anomaly_range: np.ndarray,
     return elapsed_time
 
 
-def true_anomaly_from_delta_t(time_vector: np.ndarray,
+def true_anomaly_from_delta_t(time_vector_pericenter_referenced: np.ndarray,
                               eccentricity: float,
                               semi_major_axis: float,
                               mu_parameter: float,
                               verbose:bool = False) -> float:
-    """"""
+
     if eccentricity == 1:
         raise ValueError('parabolas? we dont do that here. invalid value for eccentricity (e != 1)')
 
     angular_velocity = np.sqrt(mu_parameter / abs(semi_major_axis) ** 3)
-    mean_anomaly_range = time_vector * angular_velocity
+    mean_anomaly_range = time_vector_pericenter_referenced * angular_velocity
 
     eccentric_anomaly_initial_guesses = kepler_equation_initial_guess(mean_anomaly_range, eccentricity)
     kepler_equation_solution = sp.optimize.fsolve(kepler_equation_zeroed, eccentric_anomaly_initial_guesses, (eccentricity, mean_anomaly_range))
@@ -391,6 +431,22 @@ def kepler_equation_initial_guess(mean_anomaly_range, eccentricity: float):
 
 def kepler_equation_zeroed(eccentric_anomaly, eccentricity, mean_anomaly_range):
     return kepler_equation(eccentric_anomaly, eccentricity) - mean_anomaly_range
+
+def true_anomaly_from_referenced_delta_t(absolute_epochs_interval: np.ndarray,
+                                         initial_true_anomaly_reference_point: float,
+                                         eccentricity: float,
+                                         semi_major_axis: float,
+                                         mu_parameter: float,
+                                         verbose:bool = False) -> float:
+
+    delta_t_from_pericenter = delta_t_from_delta_true_anomaly(np.array([0., initial_true_anomaly_reference_point]),
+                                                              eccentricity, semi_major_axis, mu_parameter)
+    relative_epochs_interval = absolute_epochs_interval - absolute_epochs_interval[0]
+    pericenter_referenced_epochs = relative_epochs_interval + delta_t_from_pericenter
+
+    delta_true_anomaly = true_anomaly_from_delta_t(pericenter_referenced_epochs,
+                                                   eccentricity,semi_major_axis,mu_parameter)
+    return delta_true_anomaly
 
 
 def eccentricity_vector_from_cartesian_state(cartesian_state: np.ndarray) -> np.ndarray:
