@@ -4,6 +4,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from JupiterTrajectory_GlobalParameters import *
 import class_AerocaptureSemianalyticalModel as ae_analytical
 from handle_functions import *
+from class_GalileanMoon import GalileanMoon
+
+from tudatpy.kernel.astro import two_body_dynamics
 
 # Load spice kernels
 spice_interface.load_standard_kernels()
@@ -62,6 +65,7 @@ class InitialStateTargeting:
         self.entire_trajectory_cartesian_states = None
         self.final_orbit_cartesian_states = None
         self.trajectory_state_history = None
+        self.trajectory_state_history_custom = None
 
     def calculate_initial_state(self):
 
@@ -259,6 +263,7 @@ class InitialStateTargeting:
         # Calculate post-flyby r_p
         fourth_arc_pericenter = fourth_arc_semimajor_axis * (1 - fourth_arc_eccentricity)
 
+        fourth_arc_orbital_period = orbital_period(fourth_arc_semimajor_axis, jupiter_gravitational_parameter)
 
         # Calculate true anomaly spanned by the spacecraft in the first arc
         first_arc_departure_true_anomaly = true_anomaly_from_radius(first_arc_departure_radius,first_arc_eccentricity, first_arc_semimajor_axis, return_positive=False)
@@ -281,9 +286,9 @@ class InitialStateTargeting:
         total_elapsed_time = first_arc_elapsed_time + aerocapture_elapsed_time + second_arc_elapsed_time
 
         second_arc_initial_position = rotate_vector(atmospheric_exit_radius*unit_vector(second_arc_final_position), orbital_axis, -second_arc_delta_true_anomaly)
+        second_arc_initial_velocity = velocity_vector_from_position(second_arc_initial_position,orbital_axis,atmospheric_exit_fpa,atmospheric_exit_velocity_norm)
 
         first_arc_final_position = rotate_vector(first_arc_arrival_radius*unit_vector(second_arc_initial_position), orbital_axis, -aerocapture_delta_phase_angle)
-
         first_arc_final_velocity = velocity_vector_from_position(first_arc_final_position, orbital_axis, first_arc_arrival_fpa, first_arc_arrival_velocity_norm)
 
         # Compute initial state of first arc
@@ -320,10 +325,7 @@ class InitialStateTargeting:
         # Build the initial state vector
         initial_state_vector = np.concatenate((first_arc_initial_position, first_arc_initial_velocity))
 
-        # Build the atmospheric entry interface state vector
-        if self.start_at_entry_interface:
-            initial_state_vector = np.concatenate((first_arc_final_position, first_arc_final_velocity))
-
+        sphere_of_influence_entry_start_epoch = self.flyby_epoch - total_elapsed_time
 
         self.arcs_dictionary = {
             'First': (
@@ -338,19 +340,50 @@ class InitialStateTargeting:
             # third_arc_arrival_fpa),
         }
 
+        first_arc_start_epoch = sphere_of_influence_entry_start_epoch
+        aerocapture_start_epoch = first_arc_start_epoch + first_arc_elapsed_time
+        second_arc_start_epoch = aerocapture_start_epoch + aerocapture_elapsed_time
+        flyby_start_epoch = second_arc_start_epoch + second_arc_elapsed_time
+        final_orbit_start_epoch = flyby_start_epoch + flyby_elapsed_time
+
+        self.arcs_time_information = np.asarray([(first_arc_start_epoch, first_arc_elapsed_time),
+                                      (aerocapture_start_epoch, aerocapture_elapsed_time),
+                                      (second_arc_start_epoch, second_arc_elapsed_time),
+                                      (flyby_start_epoch, flyby_elapsed_time),
+                                      (final_orbit_start_epoch, fourth_arc_orbital_period)])
+
+        first_arc_initial_state = np.concatenate((first_arc_initial_position,first_arc_initial_velocity))
+        aerocapture_initial_state = np.concatenate((first_arc_final_position,first_arc_final_velocity))
+        second_arc_initial_state = np.concatenate((second_arc_initial_position,second_arc_initial_velocity))
+        flyby_initial_state = np.concatenate((second_arc_final_position,second_arc_arrival_velocity))
+        final_orbit_initial_state = np.concatenate((fourth_arc_departure_position,fourth_arc_departure_velocity))
+
+        self.arcs_initial_states = np.array([first_arc_initial_state,
+                                             aerocapture_initial_state,
+                                             second_arc_initial_state,
+                                             flyby_initial_state,
+                                             final_orbit_initial_state])
+
+
+
         self.final_orbit_data = [fourth_arc_eccentricity, fourth_arc_semimajor_axis,fourth_arc_departure_velocity, fourth_arc_departure_position,fourth_arc_orbital_energy]
 
-        self.simulation_start_epoch = self.flyby_epoch - total_elapsed_time
 
         aerocapture_start_epoch = self.flyby_epoch - second_arc_elapsed_time - aerocapture_elapsed_time
         self.aerocapture_state_history = aerocapture_analytical_problem.get_cartesian_state_history(
             first_arc_final_position, aerocapture_start_epoch, orbital_axis)
 
+        self.simulation_start_epoch = sphere_of_influence_entry_start_epoch
+
+        # Build the atmospheric entry interface state vector
+        if self.start_at_entry_interface:
+            initial_state_vector = np.concatenate((first_arc_final_position, first_arc_final_velocity))
+            self.simulation_start_epoch = aerocapture_start_epoch
+
         # Print the state vector for debugging
         if self.verbose:
             print('\nDeparture state:')
             print(f'{list(initial_state_vector)}')
-
         return initial_state_vector
 
     def get_initial_state(self):
@@ -366,6 +399,11 @@ class InitialStateTargeting:
         if self.trajectory_state_history is None:
             self.create_state_history()
         return self.trajectory_state_history
+
+    def get_trajectory_state_history_from_epochs(self, epochs):
+        if self.trajectory_state_history_custom is None:
+            self.create_state_history_from_epochs(epochs)
+        return self.trajectory_state_history_custom
 
     def create_state_history(self):
         flyby_moon_state = spice_interface.get_body_cartesian_state_at_epoch(
@@ -402,12 +440,21 @@ class InitialStateTargeting:
 
         arc_final_epoch = self.simulation_start_epoch # the first arc does not have a previous arc with a final epoch, so final_epoch is set as sim start epoch
 
-        for arc in arcs_dictionary.keys():
+        arcs_sequence = ['First', 'Aerocapture', 'Second']
+        if self.start_at_entry_interface:
+            arcs_sequence = ['Aerocapture', 'Second']
+            arcs_dictionary.pop('First')
+
+        for arc in arcs_sequence:
             if arc == 'First':
-                initial_epoch = arc_final_epoch # simulation start epoch
+                initial_epoch = self.simulation_start_epoch # simulation start epoch
             elif arc == 'Second':
                 aerocapture_elapsed_time = self.aerocapture_problem_parameters[6]
-                initial_epoch = arc_final_epoch + aerocapture_elapsed_time # aerocapture exit epoch
+                initial_epoch = self.simulation_start_epoch + self.arcs_time_information[0,1] + aerocapture_elapsed_time # aerocapture exit epoch
+            elif arc == 'Aerocapture':
+                # COMPUTE AEROCAPTURE STATE HISTORY
+                total_state_history.update(self.aerocapture_state_history)
+                continue
             else:
                 warnings.warn('no arcs wound with names First or Second')
                 continue
@@ -493,7 +540,6 @@ class InitialStateTargeting:
         final_orbit_radius_vector = radius_from_true_anomaly(final_orbit_true_anomaly_vector, final_orbit_eccentricity,
                                                              final_orbit_semimajor_axis)
 
-
         final_orbit_flight_path_angles = np.arctan(final_orbit_eccentricity * np.sin(final_orbit_true_anomaly_vector) / (
                     1 + final_orbit_eccentricity * np.cos(final_orbit_true_anomaly_vector)))
         final_orbit_velocity_magnitudes = velocity_from_energy(final_orbit_orbital_energy, final_orbit_radius_vector, jupiter_gravitational_parameter)
@@ -520,14 +566,73 @@ class InitialStateTargeting:
 
         first_arc_final_position = first_arc_cartesian_state_history[-1, 0:3]
 
-        # COMPUTE AEROCAPTURE STATE HISTORY
-        total_state_history.update(self.aerocapture_state_history)
-
         aerocapture_cartesian_state_history = np.vstack(list(self.aerocapture_state_history.values()))
 
         self.trajectory_state_history = total_state_history # LACK AE STATE HISTORY
         self.entire_trajectory_cartesian_states = np.vstack((first_arc_cartesian_state_history, aerocapture_cartesian_state_history, second_arc_cartesian_state_history))
         self.final_orbit_cartesian_states = final_orbit_cartesian_states
+
+    def create_state_history_from_epochs(self, epochs_vector: np.ndarray):
+        if self.simulation_start_epoch != epochs_vector[0]:
+            raise ValueError(f'Initial epoch differs from simulation start, by {abs(epochs_vector[0] - self.simulation_start_epoch)} s')
+
+        flyby_moon = GalileanMoon(self.flyby_moon, self.flyby_epoch)
+        flyby_moon_state = flyby_moon.cartesian_state
+        moon_position, moon_velocity = flyby_moon_state[0:3], flyby_moon_state[3:6]
+
+        arc_initial_states = self.arcs_initial_states
+        arc_initial_epochs = self.arcs_time_information[:,0]
+        arc_time_durations = self.arcs_time_information[:, 1]
+
+        total_state_history = {}
+        FIRST_ARC, AEROCAPTURE_ARC, SECOND_ARC, FLYBY_ARC, FINAL_ORBIT = 0, 1, 2, 3, 4
+
+        # cartesian_states = np.zeros((len(epochs_vector),6))
+        total_arc_epochs_list = []
+        for arc_no, arc_initial_state in enumerate(arc_initial_states):
+            mu_parameter = jupiter_gravitational_parameter
+            if arc_no == FIRST_ARC and self.start_at_entry_interface:
+                continue
+            if arc_no == AEROCAPTURE_ARC:
+                warnings.warn('might be wrong the aerocapture state history')
+                total_state_history.update(self.aerocapture_state_history)
+                continue
+            if arc_no == FLYBY_ARC:
+                flyby_position = arc_initial_state[0:3] - moon_position
+                flyby_velocity = arc_initial_state[3:6] - moon_velocity
+                arc_initial_state = np.concatenate((flyby_position, flyby_velocity))
+                mu_parameter = flyby_moon.gravitational_parameter
+
+            arc_initial_kepler_elements = element_conversion.cartesian_to_keplerian(arc_initial_state, mu_parameter)
+            arc_initial_epoch = arc_initial_epochs[arc_no]
+            arc_time_of_flight = arc_time_durations[arc_no]
+
+            arc_epochs = epochs_vector[np.asarray(epochs_vector-arc_initial_epoch < arc_time_of_flight).nonzero()[0]]
+            arc_epochs = arc_epochs[np.asarray(arc_epochs-arc_initial_epoch>0).nonzero()[0]]
+
+            arc_cartesian_states = np.zeros((len(arc_epochs), 6))
+            for epoch_index, arc_current_epoch in enumerate(arc_epochs):
+                arc_elapsed_time = arc_current_epoch - arc_initial_epoch
+
+                arc_new_kepler_elements = two_body_dynamics.propagate_kepler_orbit(arc_initial_kepler_elements, arc_elapsed_time, mu_parameter)
+                arc_new_cartesian_state = element_conversion.keplerian_to_cartesian(arc_new_kepler_elements, mu_parameter)
+                arc_cartesian_states[epoch_index, :] = arc_new_cartesian_state
+
+            if arc_no == FLYBY_ARC:
+                arc_cartesian_states[:,0:3] = arc_cartesian_states[:,0:3] + moon_position
+                arc_cartesian_states[:,3:6] = arc_cartesian_states[:,3:6] + moon_velocity
+
+            # arc_cartesian_states = np.vstack(arc_cartesian_states_list)
+            arc_state_history = dict(zip(arc_epochs,arc_cartesian_states)) # fix what you do with epochs
+            total_state_history.update(arc_state_history)
+            total_arc_epochs_list = total_arc_epochs_list + list(arc_epochs)
+
+        total_arc_epochs = np.array(total_arc_epochs_list)
+        if not np.asarray(total_arc_epochs == epochs_vector).all():
+            warnings.warn('Not all epochs have been used. Epochs vector extends further than the analytical orbit timespan. Extrapolation needed')
+            # raise Exception('Not all epochs have been assigned')
+
+        self.trajectory_state_history_custom = total_state_history
 
 
     def plot_trajectory(self):
