@@ -38,14 +38,7 @@ spice_interface.load_standard_kernels()
 # DEFINE SIMULATION SETTINGS ##############################################
 ###########################################################################
 
-# # Set simulation flyby epoch
-# simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
-# simulation_flyby_epoch = 11293 * constants.JULIAN_DAY  # s
-# # Atmospheric entry conditions
-# flight_path_angle_at_atmosphere_entry = -3.1  # degrees
-# interplanetary_arrival_velocity = 5600  # m/s
-# moon_no = 3
-# flyby_B_parameter = ...
+start_at_entry_interface = True
 
 MJD200_date = 66154  # 01/01/2040
 J2000_date = MJD200_date - 51544
@@ -88,7 +81,7 @@ integer_variable_names = ['FlybyMoon']
 # * Entry 4: Impact parameter of the flyby in meters
 
 
-number_of_runs = 50
+number_of_runs = 5
 
 simulation_directory = current_dir + '/VerificationOutput'
 
@@ -97,9 +90,13 @@ if check_folder_existence:
     shutil.rmtree(simulation_directory) if does_folder_exists else None
     check_folder_existence = False
 
+if start_at_entry_interface:
+    arc_to_compute = 12
+else:
+    arc_to_compute = -1
 aerocapture_problem = ae_model.AerocaptureNumericalProblem(decision_variable_range, choose_model,
-                                                                       integrator_settings_index, do_flyby=True,
-                                                                       arc_to_compute=-1)
+                                                           integrator_settings_index, do_flyby=True,
+                                                           arc_to_compute=arc_to_compute)
 
 for variable_no, decision_variable_investigated in enumerate(decision_variable_names):
 
@@ -140,6 +137,8 @@ for variable_no, decision_variable_investigated in enumerate(decision_variable_n
                 simulation_flyby_epoch = variable_linspace[run]
             elif decision_variable_investigated == 'ImpactParameter':
                 flyby_B_parameter = variable_linspace[run]
+                if flyby_B_parameter == 0.:
+                    continue
             else:
                 raise Exception('wrong variable name or nonexisting variable')
 
@@ -155,7 +154,8 @@ for variable_no, decision_variable_investigated in enumerate(decision_variable_n
                                                                         atmosphere_entry_altitude=atmospheric_entry_altitude,
                                                                         B_parameter=flyby_B_parameter, flyby_moon=current_moon,
                                                                         flyby_epoch=simulation_flyby_epoch,
-                                                                        jupiter_arrival_v_inf=interplanetary_arrival_velocity
+                                                                        jupiter_arrival_v_inf=interplanetary_arrival_velocity,
+                                                                        start_at_entry_interface=start_at_entry_interface
                                                                         )
             # analytical_simulation_start_epoch = initial_state_targeting_problem.get_simulation_start_epoch()
             # analytical_initial_state = initial_state_targeting_problem.get_initial_state()
@@ -184,7 +184,8 @@ for variable_no, decision_variable_investigated in enumerate(decision_variable_n
             ### OUTPUT OF THE SIMULATION ###
             # Retrieve propagated state and dependent variables
             numerical_state_history = dynamics_simulator.state_history
-            analytical_state_history = initial_state_targeting_problem.get_trajectory_state_history()
+            # analytical_state_history = initial_state_targeting_problem.get_trajectory_state_history()
+            analytical_state_history = initial_state_targeting_problem.get_trajectory_state_history_from_epochs(np.array(list(numerical_state_history.keys())))
             # unprocessed_state_history = dynamics_simulator.unprocessed_state_history
             dependent_variable_history = dynamics_simulator.dependent_variable_history
 
