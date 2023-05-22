@@ -596,7 +596,7 @@ def compare_models(first_model: dict,
     second_model : dict
         State (or dependent variable history) from the second run.
     interpolation_epochs : np.ndarray
-        Vector of epochs at which the two runs are compared.
+        Vector of verification_epochs at which the two runs are compared.
     output_path : str
         If and where to save the benchmark results (if None, results are NOT written).
     filename : str
@@ -614,7 +614,7 @@ def compare_models(first_model: dict,
         first_model, interpolator_settings)
     second_interpolator = interpolators.create_one_dimensional_vector_interpolator(
         second_model, interpolator_settings)
-    # Calculate the difference between the first and second model at specific epochs
+    # Calculate the difference between the first and second model at specific verification_epochs
     model_difference = {epoch: second_interpolator.interpolate(epoch) - first_interpolator.interpolate(epoch)
                         for epoch in interpolation_epochs}
     # Write results to files

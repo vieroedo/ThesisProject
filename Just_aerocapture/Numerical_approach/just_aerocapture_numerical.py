@@ -27,7 +27,7 @@ from handle_functions import *
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
-fly_galileo = True
+fly_galileo = False
 choose_model = 0 # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
 integrator_settings_index = -4
 
@@ -57,7 +57,7 @@ spice_interface.load_standard_kernels()
 
 # Atmospheric entry conditions
 atmospheric_entry_interface_altitude = Util.atmospheric_entry_altitude  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
-flight_path_angle_at_atmosphere_entry = -3.1  # degrees
+flight_path_angle_at_atmosphere_entry = -3  # degrees
 interplanetary_arrival_velocity = 5600  # m/s
 
 ###########################################################################

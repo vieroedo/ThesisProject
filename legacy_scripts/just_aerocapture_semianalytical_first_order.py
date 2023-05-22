@@ -107,10 +107,10 @@ atmospheric_entry_initial_position = pre_ae_arrival_position
 fpa_entry, fpa_minimum_altitude, fpa_exit = ae_first_order.calculate_fpa_boundaries(atmospheric_entry_fpa)
 fpa_linspace = np.linspace(fpa_entry, fpa_exit, 100)
 
-aerocapture_quantities, other_data = ae_first_order.first_order_approximation_aerocapture(
-    fpa_linspace, fpa_entry, fpa_minimum_altitude,
-    atmospheric_entry_altitude + jupiter_radius,
-    atmospheric_entry_velocity_norm)
+aerocapture_quantities, other_data = ae_first_order.first_order_approximation_aerocapture(fpa_linspace, fpa_entry,
+                                                                                          fpa_minimum_altitude,
+                                                                                          atmospheric_entry_altitude + jupiter_radius,
+                                                                                          atmospheric_entry_velocity_norm)
 
 # Minimum altitude
 minimum_altitude = other_data[0]

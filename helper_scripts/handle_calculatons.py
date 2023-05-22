@@ -55,7 +55,7 @@ plt.xscale('log')
 convective_hf, radiative_hf, radiative_hf_w_blockage = atmospheric_entry_heat_loads_correlations(density_lol,
                                                                                                  galileo_velocity_from_altitude(
                                                                                                      altitude_lol),
-                                                                                                 nose_radius=galileo_radius)
+                                                                                                 nose_radius=galileo_nose_radius)
 
 plt.plot(altitude_lol/1e3,convective_hf, label='conv')
 plt.plot(altitude_lol/1e3,radiative_hf, label='rad')

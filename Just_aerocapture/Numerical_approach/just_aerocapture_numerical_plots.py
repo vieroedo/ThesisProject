@@ -67,7 +67,7 @@ simulation_result = state_history_matrix[:,1:]
 # epochs_vector = np.vstack(list(state_history.keys()))
 epochs_vector = state_history_matrix[:,0]
 epochs_plot = (epochs_vector - epochs_vector[0]) / constants.JULIAN_DAY
-# dependent_variables = np.vstack(list(dependent_variable_history.values()))
+# dependent_variables = np.vstack(list(numerical_dependent_variable_history.values()))
 dependent_variables = dependent_variable_history_matrix[:,1:]
 
 # Slice to separate various dep variables and quantities

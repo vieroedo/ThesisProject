@@ -110,7 +110,7 @@ def calculate_tau_boundaries_second_order_equations(entry_radius, entry_velocity
 def second_order_approximation_aerocapture(tau, tau_x1, a1, a2, a3, entry_radius, entry_velocity, entry_flight_path_angle,
                                            C_D0 = vehicle_cd, C_L = vehicle_cl, K_hypersonic = 0.,
                                            vehicle_mass = vehicle_mass, vehicle_surface = vehicle_reference_area,
-                                           nose_radius = vehicle_radius):
+                                           nose_radius = vehicle_nose_radius):
     # finish it so that it does everything of the entry traj
 
     # delta_parameter = ...  # + or - 1

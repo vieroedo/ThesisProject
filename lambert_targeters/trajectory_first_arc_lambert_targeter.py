@@ -29,7 +29,7 @@ arrival_range_angle_wrt_moon_velocity = -np.pi/4
 
 
 
-# radii and epochs calculation
+# radii and verification_epochs calculation
 moon_radius = galilean_moons_data[choose_arrival_moon]['Radius']  # moons_radii[choose_arrival_moon]  # m
 # arrival_pericenter_radius = moon_radius + arrival_pericenter_altitude  # m
 # departure_moon_SOI_radius = moon_radius + departure_pericenter_altitude  # m
@@ -123,7 +123,7 @@ lambert_arc_ephemeris = environment_setup.create_body_ephemeris(
     environment_setup.ephemeris.keplerian(lambert_arc_keplerian_elements, departure_epoch,
                                           jupiter_gravitational_parameter), "")
 
-# Selected epochs to plot
+# Selected verification_epochs to plot
 epoch_list = np.linspace(departure_epoch, arrival_epoch, number_of_epochs_to_plot)
 
 # Building lambert arc history dictionary

@@ -42,7 +42,7 @@ if arrival_from_ganymede_case:
     moon_pericenter_phase_angle = np.pi * 0.8  # rad
     number_of_epochs_to_plot = 1000  # /
 
-# radii and epochs calculation
+# radii and verification_epochs calculation
 moon_radius = galilean_moons_data[choose_moon]['Radius']  # m
 arrival_pericenter_radius = jupiter_radius + arrival_pericenter_altitude  # m
 departure_moon_SOI_radius = galilean_moons_data[choose_moon]['SOI_Radius']  # moon_radius + departure_pericenter_altitude  # m
@@ -132,7 +132,7 @@ lambert_arc_ephemeris = environment_setup.create_body_ephemeris(
     environment_setup.ephemeris.keplerian(lambert_arc_keplerian_elements, departure_epoch,
                                           jupiter_gravitational_parameter), "")
 
-# Selected epochs to plot
+# Selected verification_epochs to plot
 epoch_list = np.linspace(departure_epoch, arrival_epoch, number_of_epochs_to_plot)
 
 # Building lambert arc history dictionary

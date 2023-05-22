@@ -12,6 +12,7 @@ from tudatpy.kernel.numerical_simulation import propagation_setup
 from tudatpy.kernel import numerical_simulation
 
 import class_InitialStateTargeting as ist
+import optimization_functions as opt
 
 
 class AerocaptureNumericalProblem:
@@ -20,7 +21,6 @@ class AerocaptureNumericalProblem:
                  decision_variable_range,
                  environment_model: int = 0,
                  integrator_settings_index: int = -4,
-                 # post_ae_flyby_moon: str = '',
                  do_flyby: bool = False,
                  fly_galileo: bool = False,
                  arc_to_compute: int = -1,
@@ -338,7 +338,8 @@ class AerocaptureNumericalProblem:
         if moon_of_flyby != '' and not self.flyby_occurs:
             raise Exception('Aerocapture problem instancce declared to have no flyby. You can\'t select a moon')
 
-        dependent_variables_to_save = Util.get_dependent_variable_save_settings(self.bodies_function())
+        dependent_variables_to_save = Util.get_dependent_variable_save_settings(self.bodies_function(),
+                                                                                fly_galileo=self.galileo_mission_case)
         # propagator_settings = Util.get_propagator_settings(entry_fpa, atm_entry_alt, self.bodies_function(),
         #                                                    self.termination_settings_function(),
         #                                                    dependent_variables_to_save,
@@ -366,7 +367,7 @@ class AerocaptureNumericalProblem:
         dependent_variable_epochs = np.array(list(dependent_variable_history.keys()))
         airspeed = dependent_variable_values[:,6]
         density = dependent_variable_values[:,8]
-        nose_radius = Util.vehicle_radius
+        nose_radius = Util.vehicle_nose_radius
         convective_hfx, radiative_hfx = Util.calculate_trajectory_heat_fluxes(density, airspeed, nose_radius)
         if return_history_dictionary:
             heat_fluxes_dict = Util.calculate_trajectory_heat_fluxes_history(dependent_variable_epochs, convective_hfx, radiative_hfx)
@@ -405,7 +406,7 @@ class AerocaptureNumericalProblem:
                 4: flyby impact parameter B
         Returns
         -------
-        fitness : float
+        fitness :
             Fitness value, for optimization.
         """
         bodies = self.bodies_function()
@@ -497,7 +498,8 @@ class AerocaptureNumericalProblem:
             bodies,
             integrator_settings,
             propagator_settings,
-            print_dependent_variable_data = False)
+            print_dependent_variable_data=False,
+            print_state_data=False)
 
         self.dynamics_simulator_function = lambda: dynamics_simulator
 
@@ -506,5 +508,40 @@ class AerocaptureNumericalProblem:
         #     self.entry_interface_nominal_state = state_history_final_state
 
         # Add the objective and constraint values into the fitness vector
-        fitness = 0.0
-        return [fitness]
+
+        simulation_state_history = dynamics_simulator.state_history
+        simulation_dependent_variable_history = dynamics_simulator.dependent_variable_history
+        cartesian_state_history = np.vstack(list(simulation_state_history.values()))
+        epochs = np.array(list(simulation_state_history.keys()))
+
+        dependent_variables = np.vstack(list(simulation_dependent_variable_history.values()))
+        aero_acc = dependent_variables[:, 0:3]
+        # grav_acc = dependent_variables[:, 3]
+        altitude = dependent_variables[:, 4]
+        # flight_path_angle = dependent_variables[:, 5]
+        airspeed = dependent_variables[:, 6]
+        # mach_number = dependent_variables[:, 7]
+        atmospheric_density = dependent_variables[:, 8]
+
+        nose_radius = vehicle_nose_radius if not self.galileo_mission_case else galileo_nose_radius
+        total_wall_heat_flux = opt.calculate_trajectory_heat_loads(atmospheric_density, airspeed, nose_radius)
+
+        payload_mass_fraction_objective = opt.aerocapture_payload_mass_fraction(epochs, total_wall_heat_flux)
+        total_radiation_dose_krad_objective = opt.calculate_trajectory_total_radiation_dose(epochs, altitude) / 1e3
+        benefit_over_insertion_burn_objective = opt.aerocapture_payload_mass_fraction_benefit_over_insertion_burn(payload_mass_fraction_objective, interplanetary_arrival_velocity)
+
+        maximum_aerodynamic_load = np.amax(LA.norm(aero_acc, axis=1))
+        peak_heat_flux, total_heat_load = opt.calculate_peak_hfx_and_heat_load(epochs, total_wall_heat_flux)
+
+        minimum_jupiter_distance = np.amin(altitude) + jupiter_radius
+        maximum_jupiter_distance = np.amax(altitude) + jupiter_radius
+
+        final_orbit_eccentricity = LA.norm(eccentricity_vector_from_cartesian_state(cartesian_state_history[-1,:]))
+
+        constraint_values = [maximum_aerodynamic_load, peak_heat_flux, minimum_jupiter_distance, maximum_jupiter_distance, final_orbit_eccentricity]
+        objective_values = [payload_mass_fraction_objective, total_radiation_dose_krad_objective, benefit_over_insertion_burn_objective]
+
+        fitness = [objective_values, constraint_values]
+
+        # fitness = 0.0
+        return fitness

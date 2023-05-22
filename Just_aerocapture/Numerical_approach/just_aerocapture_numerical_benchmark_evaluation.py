@@ -37,16 +37,16 @@ generate_benchmarks = True
 playwith_benchmark = True
 silence_benchmark_related_plots = True
 
-benchmark_accuracy_requirement = 10 # m
+benchmark_accuracy_requirement = 10  # m
 
 plot_error_wrt_benchmark = True
 
-benchmark_portion_to_evaluate = 1  # 0, 1, 2, 3 (3 means all three together)
+benchmark_portion_to_evaluate = 0  # 0, 1, 2, 3 (3 means all three together)
 
 # If you play with benchmarks
-lower_limit = 5
-upper_limit = 50
-no_of_entries = 11
+lower_limit = 10e3  # 5
+upper_limit = 610e3  # 50
+no_of_entries = 31
 
 # If you set a single step_size
 choose_step_size = 40e3
@@ -167,11 +167,11 @@ are_dependent_variables_to_save = False if not dependent_variables_to_save else 
 ###########################################################################
 
 # Get current propagator, and define propagation settings
-current_propagator = propagation_setup.propagator.unified_state_model_quaternions
-current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude, bodies,
+initial_state = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude, Util.z_axis, 5600.)
+current_propagator_settings = Util.get_propagator_settings(initial_state,
+                                                           bodies,
                                                            termination_settings,
-                                                           current_propagator=dependent_variables_to_save)
+                                                           dependent_variables_to_save)
 
 
 settings_index = -4
@@ -258,7 +258,8 @@ if use_benchmark:
             divide_step_size_of = 1
         else:
             divide_step_size_of = reduce_step_size
-
+    else:
+        raise Exception('wrong benchmark portion selected')
     # Generate benchmarks
     if playwith_benchmark:
         if generate_benchmarks:
@@ -301,10 +302,12 @@ if use_benchmark:
     # bench_portion_name = ''
     for benchmark_step_size in benchmark_step_sizes:
         t0 = pt()
-        propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude, bodies,
-                                                           Util.get_termination_settings(simulation_start_epoch),
-                                                           current_propagator=dependent_variables_to_save)
+        initial_state = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
+                                               Util.z_axis, 5600.)
+        propagator_settings = Util.get_propagator_settings(initial_state,
+                                                           bodies,
+                                                           termination_settings,
+                                                           dependent_variables_to_save)
         if playwith_benchmark:
             step_size_name = '_stepsize_' + str(benchmark_step_size)
 
@@ -427,18 +430,22 @@ if use_benchmark:
             axx.plot(max_position_errors.keys(), fitting_function, color='firebrick')
         axx.set_yscale('log')
         axx.set_xscale('log')
-        axx.set_xlabel('time step (s)')
-        axx.set_ylabel('maximum position error norm (m)')
+        axx.set_xlabel('Time step [s]')
+        axx.set_ylabel('Maximum position error [m]')
         axx.axhline(y=benchmark_accuracy_requirement, color='r',linestyle=':')
+        axx = Util.plot_grid(axx, 15)
+        figg.tight_layout()
         plt.show()
 
     if playwith_benchmark or benchmark_portion_to_evaluate != 3:
         quit()
 
-current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude, bodies,
-                                                           Util.get_termination_settings(simulation_start_epoch),
-                                                           current_propagator=dependent_variables_to_save)
+initial_state = Util.get_initial_state(flight_path_angle_at_atmosphere_entry, atmospheric_entry_altitude,
+                                               Util.z_axis, 5600.)
+current_propagator_settings = Util.get_propagator_settings(initial_state,
+                                                                   bodies,
+                                                                   termination_settings,
+                                                                   dependent_variables_to_save)
 
 # Create Shape Optimization Problem object
 dynamics_simulator = numerical_simulation.SingleArcSimulator(

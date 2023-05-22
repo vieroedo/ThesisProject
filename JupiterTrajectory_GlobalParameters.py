@@ -1,11 +1,14 @@
 from tudatpy.kernel.interface import spice_interface
 from tudatpy.kernel import constants
 from tudatpy.kernel.math import interpolators
-from tudatpy.kernel.astro import element_conversion
+from tudatpy.kernel.astro import element_conversion, frame_conversion
 
 import numpy as np
+import pandas as pd
 from numpy import linalg as LA
+from matplotlib import pyplot as plt
 import os
+import warnings
 global_parameters_file_directory = os.path.dirname(__file__)
 
 # Load standard spice kernels
@@ -27,13 +30,16 @@ global_frame_orientation = 'ECLIPJ2000'
 atmospheric_entry_altitude = 450e3  # m
 
 # Vehicle properties
-vehicle_mass = 3000  # kg
+vehicle_mass = 2000  # kg
 vehicle_reference_area = 5.  # m^2
 vehicle_radius = np.sqrt(vehicle_reference_area/np.pi)
+vehicle_nose_radius = 0.222  # m
 # vehicle_reference_area = np.pi * vehicle_radius**2    choose which one you want to use as parameter
 vehicle_cd = 1.2
 vehicle_cl = 0.6
 vehicle_hypersonic_K_parameter = 0.000315  # galileo probe aerodynamic -paper
+
+vehicle_shield_thickness = 2.7  # g/cm2
 ########################################################################################################################
 
 
@@ -65,8 +71,15 @@ jupiter_atmosphere_exponential_layered_model = {
 # Orbital and physical data of galilean moons in SI units
 # Moons: 'Io' 'Europa' 'Ganymede' 'Callisto'
 # Entries for each moon: 'SMA' 'Mass' 'Radius' 'Orbital_Period' 'SOI_Radius' 'mu' 'g_0'
-moons_optimization_parameter_dict = {1: 'Io', 2: 'Europa', 3: 'Ganymede', 4: 'Callisto'}
+moons_optimization_parameter_dict = {0: 'NoMoon', 1: 'Io', 2: 'Europa', 3: 'Ganymede', 4: 'Callisto'}
 galilean_moons_data = {
+                       'NoMoon': {'SMA': 1,
+                                  'Mass': 1,
+                                  'Radius': 1,
+                                  'Orbital_Period': 1,
+                                  'SOI_Radius': 1,
+                                  'mu': 1,
+                                  'g_0': 1},
                        'Io': {'SMA': 421.77e6,
                               'Mass': 893.3e20,
                               'Radius': 1821.3e3,
@@ -103,6 +116,7 @@ galilean_moons_data = {
 # Galileo probe data
 galileo_mass = 339.  # kg
 galileo_radius = 0.632  # m
+galileo_nose_radius = 0.222  # m
 galileo_ref_area = galileo_radius**2 * np.pi  # m^2
 galileo_cd = 1.05 #1.02
 galileo_cl = 0.
@@ -138,4 +152,63 @@ jupiter_altitude_atmosphere_values_seiff1998 = np.concatenate((jupiter_upper_atm
 jupiter_density_atmosphere_values_seiff1998 = np.concatenate((jupiter_upper_atmosphere_data_seiff1998[:, 3],jupiter_lower_atmosphere_data_seiff1998[:, 3]))
 atmosphere_altitude_values_boundaries_seiff1998 = [jupiter_altitude_atmosphere_values_seiff1998[-1],
                                                    jupiter_altitude_atmosphere_values_seiff1998[0]]  # 0=1000km  -1=-135km
+########################################################################################################################
+
+
+# SIMULATION CONSTANTS #################################################################################################
+
+MJD200_date = 66154  # 01/01/2040
+J2000_date = MJD200_date - 51544
+first_january_2040_epoch = J2000_date * constants.JULIAN_DAY
+
+########################################################################################################################
+
+
+# JUPITER RADIATION ENVIRONMENT ########################################################################################
+
+def radiation_intensity_function(altitude: np.ndarray):
+    distance_from_jupiter_centre = altitude + jupiter_radius
+    # FUNCTION VALID ONLY FOR SHIELD THICKNESS 2.2 g/cm2
+    if np.asarray(distance_from_jupiter_centre < 0).any():
+        raise ValueError('Distance cannot be negative!')
+
+    radiation_intensity = np.zeros(len(distance_from_jupiter_centre))
+    for index in range(len(distance_from_jupiter_centre)):
+
+        if distance_from_jupiter_centre[index] < jupiter_radius:
+            warnings.warn('altitude is below zero!')
+            radiation_intensity[index] = 0.
+
+        if jupiter_radius < distance_from_jupiter_centre[index] < 1.5*jupiter_radius:
+            x_0, x_1 = 1*jupiter_radius, 1.5*jupiter_radius
+            y_0, y_1 = 0, 1.5e5
+            m_coeff = (y_1 - y_0) / (x_1 - x_0)
+            q_coeff = y_0 - m_coeff * x_0
+            radiation_intensity[index] = m_coeff * distance_from_jupiter_centre[index] + q_coeff
+
+        if 1.5*jupiter_radius < distance_from_jupiter_centre[index] < 4*jupiter_radius:
+            MINOR_INNER_MOONS_RAD_LEVEL = 1.5e5
+            radiation_intensity[index] = MINOR_INNER_MOONS_RAD_LEVEL
+
+        if 4*jupiter_radius < distance_from_jupiter_centre[index] < 16 * jupiter_radius:
+            x_0, x_1 = 4 * jupiter_radius, 16 * jupiter_radius
+            y_0, y_1 = 1.5e5, 1e2
+            m_coeff = (y_1 - y_0) / (x_1 - x_0)
+            q_coeff = y_0 - m_coeff * x_0
+            radiation_intensity[index] = m_coeff * distance_from_jupiter_centre[index] + q_coeff
+
+        if distance_from_jupiter_centre[index] > 16*jupiter_radius:
+            # Same m_coeff as before, but now different qcoeff
+            x_0, x_1 = 4 * jupiter_radius, 16 * jupiter_radius
+            y_0, y_1 = 1.5e5, 1e2
+            m_coeff = (y_1 - y_0) / (x_1 - x_0)
+            q_coeff = y_0 - m_coeff * x_0
+            rad_level = m_coeff * distance_from_jupiter_centre[index] + q_coeff
+            radiation_intensity[index] = rad_level if rad_level > 0 else 0
+
+    return radiation_intensity / constants.JULIAN_DAY
+# Debug plot:
+# plt.plot(np.linspace(0,16,200), radiation_intensity_function(np.linspace(0,16*jupiter_radius,200)))
+# plt.show()
+
 ########################################################################################################################

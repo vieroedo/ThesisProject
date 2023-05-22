@@ -41,7 +41,7 @@ total_altitudes_data = np.concatenate((rarefield_altitude,simulated_altitudes)) 
 total_velocities_data = np.concatenate((rarefield_velocity, simulated_velocities))  # km/s
 total_densities_data = np.concatenate((rarefield_density, simulated_densities))  # kg/m^3
 total_qc_data = np.concatenate((rarefield_heatflux, simulated_qc))  # kW/m^2
-nose_radius = galileo_radius * np.ones(len(total_qc_data))  # m
+nose_radius = galileo_nose_radius * np.ones(len(total_qc_data))  # m
 
 scaling_vector = np.array([1/nose_radius[0], 1/total_densities_data.max(), 1/total_velocities_data.max(), 1/total_qc_data.max()])
 # scaling_vector = np.ones(4)
@@ -60,7 +60,7 @@ parameters = solution[0]
 
 altitudes = np.linspace(100,800,1000)  # km
 
-x_val_2_unscaled = np.vstack((galileo_radius * np.ones(len(altitudes)), jupiter_atmosphere_density_model(altitudes*1e3), galileo_velocity_from_altitude(altitudes*1e3)/1e3))
+x_val_2_unscaled = np.vstack((galileo_nose_radius * np.ones(len(altitudes)), jupiter_atmosphere_density_model(altitudes*1e3), galileo_velocity_from_altitude(altitudes*1e3)/1e3))
 calc_heatflux = np.zeros(len(altitudes))
 
 

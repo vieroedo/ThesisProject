@@ -25,7 +25,7 @@ def calculate_fpa_boundaries(entry_fpa):
 
 def first_order_approximation_aerocapture(current_fpa, entry_fpa, minimum_altitude_fpa, entry_radius, entry_velocity,
                                           C_L = vehicle_cl, C_D = vehicle_cd, capsule_mass = vehicle_mass,
-                                          capsule_radius = vehicle_radius, capsule_area = vehicle_reference_area):
+                                          capsule_nose_radius = vehicle_nose_radius, capsule_area = vehicle_reference_area):
 
     entry_altitude = entry_radius - jupiter_radius
     entry_g_acc = jupiter_gravitational_parameter / (entry_radius ** 2)
@@ -99,7 +99,7 @@ def first_order_approximation_aerocapture(current_fpa, entry_fpa, minimum_altitu
 
     lift_acc = lift_over_drag_ratio * drag_acc
     # Heat loads
-    wall_heat_flux = 0.6556E-8 * (density/capsule_radius)**0.5 * velocity**3
+    wall_heat_flux = 0.6556E-8 * (density / capsule_nose_radius) ** 0.5 * velocity ** 3
 
     return_values = (radius, velocity, flight_path_angle, density, drag_acc, lift_acc, wall_heat_flux, range_angle)
     additional_values = (minimum_altitude,)

@@ -234,7 +234,7 @@ for settings_index in number_of_settings:
     if write_results_to_file:
         save2txt(state_history, 'state_history.dat', output_path)
         save2txt(unprocessed_state_history, 'unprocessed_state_history.dat', output_path)
-        save2txt(dependent_variable_history, 'dependent_variable_history.dat', output_path)
+        save2txt(dependent_variable_history, 'numerical_dependent_variable_history.dat', output_path)
         save2txt(dict_to_write, 'ancillary_simulation_info.txt', output_path)
 
     if use_benchmark:

@@ -123,6 +123,48 @@ def rotate_vector(vector, axis, angle):
         raise Exception('wrong shape for angles or vectors')
 
 
+def vector_coordinates_in_rsw(vector, inertial_cartesian_state):
+    vector_shape = np.shape(vector)
+    if len(vector_shape) == 1 and not vector_shape[0] == 3:
+        raise TypeError('wrong dimensions of the vector.')
+    rot_matrix = frame_conversion.inertial_to_rsw_rotation_matrix(inertial_cartesian_state)
+    rotated_vector = rotate_vectors_by_given_matrix(rot_matrix, vector)
+    return rotated_vector
+
+
+def rsw_state_from_cartesian(inertial_cartesian_state: np.ndarray, inertial_state_to_convert: np.ndarray = None):
+    vec_shape = np.shape(inertial_cartesian_state)
+
+    if len(vec_shape) == 1 and vec_shape[0] != 6:
+        raise TypeError('wrong dimensions of the vector.')
+    if len(vec_shape) == 2 and vec_shape[1] != 6:
+        inertial_cartesian_state = inertial_cartesian_state.T
+    if len(vec_shape) == 2 and vec_shape[1] != 6:
+        raise TypeError('wrong dimensions for the vector')
+    if len(vec_shape) > 2:
+        raise TypeError('wrong dimensions. only 1- or 2-D vectors are accepted.')
+
+    if inertial_state_to_convert is None:
+        inertial_state_to_convert = inertial_cartesian_state
+    if not np.asarray(np.shape(inertial_state_to_convert) == vec_shape).all():
+        inertial_state_to_convert = inertial_state_to_convert.T
+    if not np.asarray(np.shape(inertial_state_to_convert) == vec_shape).all():
+        raise TypeError(f'inertial state to convert ({np.shape(inertial_state_to_convert)}) and cartesian state ({vec_shape}) have non matching dimensions')
+
+    if len(vec_shape) == 1:
+        inertial_position, inertial_velocity = inertial_state_to_convert[0:3], inertial_state_to_convert[3:6]
+        rsw_position = vector_coordinates_in_rsw(inertial_position, inertial_cartesian_state)
+        rsw_velocity = vector_coordinates_in_rsw(inertial_velocity, inertial_cartesian_state)
+        return np.concatenate((rsw_position, rsw_velocity))
+
+    rsw_positions, rsw_velocities = np.zeros(np.shape(inertial_cartesian_state[:, 0:3])), np.zeros(np.shape(inertial_cartesian_state[:, 3:6]))
+    for i in range(len(inertial_cartesian_state[:,0])):
+        inertial_position, inertial_velocity = inertial_state_to_convert[i, 0:3], inertial_state_to_convert[i, 3:6]
+        rsw_positions[i,:] = vector_coordinates_in_rsw(inertial_position, inertial_cartesian_state[i, :])
+        rsw_velocities[i,:] = vector_coordinates_in_rsw(inertial_velocity, inertial_cartesian_state[i,:])
+    rsw_states = np.concatenate((rsw_positions, rsw_velocities), axis=1)
+    return rsw_states
+
 def velocity_vector_from_position(position, axis, fpa, velocity_mag):
     if len(np.shape(position)) == 2:
         try:
@@ -162,6 +204,23 @@ def longitude_from_cartesian(position_state: np.ndarray, verbose: bool = True):
         return longitude
     else:
         return - longitude
+
+
+def get_interpolation_epochs(first_state_history:dict, second_state_history:dict, exclude_cells: int = 0):
+
+    first_epochs = np.array(list(first_state_history.keys()))
+    second_epochs = np.array(list(second_state_history.keys()))
+
+    # Get limit times at which both histories can be validly interpolated
+    interpolation_lower_limit = max(first_epochs[exclude_cells], second_epochs[exclude_cells])
+    interpolation_upper_limit = min(first_epochs[-exclude_cells - 1], second_epochs[-exclude_cells - 1])
+
+    # Create vector of verification_epochs to be compared (boundaries are referred to the first case)
+    unfiltered_interpolation_epochs = first_epochs #if len(first_epochs) > len(second_epochs) else second_epochs
+    unfiltered_interpolation_epochs = [n for n in unfiltered_interpolation_epochs if n <= interpolation_upper_limit]
+    interpolation_epochs = [n for n in unfiltered_interpolation_epochs if n >= interpolation_lower_limit]
+
+    return np.array(interpolation_epochs)
 
 
 ########################################################################################################################
@@ -519,7 +578,7 @@ def compute_lambert_targeter_state_history(
         environment_setup.ephemeris.keplerian(lambert_arc_keplerian_elements, departure_epoch,
                                               jupiter_gravitational_parameter), "")
 
-    # Selected epochs to plot
+    # Selected verification_epochs to plot
     epoch_list = np.linspace(departure_epoch, arrival_epoch, number_of_epochs)
 
     # Building lambert arc history dictionary
@@ -1254,6 +1313,32 @@ def entry_velocity_from_interplanetary(interplanetary_arrival_velocity_in_jupite
     pre_ae_arrival_radius = jupiter_radius + atmospheric_entry_altitude
     pre_ae_arrival_velocity_norm = velocity_from_energy(pre_ae_orbital_energy, pre_ae_arrival_radius)
     return pre_ae_arrival_velocity_norm
+
+
+def drag_lift_accelerations_from_aerodynamic(aero_acc: np.ndarray, cartesian_state: np.ndarray):
+    cart_shape = np.shape(cartesian_state)
+    aero_shape = np.shape(aero_acc)
+    if cart_shape[1] != 6 or aero_shape[1] != 3:
+        raise Exception('Wrong number of entries on axis=1')
+
+    state_position = cartesian_state[:, 0:3]
+    state_velocity = cartesian_state[:, 3:6]
+    drag_direction = -unit_vector(state_velocity)
+
+    lift_direction = np.zeros((len(state_velocity[:, 0]), 3))
+    for i in range(len(state_velocity[:, 0])):
+        rotation_axis = unit_vector(
+            np.cross(state_position[i,:], state_velocity[i,:]))
+        lift_direction[i] = rotate_vectors_by_given_matrix(rotation_matrix(rotation_axis, np.pi / 2),
+                                                           drag_direction[i, :])
+
+    drag_acc = np.zeros((len(aero_acc[:, 0]), 3))
+    lift_acc = np.zeros((len(aero_acc[:, 0]), 3))
+    for i in range(len(aero_acc[:, 0])):
+        drag_acc[i, :] = np.dot(aero_acc[i, :], drag_direction[i, :]) * drag_direction[i, :]
+        lift_acc[i, :] = np.dot(aero_acc[i, :], lift_direction[i, :]) * lift_direction[i, :]
+
+    return drag_acc, lift_acc
 
 ########################################################################################################################
 # ZERO-FINDING METHODS #################################################################################################

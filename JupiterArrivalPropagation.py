@@ -360,7 +360,7 @@ for random_seed in seeds_to_try:
         ### OUTPUT OF THE SIMULATION ###
         # Retrieve propagated state and dependent variables
         state_history = current_jupiter_arrival_problem.get_last_run_dynamics_simulator().state_history
-        dependent_variable_history = current_jupiter_arrival_problem.get_last_run_dynamics_simulator().dependent_variable_history
+        dependent_variable_history = current_jupiter_arrival_problem.get_last_run_dynamics_simulator().numerical_dependent_variable_history
 
         # Get output path
         if use_sobol_sampling or design_space_method == 'factorial_design' or design_space_method == 'monte_carlo_one_at_a_time':
@@ -377,7 +377,7 @@ for random_seed in seeds_to_try:
         # If desired, write output to a file
         if write_results_to_file:
             save2txt(state_history, 'state_history.dat', output_path)
-            save2txt(dependent_variable_history, 'dependent_variable_history.dat', output_path)
+            save2txt(dependent_variable_history, 'numerical_dependent_variable_history.dat', output_path)
 
     if write_results_to_file:
         if use_sobol_sampling or design_space_method == 'factorial_design' or design_space_method == 'monte_carlo_one_at_a_time':

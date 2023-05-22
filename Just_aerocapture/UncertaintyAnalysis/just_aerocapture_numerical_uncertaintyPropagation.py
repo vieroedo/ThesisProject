@@ -354,7 +354,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         # Retrieve propagated state and dependent variables
         state_history = dynamics_simulator.state_history
         unprocessed_state_history = dynamics_simulator.unprocessed_state_history
-        dependent_variable_history = dynamics_simulator.dependent_variable_history
+        dependent_variable_history = dynamics_simulator.numerical_dependent_variable_history
         heat_fluxes_history = aerocapture_problem.get_entry_heat_fluxes(return_history_dictionary=True)
 
         # Save results to a dictionary
@@ -428,7 +428,7 @@ for uncertainty_nr, uncertainty in enumerate(uncertainties_to_run):
         interpolation_lower_limit = max(nominal_times[limit_value],current_times[limit_value])
         interpolation_upper_limit = min(nominal_times[-limit_value],current_times[-limit_value])
 
-        # Create vector of epochs to be compared (boundaries are referred to the first case)
+        # Create vector of verification_epochs to be compared (boundaries are referred to the first case)
         if actual_arc_to_compute == 1 or actual_arc_to_compute == 12:
             unfiltered_interpolation_epochs = np.arange(current_times[0], current_times[-1], selected_output_interpolation_step)
         else:

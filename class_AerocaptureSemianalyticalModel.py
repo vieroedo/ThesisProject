@@ -69,17 +69,18 @@ class AerocaptureSemianalyticalModel:
         self.create_cartesian_state_history(aerocapture_initial_position,aerocapture_initial_epoch, orbital_axis)
         return self.state_history_function()
 
-    def get_dependent_variables_history(self) -> dict:
+    def get_dependent_variables_history(self, silence: bool = False) -> dict:
         """
         Returns the full history of the propagated dependent variables.
         Parameters
         ----------
-        none
+        silence: silence warning
         Returns
         -------
         dict
         """
-        warnings.warn('label epochs are have as t=0 the beginning of the aerocapture phase')
+        if not silence:
+            warnings.warn('label verification_epochs are have as t=0 the beginning of the aerocapture phase')
         return self.dependent_variable_history_function()
 
     def get_bounds(self):
@@ -196,10 +197,11 @@ class AerocaptureSemianalyticalModel:
             fpa_entry, fpa_minimum_altitude, fpa_exit = ae_first_order.calculate_fpa_boundaries(atmospheric_entry_fpa)
             fpa_linspace = np.linspace(fpa_entry, fpa_exit, self.orbit_datapoints)
 
-            aerocapture_quantities, other_data = ae_first_order.first_order_approximation_aerocapture(
-                                                                        fpa_linspace, fpa_entry, fpa_minimum_altitude,
-                                                                        atmospheric_entry_altitude + jupiter_radius,
-                                                                        atmospheric_entry_velocity_norm)
+            aerocapture_quantities, other_data = ae_first_order.first_order_approximation_aerocapture(fpa_linspace,
+                                                                                                      fpa_entry,
+                                                                                                      fpa_minimum_altitude,
+                                                                                                      atmospheric_entry_altitude + jupiter_radius,
+                                                                                                      atmospheric_entry_velocity_norm)
 
             # Minimum altitude
             minimum_altitude = other_data[0]

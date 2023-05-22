@@ -8,7 +8,7 @@ from handle_functions import orbital_energy
 class GalileanMoon:
 
     def __init__(self, moon_name, epoch=0.):
-        if moon_name not in ['Io', 'Europa', 'Ganymede', 'Callisto']:
+        if moon_name not in ['NoMoon', 'Io', 'Europa', 'Ganymede', 'Callisto']:
             raise ValueError('Unexpected moon name. Allowed values are Io, Europa, Ganymede, Callisto')
 
         self._moon = moon_name
@@ -19,12 +19,15 @@ class GalileanMoon:
         self._gravitational_parameter = galilean_moons_data[moon_name]['mu']
 
         self.epoch = epoch
-        self._cartesian_state = spice_interface.get_body_cartesian_state_at_epoch(
-            target_body_name=self._moon,
-            observer_body_name="Jupiter",
-            reference_frame_name=global_frame_orientation,
-            aberration_corrections="NONE",
-            ephemeris_time=self.epoch)
+        if moon_name != 'NoMoon':
+            self._cartesian_state = spice_interface.get_body_cartesian_state_at_epoch(
+                target_body_name=self._moon,
+                observer_body_name="Jupiter",
+                reference_frame_name=global_frame_orientation,
+                aberration_corrections="NONE",
+                ephemeris_time=self.epoch)
+        else:
+            self._cartesian_state = np.ones(6)
 
     @property
     def cartesian_state(self):

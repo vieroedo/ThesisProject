@@ -40,7 +40,7 @@ if use_rarefield_data:
     rarefield_altitude = rarefield_flight_data[:, 1]  # km
     rarefield_velocity = galileo_velocity_from_altitude(rarefield_altitude*1e3)/1e3  #km/s
     # rarefield_velocity=47.450 * np.ones(len(rarefield_density))  # km/s
-    nose_radius = galileo_radius * np.ones(len(rarefield_density))  # m
+    nose_radius = galileo_nose_radius * np.ones(len(rarefield_density))  # m
 
     #nondimensionalizing
     scaling_values = np.array([1/nose_radius[0], 1/rarefield_density.max(), 1/rarefield_velocity.max(), 1/rarefield_heatflux.max()])
@@ -61,7 +61,7 @@ if use_weird_heat_fluxes:
     heat_fluxes_velocities = galileo_velocity_from_altitude(heat_fluxes_altitudes)/1e3  # km/s
 
     altitude_boundaries = [heat_fluxes_altitudes[-1], heat_fluxes_altitudes[0]]
-    nose_radius = galileo_radius * np.ones(len(heat_fluxes_densities))  # m
+    nose_radius = galileo_nose_radius * np.ones(len(heat_fluxes_densities))  # m
 
     x_values = np.vstack((nose_radius, heat_fluxes_densities, heat_fluxes_velocities))
     y_values = qc_wall
@@ -76,7 +76,7 @@ if use_galileo_simulated_heatloads:
     simulated_qc = galileo_generic_data[:,8]  # MW/m^2
     simulated_qr = galileo_generic_data[:,9]  # MW/m^2
 
-    nose_radius = galileo_radius * np.ones(len(simulated_qc))
+    nose_radius = galileo_nose_radius * np.ones(len(simulated_qc))
 
     x_values = np.vstack((nose_radius, simulated_densities, simulated_velocities))
     y_values = simulated_qc
@@ -109,7 +109,7 @@ altitudes = np.linspace(100,800,1000)  # km
 
 if use_rarefield_data or use_weird_heat_fluxes or use_galileo_simulated_heatloads:
     scaling_factor = 1e-3
-x_val_2 = np.vstack((galileo_radius * np.ones(len(altitudes)), jupiter_atmosphere_density_model(altitudes*1e3), galileo_velocity_from_altitude(altitudes*1e3)*scaling_factor))
+x_val_2 = np.vstack((galileo_nose_radius * np.ones(len(altitudes)), jupiter_atmosphere_density_model(altitudes*1e3), galileo_velocity_from_altitude(altitudes*1e3)*scaling_factor))
 calc_heatflux = np.zeros(len(altitudes))
 
 if use_rarefield_data:

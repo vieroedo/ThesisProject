@@ -39,6 +39,13 @@ class InitialStateTargeting:
         self.atmosphere_entry_altitude = atmosphere_entry_altitude
         self.B_parameter = B_parameter
         self.flyby_moon = flyby_moon
+        if self.flyby_moon not in ['Io', 'Europa', 'Ganymede', 'Callisto']:
+            self.flyby_moon = 'Ganymede'
+            self.B_parameter = 1 / 2 * (galilean_moons_data[self.flyby_moon]['Radius'] +
+                     galilean_moons_data[self.flyby_moon]['SOI_Radius'])
+            warnings.warn(f'No moon selected. Using Ganymede as default. NOTE: the inserted B parameter: {B_parameter} [m] has no effect. Default value is {self.B_parameter} [m]')
+
+
         self.flyby_epoch = flyby_epoch
         self.jupiter_arrival_v_inf = jupiter_arrival_v_inf
         self.perturb_entry_velocity_magnitude = perturb_entry_velocity_magnitude
@@ -122,6 +129,8 @@ class InitialStateTargeting:
         # Set the problem parameters and compute atmospheric entry
         orbital_parameters = [first_arc_departure_velocity_norm, first_arc_arrival_fpa]
         aerocapture_analytical_problem.fitness(orbital_parameters)
+
+        self.aerocapture_dependent_variable_history = aerocapture_analytical_problem.get_dependent_variables_history()
 
         # Retrieve problem parameters
         aerocapture_problem_parameters = aerocapture_analytical_problem.aerocapture_parameters_function()
@@ -405,6 +414,20 @@ class InitialStateTargeting:
             self.create_state_history_from_epochs(epochs)
         return self.trajectory_state_history_custom
 
+    def get_aerocapture_dependent_variable_history(self, aerocapture_start_epoch: float = 0.):
+        if type(aerocapture_start_epoch) not in [float, np.float64, int]:
+            raise TypeError('wrong parameter inserted')
+        if aerocapture_start_epoch == 0.:
+            return self.aerocapture_dependent_variable_history
+
+        elapsed_time_epochs = np.array(list(self.aerocapture_dependent_variable_history.keys()))
+        dependent_variables = np.vstack(list(self.aerocapture_dependent_variable_history.values()))
+        epochs = elapsed_time_epochs + aerocapture_start_epoch
+        return dict(zip(epochs, dependent_variables))
+
+
+
+
     def create_state_history(self):
         flyby_moon_state = spice_interface.get_body_cartesian_state_at_epoch(
             target_body_name=self.flyby_moon,
@@ -623,14 +646,14 @@ class InitialStateTargeting:
                 arc_cartesian_states[:,3:6] = arc_cartesian_states[:,3:6] + moon_velocity
 
             # arc_cartesian_states = np.vstack(arc_cartesian_states_list)
-            arc_state_history = dict(zip(arc_epochs,arc_cartesian_states)) # fix what you do with epochs
+            arc_state_history = dict(zip(arc_epochs,arc_cartesian_states)) # fix what you do with verification_epochs
             total_state_history.update(arc_state_history)
             total_arc_epochs_list = total_arc_epochs_list + list(arc_epochs)
 
         total_arc_epochs = np.array(total_arc_epochs_list)
         if not np.asarray(total_arc_epochs == epochs_vector).all():
-            warnings.warn('Not all epochs have been used. Epochs vector extends further than the analytical orbit timespan. Extrapolation needed')
-            # raise Exception('Not all epochs have been assigned')
+            warnings.warn('Not all verification_epochs have been used. Epochs vector extends further than the analytical orbit timespan. Extrapolation needed')
+            # raise Exception('Not all verification_epochs have been assigned')
 
         self.trajectory_state_history_custom = total_state_history
 

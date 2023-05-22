@@ -277,6 +277,10 @@ def get_termination_settings(simulation_start_epoch: float,
         terminate_exactly_on_final_condition=False
     )
 
+    cpu_time_termination_settings = propagation_setup.propagator.cpu_time_termination(
+        cpu_termination_time=5,
+    )
+
     # Maximum altitude
     maximum_altitude_termination_settings = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
@@ -387,7 +391,8 @@ def get_termination_settings(simulation_start_epoch: float,
     termination_list = [nominal_termination_settings,
                         maximum_altitude_termination_settings,
                         minimum_altitude_termination_settings,
-                        time_termination_settings]
+                        time_termination_settings,
+                        cpu_time_termination_settings]
 
     # Create termination settings object that terminates when either nominal or non-nominal conditions are reached
     termination_settings = propagation_setup.propagator.hybrid_termination(termination_list,
@@ -396,7 +401,7 @@ def get_termination_settings(simulation_start_epoch: float,
     return termination_settings
 
 
-def get_dependent_variable_save_settings(bodies) -> list:
+def get_dependent_variable_save_settings(bodies, fly_galileo=False) -> list:
     """
     Retrieves the dependent variables to save.
 
@@ -413,6 +418,7 @@ def get_dependent_variable_save_settings(bodies) -> list:
     -------
     dependent_variables_to_save : list[tudatpy.kernel.numerical_simulation.propagation_setup.dependent_variable]
         List of dependent variables to save.
+        :param fly_galileo:
     """
 
     def inertial_fpa():
@@ -423,6 +429,13 @@ def get_dependent_variable_save_settings(bodies) -> list:
         inertial_fpa = np.pi / 2 - np.arccos(dot_product)
         return np.array([inertial_fpa])
 
+    # def wall_heat_flux():
+    #     density = bodies.get( "Jupiter" ).flight_conditions.density
+    #     velocity = bodies.get( "Jupiter" ).flight_conditions.airspeed
+    #     nose_radius = galileo_radius if fly_galileo else vehicle_radius
+    #     convectie_hfx, radiative_hfx = calculate_trajectory_heat_fluxes(density, velocity, nose_radius=nose_radius)
+    #     return np.array([convectie_hfx+radiative_hfx])
+
     dependent_variables_to_save = [propagation_setup.dependent_variable.single_acceleration(propagation_setup.acceleration.aerodynamic_type,'Capsule', 'Jupiter'),
                                    propagation_setup.dependent_variable.single_acceleration_norm(propagation_setup.acceleration.point_mass_gravity_type, 'Capsule', 'Jupiter'),
                                    propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
@@ -430,7 +443,8 @@ def get_dependent_variable_save_settings(bodies) -> list:
                                    propagation_setup.dependent_variable.airspeed('Capsule', 'Jupiter'),
                                    propagation_setup.dependent_variable.mach_number('Capsule', 'Jupiter'),
                                    propagation_setup.dependent_variable.density('Capsule', 'Jupiter'),
-                                   propagation_setup.dependent_variable.custom_dependent_variable(inertial_fpa, 1)
+                                   propagation_setup.dependent_variable.custom_dependent_variable(inertial_fpa, 1),
+                                   # propagation_setup.dependent_variable.custom_dependent_variable(wall_heat_flux, 1)
                                    ]
     return dependent_variables_to_save
 
@@ -555,8 +569,8 @@ def get_propagator_settings(initial_state,
     else:
         return -1
 
-    # if moon_of_flyby != '':
-    #     acceleration_settings_on_vehicle[moon_of_flyby] = [propagation_setup.acceleration.point_mass_gravity()]
+    if moon_of_flyby != '':
+        acceleration_settings_on_vehicle[moon_of_flyby] = [propagation_setup.acceleration.point_mass_gravity()]
 
 
     # Create global accelerations' dictionary
@@ -1044,7 +1058,7 @@ def compare_models(first_model: dict,
     second_model : dict
         State (or dependent variable history) from the second run.
     interpolation_epochs : np.ndarray
-        Vector of epochs at which the two runs are compared.
+        Vector of verification_epochs at which the two runs are compared.
     output_path : str
         If and where to save the benchmark results (if None, results are NOT written).
     filename : str
@@ -1062,7 +1076,7 @@ def compare_models(first_model: dict,
         first_model, interpolator_settings)
     second_interpolator = interpolators.create_one_dimensional_vector_interpolator(
         second_model, interpolator_settings)
-    # Calculate the difference between the first and second model at specific epochs
+    # Calculate the difference between the first and second model at specific verification_epochs
     model_difference = {epoch: - second_interpolator.interpolate(epoch) + first_interpolator.interpolate(epoch)
                         for epoch in interpolation_epochs}
     # Write results to files
