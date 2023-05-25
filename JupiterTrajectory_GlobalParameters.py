@@ -33,7 +33,7 @@ atmospheric_entry_altitude = 450e3  # m
 vehicle_mass = 2000  # kg
 vehicle_reference_area = 5.  # m^2
 vehicle_radius = np.sqrt(vehicle_reference_area/np.pi)
-vehicle_nose_radius = 0.222  # m
+vehicle_nose_radius = vehicle_radius  # 0.222  # m
 # vehicle_reference_area = np.pi * vehicle_radius**2    choose which one you want to use as parameter
 vehicle_cd = 1.2
 vehicle_cl = 0.6
@@ -116,7 +116,7 @@ galilean_moons_data = {
 # Galileo probe data
 galileo_mass = 339.  # kg
 galileo_radius = 0.632  # m
-galileo_nose_radius = 0.222  # m
+galileo_nose_radius = galileo_radius  # 0.222  # m
 galileo_ref_area = galileo_radius**2 * np.pi  # m^2
 galileo_cd = 1.05 #1.02
 galileo_cl = 0.
