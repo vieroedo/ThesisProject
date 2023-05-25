@@ -295,7 +295,7 @@ def fpa_from_cartesian_state(position_vec, velocity_vec):
     return np.arcsin(np.dot(unit_vector(position_vec), unit_vector(velocity_vec)))
 
 
-def true_anomaly_from_radius(radius,eccentricity,sma, return_positive, silence=True):
+def true_anomaly_from_radius(radius,eccentricity,sma, return_positive: bool, silence=True):
     """ WARNING: the solutions of ths function are 2! +theta and -theta, but only +theta is retrieved
     :param return_positive:
     """
