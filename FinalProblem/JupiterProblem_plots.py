@@ -1,16 +1,35 @@
 from JupiterTrajectory_GlobalParameters import *
 from optimization_functions import *
 from PlotsUtilities import *
+from tudatpy.util import pareto_optimums
+from tudatpy import plotting
 
 import pandas as pd
 import numpy as np
+import shutil
 
 current_dir = os.path.dirname(__file__)
+# select_objective = 'benefit_over_insertion_burn'
 
-select_objective = 'benefit_over_insertion_burn'
-use_old_results = True
+use_old_results = False
+
 apply_constraints = True
+filter_results_further = True
 
+show_plots_singularly = False
+save_figures = False
+delete_figures_folder_if_existing = False
+fontsize = 20
+
+
+save_dir = current_dir + '/Figures/'
+
+if delete_figures_folder_if_existing:
+    does_folder_exists = os.path.exists(save_dir)
+    shutil.rmtree(save_dir) if does_folder_exists else None
+
+if not os.path.exists(save_dir):
+    os.mkdir(save_dir)
 
 decision_variable_list = ['InterplanetaryVelocity', 'EntryFpa']
 objectives_list = ['payload_mass_fraction', 'total_radiation_dose_krad', 'benefit_over_insertion_burn']
@@ -33,25 +52,72 @@ if apply_constraints:
 else:
     filtered_grid_search_df = grid_search_df
 
+if filter_results_further:
+    convex_filtered_grid_search_df = filtered_grid_search_df[(filtered_grid_search_df['EntryFpa'] > -3.4)]
+else:
+    convex_filtered_grid_search_df = filtered_grid_search_df
+
 max_rad_dose = filtered_grid_search_df['total_radiation_dose_krad'].max()
 min_rad_dose = filtered_grid_search_df['total_radiation_dose_krad'].min()
 print(max_rad_dose)
 print(min_rad_dose)
 
-# Plot decision variable space with color assigned based on the selected objective value
-plot_with_colorbar(filtered_grid_search_df, 'InterplanetaryVelocity', 'EntryFpa', select_objective, directly_show=True)
-
-# Plot the selected ojective as function of the EntryFpa, coloring based on value of InterplanetaryVelocity
-plot_with_colorbar(filtered_grid_search_df, 'EntryFpa', select_objective, 'InterplanetaryVelocity', directly_show=True)
-# Plot the selected ojective as function of the InterplanetaryVelocity, coloring based on value of EntryFpa
-plot_with_colorbar(filtered_grid_search_df, 'InterplanetaryVelocity', select_objective, 'EntryFpa', directly_show=True)
-
-# 3D plot with projections
-plot_decision_variables_3D_ver2(filtered_grid_search_df, decision_variable_list, select_objective, objectives_list)
-plot_decision_variables_3D(filtered_grid_search_df, decision_variable_list, select_objective, objectives_list)
+# # Plot decision variable space with color assigned based on the selected objective value
+# fig1, ax1 = plot_with_colorbar(filtered_grid_search_df, 'InterplanetaryVelocity', 'EntryFpa', select_objective, directly_show=show_plots_singularly)
+#
+# # Plot the selected ojective as function of the EntryFpa, coloring based on value of InterplanetaryVelocity
+# fig2, ax2 = plot_with_colorbar(filtered_grid_search_df, 'EntryFpa', select_objective, 'InterplanetaryVelocity', directly_show=show_plots_singularly)
+# # Plot the selected ojective as function of the InterplanetaryVelocity, coloring based on value of EntryFpa
+# fig3, ax3 = plot_with_colorbar(filtered_grid_search_df, 'InterplanetaryVelocity', select_objective, 'EntryFpa', directly_show=show_plots_singularly)
+#
+# # 3D plot with projections
+# fig10, ax10 = plot_decision_variables_3D_ver2(filtered_grid_search_df, decision_variable_list, select_objective, objectives_list, directly_show=show_plots_singularly)
+# fig11, ax11 = plot_decision_variables_3D(filtered_grid_search_df, decision_variable_list, select_objective, objectives_list, directly_show=show_plots_singularly)
 
 # Double objective plots
-plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'benefit_over_insertion_burn', 'EntryFpa', directly_show=True)
-plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'payload_mass_fraction', 'EntryFpa', directly_show=True)
-plot_with_colorbar(filtered_grid_search_df, 'benefit_over_insertion_burn', 'payload_mass_fraction', 'EntryFpa', directly_show=True)
+fig50, ax50 = plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'benefit_over_insertion_burn',
+                                 'EntryFpa', directly_show=show_plots_singularly, save_fig=save_figures,
+                                 save_dir=save_dir, fontsize=fontsize)
+fig51, ax51 = plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'benefit_over_insertion_burn',
+                                 'InterplanetaryVelocity', directly_show=show_plots_singularly, save_fig=save_figures,
+                                 save_dir=save_dir, fontsize=fontsize)
 
+fig50_2, ax50_2 = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
+                                    'benefit_over_insertion_burn', 'EntryFpa', [min, max], save_fig=save_figures,
+                                    save_dir=save_dir, fontsize=fontsize)  #, best_candidate_index=7358)
+fig50_2_zoom, ax50_2_zoom = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
+                                              'benefit_over_insertion_burn', 'EntryFpa', [min, max],
+                                              save_fig=save_figures, pareto_zoom=True, save_dir=save_dir, fontsize=fontsize)
+
+
+fig55, ax55 = plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'payload_mass_fraction',
+                                 'EntryFpa', directly_show=show_plots_singularly, save_fig=save_figures,
+                                 save_dir=save_dir, fontsize=fontsize)
+fig56, ax56 = plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'payload_mass_fraction',
+                                 'InterplanetaryVelocity', directly_show=show_plots_singularly, save_fig=save_figures,
+                                 save_dir=save_dir, fontsize=fontsize)
+
+fig55_2, ax55_2 = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
+                                    'payload_mass_fraction', 'EntryFpa', [min, max], save_fig=save_figures,
+                                    save_dir=save_dir, fontsize=fontsize)
+fig55_2_zoom, ax55_2_zoom = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
+                                              'payload_mass_fraction', 'EntryFpa', [min, max],
+                                              save_fig=save_figures, pareto_zoom=True, save_dir=save_dir, fontsize=fontsize)
+
+
+fig60, ax60 = plot_with_colorbar(filtered_grid_search_df, 'benefit_over_insertion_burn', 'payload_mass_fraction',
+                                 'EntryFpa', directly_show=show_plots_singularly, save_fig=save_figures,
+                                 save_dir=save_dir, fontsize=fontsize)
+fig61, ax61 = plot_with_colorbar(filtered_grid_search_df, 'benefit_over_insertion_burn', 'payload_mass_fraction',
+                                 'InterplanetaryVelocity', directly_show=show_plots_singularly, save_fig=save_figures,
+                                 save_dir=save_dir, fontsize=fontsize)
+
+fig60_2, ax60_2 = pareto_front_plot(convex_filtered_grid_search_df, 'benefit_over_insertion_burn',
+                                    'payload_mass_fraction', 'EntryFpa', [max, max], save_fig=save_figures,
+                                    save_dir=save_dir, fontsize=fontsize)
+fig60_2_zoom, ax60_2_zoom = pareto_front_plot(convex_filtered_grid_search_df, 'benefit_over_insertion_burn',
+                                              'payload_mass_fraction', 'EntryFpa', [max, max],
+                                              save_fig=save_figures, pareto_zoom=True, save_dir=save_dir, fontsize=fontsize)
+
+
+plt.show()
