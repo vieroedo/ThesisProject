@@ -183,9 +183,11 @@ if not plot_heatfluxes_in_dep_var_plots:
 
 
 if show_galileo_flight:
-    nose_radius = np.sqrt(Util.galileo_ref_area / np.pi)
+    # nose_radius = np.sqrt(Util.galileo_ref_area / np.pi)
+    nose_radius = galileo_nose_radius
 else:
-    nose_radius = np.sqrt(Util.vehicle_reference_area / np.pi)
+    # nose_radius = np.sqrt(Util.vehicle_reference_area / np.pi)
+    nose_radius = vehicle_nose_radius
 convective_hf, radiative_hf, radiative_hf_w_blockage = Util.atmospheric_entry_heat_loads_correlations(
     atmospheric_density, airspeed, nose_radius=nose_radius)
 
@@ -379,6 +381,14 @@ print(f'The heat load is of {integrated_heat_load_only_rad:.3f} J/m^2  or  {inte
 print(f'TPS mass fraction is {tps_mass_fraction_only_rad:.5f}, which corresponds to a mass of {tps_mass_only_rad:.3f} kg')
 print(f'Peak heat flux is {peak_heat_flux_only_rad/1e3:.3f} kw/m^2')
 
+# verification
+conv_hf_wall, rad_hfx_wall = Util.calculate_trajectory_heat_fluxes(atmospheric_density,airspeed,nose_radius)
+peak_hfx, total_heat_load = Util.calculate_peak_hfx_and_heat_load(epochs_vector,conv_hf_wall+rad_hfx_wall)
+tps_mf = Util.calculate_tps_mass_fraction(total_heat_load)
+print('\nUSING FINAL EQUATIONS: VERIF')
+print(f'The heat load is of {total_heat_load:.3f} J/m^2  or  {total_heat_load/1e4:.3f} J/cm^2')
+print(f'TPS mass fraction is {tps_mf:.5f}')
+print(f'Peak heat flux is {peak_hfx/1e3:.3f} kw/m^2')
 
 
 ########################################################################################################################
