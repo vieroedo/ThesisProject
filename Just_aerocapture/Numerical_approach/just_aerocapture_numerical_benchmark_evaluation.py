@@ -32,28 +32,51 @@ write_results_to_file = True  # when in doubt leave true (idk anymore what setti
 
 use_benchmark = True
 # if use_benchmark is True ####################################################
-generate_benchmarks = True
+generate_benchmarks = False
 
-playwith_benchmark = True
+playwith_benchmark = False
 silence_benchmark_related_plots = True
 
-benchmark_accuracy_requirement = 10  # m
 
 plot_error_wrt_benchmark = True
 
-benchmark_portion_to_evaluate = 0  # 0, 1, 2, 3 (3 means all three together)
+benchmark_portion_to_evaluate = 3  # 0, 1, 2, 3 (3 means all three together)
 
 # If you play with benchmarks
-lower_limit = 10e3  # 5
-upper_limit = 610e3  # 50
-no_of_entries = 31
+if benchmark_portion_to_evaluate == 0:
+    # ARC 0
+    lower_limit = 10e3
+    upper_limit = 610e3
+    no_of_entries = 31
+    benchmark_accuracy_requirement = 10  # m
+elif benchmark_portion_to_evaluate == 1:
+    lower_limit = 1
+    upper_limit = 21
+    no_of_entries = 11  #11
+    benchmark_accuracy_requirement = 1  # m
+elif benchmark_portion_to_evaluate == 2:
+    lower_limit = 10e3
+    upper_limit = 610e3
+    no_of_entries = 31
+    benchmark_accuracy_requirement = 10  # m
+else:
+    lower_limit = 10e3
+    upper_limit = 610e3
+    no_of_entries = 31
+    benchmark_accuracy_requirement = 10  # m
+
+
+# ARC 1
+# lower_limit = 1  # 5
+# upper_limit = 21  # 50
+# no_of_entries = 11
 
 # If you set a single step_size
 choose_step_size = 40e3
 
 # If you set dedicated step sizes for case 3
 set_dedicated_step_sizes = True
-dedicated_step_sizes = [8e3, 4, 8e3]
+dedicated_step_sizes = [4e3, 4, 4e3]#[1e5, 10, 8e4]
 
 # For both cases
 reduce_step_size = 1
@@ -91,7 +114,8 @@ flight_path_angle_at_atmosphere_entry = -2.1  # degrees
 ###########################################################################
 
 # Set simulation start epoch
-simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
+# simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
+simulation_start_epoch = first_january_2040_epoch
 # Set termination conditions
 # maximum_duration = 85 * constants.JULIAN_DAY  # s
 # termination_altitude = 270.0E3  # m
@@ -122,6 +146,17 @@ density_scale_height = jupiter_scale_height
 density_at_zero_altitude = jupiter_1bar_density
 body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.exponential(
         density_scale_height, density_at_zero_altitude)
+
+# density_scale_height = Util.jupiter_scale_height
+# density_at_zero_altitude = Util.jupiter_1bar_density
+# g_0 = Util.jupiter_gravitational_parameter / Util.jupiter_radius ** 2
+# constant_temperature = density_scale_height * g_0 / Util.jupiter_gas_constant
+# #
+# body_settings.get('Jupiter').atmosphere_settings = environment_setup.atmosphere.custom_constant_temperature(
+#                 Util.jupiter_atmosphere_density_model,
+#                 constant_temperature,
+#                 Util.jupiter_gas_constant,
+#                 Util.jupiter_specific_heats_ratio)
 
 # Create bodies
 bodies = environment_setup.create_system_of_bodies(body_settings)
@@ -280,7 +315,6 @@ if use_benchmark:
             benchmark_step_sizes = [choose_step_size]
 
 
-
     if check_folder_existence and generate_benchmarks:
         does_folder_exists = os.path.exists(benchmark_output_path)
         shutil.rmtree(benchmark_output_path) if does_folder_exists else None
@@ -390,21 +424,25 @@ if use_benchmark:
                                                                      'benchmarks_dependent_variable_difference' + step_size_name + '.dat')
 
         if not silence_benchmark_related_plots:
-            fig1, ax1 = Util.plot_base_trajectory(first_benchmark_state_history)
+            fig1 = plt.figure()
+            ax1 = plt.axes(projection='3d')
+            fig1, ax1 = Util.plot_base_trajectory(first_benchmark_state_history, fig1, ax1)
             fig2, ax2 = Util.plot_time_step(first_benchmark_state_history)
 
-            fig3, ax3 = Util.plot_base_trajectory(second_benchmark_state_history)
+            fig3 = plt.figure()
+            ax3 = plt.axes(projection='3d')
+            fig3, ax3 = Util.plot_base_trajectory(second_benchmark_state_history, fig3, ax3)
             fig4, ax4 = Util.plot_time_step(second_benchmark_state_history)
 
-
+        skip_cells = 1
         benchmark_error = np.vstack(list(benchmark_state_difference.values()))
         bench_diff_epochs = np.array(list(benchmark_state_difference.keys()))
         bench_diff_epochs_plot = (bench_diff_epochs - bench_diff_epochs[0]) / constants.JULIAN_DAY
-        benchmark_error = benchmark_error[2:-2,:]
-        bench_diff_epochs_plot = bench_diff_epochs_plot[2:-2]
-        bench_diff_epochs = bench_diff_epochs[2:-2]  # useless for now
+        benchmark_error = benchmark_error[skip_cells:-skip_cells-1,:]
+        bench_diff_epochs_plot = bench_diff_epochs_plot[skip_cells:-skip_cells-1]
+        bench_diff_epochs = bench_diff_epochs[skip_cells:-skip_cells-1]  # useless for now
         position_error = LA.norm(benchmark_error[:, 0:3], axis=1)
-        max_position_error = np.amax(position_error)
+        max_position_error = position_error[-1]  # np.amax(position_error)
         if playwith_benchmark:
             # max_position_errors[benchmark_step_size/divide_step_size_of] = max_position_error
             max_position_errors[benchmark_step_size] = max_position_error
@@ -419,7 +457,6 @@ if use_benchmark:
 
     if write_results_to_file and generate_benchmarks:
         save2txt(benchmark_info, 'ancillary_benchmark_info.txt', benchmark_output_path)
-
 
     if playwith_benchmark:
         figg, axx = plt.subplots(figsize=(6,5))
@@ -547,7 +584,7 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
     curr_eccentricity_vector = (term1 * curr_position - term2 * curr_velocity) / Util.jupiter_gravitational_parameter
     curr_eccentricity = LA.norm(curr_eccentricity_vector)
 
-    curr_orbital_energy = Util.orbital_energy(LA.norm(curr_position), LA.norm(curr_velocity))
+    curr_orbital_energy = Util.orbital_energy(LA.norm(curr_position), LA.norm(curr_velocity), jupiter_gravitational_parameter)
 
     add_string = ''
     conjug = ' and'
@@ -603,9 +640,9 @@ ax.set_aspect('auto')
 ax.plot3D(simulation_result[:,0], simulation_result[:,1], simulation_result[:,2], 'gray')
 
 if plot_error_wrt_benchmark and use_benchmark:
-    fig2, ax2 = plt.subplots(figsize=(6,5))
+    fig2, ax2 = plt.subplots(figsize=(6,5), constrained_layout=True)
 
-    bench1 = np.loadtxt(benchmark_output_path + 'benchmark_1_states.dat')
+    bench1 = np.loadtxt(benchmark_output_path + 'benchmark_2_states.dat')
 
     bench1_epochs = bench1[:,0]
 
@@ -626,10 +663,11 @@ if plot_error_wrt_benchmark and use_benchmark:
 
 
 
-    ax2.plot(epochs_plot[8:-1], LA.norm(np.vstack(list(state_difference.values()))[:,0:3], axis=1)[8:-1])
-    ax2.plot(bench_diff_epochs_plot, position_error, color='firebrick')
-    ax2.set(xlabel='days', ylabel='error [m]')
+    ax2.plot(epochs_plot[8:-1], LA.norm(np.vstack(list(state_difference.values()))[:,0:3], axis=1)[8:-1], label='RKF7(8) (tol = 1e-14)')
+    ax2.plot(bench_diff_epochs_plot, position_error, color='firebrick', label='benchmark')
+    ax2.set(xlabel='Elapsed time [days]', ylabel='Position error [m]')
     ax2.set_yscale('log')
+    ax2.legend()
 
 Fig3, ax3 = plt.subplots(2, 1, figsize= (6,5))
 time_steps = np.diff(epochs_vector, n=1, axis=0)

@@ -16,15 +16,15 @@ import os
 
 decision_variable_list = ['InterplanetaryVelocity', 'EntryFpa']
 objectives_list = ['payload_mass_fraction', 'total_radiation_dose_krad', 'benefit_over_insertion_burn']
-total_list = decision_variable_list + objectives_list
+total_list = decision_variable_list + objectives_list + ['final_eccentricity']
 
 decision_variable_nice_labels = [r'$V_{J\,\infty}$ [m/s]', r'$\gamma_E$ [deg]']
 objectives_nice_labels = [r'$f_{payload}$ [-]', 'Radiation Dose [krad]', 'Aerocapture Benefit [-]']
-total_nice_names = decision_variable_nice_labels + objectives_nice_labels
+total_nice_names = decision_variable_nice_labels + objectives_nice_labels + [r'$e_{final}$ [-]']
 
 decision_variable_abbreviations = decision_variable_list
 objectives_abbreviations = ['payloadMF', 'RadDose', 'benefitAE']
-total_abbreviations = decision_variable_abbreviations + objectives_abbreviations
+total_abbreviations = decision_variable_abbreviations + objectives_abbreviations + ['final_eccentricity']
 
 def get_label(quantity: str):
     if quantity not in total_list:
@@ -100,7 +100,7 @@ def pareto_front_plot(df: pd.DataFrame,
                       objective1: str, objective2: str,
                       decision_variable: str,
                       are_objectives_min_max: list = (max, max),
-                      best_candidate_index: int = -1,
+                      best_candidate_index = None,
                       plot_title: str = '',
                       show_optimum_labels: bool = False,
                       save_fig: bool = False,
@@ -111,7 +111,7 @@ def pareto_front_plot(df: pd.DataFrame,
 
     if objective1 not in objectives_list or objective2 not in objectives_list:
         raise ValueError(f'Invalid name for one of the two objectives. Allowed values are {objectives_list}')
-    if decision_variable not in decision_variable_list:
+    if decision_variable not in decision_variable_list + ['final_eccentricity']:
         raise ValueError(f'Invalid name for the selected decision variable. Allowed values are {decision_variable_list}')
     if save_fig and save_dir == '':
         raise ValueError('No directory selected for saving the file.')
@@ -163,7 +163,7 @@ def pareto_front_plot(df: pd.DataFrame,
     return fig, ax
 
 
-def find_best_candidate(df: pd.DataFrame, ax: plt.Axes, objective1, objective2, optimum_points: np.ndarray, best_candidate_index: int = -1, show_optimum_labels: bool = False, fontsize: int = 15):
+def find_best_candidate(df: pd.DataFrame, ax: plt.Axes, objective1, objective2, optimum_points: np.ndarray, best_candidate_index = None, show_optimum_labels: bool = False, fontsize: int = 15):
     opt_points_shape = np.shape(optimum_points)
     if opt_points_shape[1] != 2:
         raise ValueError('Invalid number of columns for optimum points. it must be 2')
@@ -177,16 +177,20 @@ def find_best_candidate(df: pd.DataFrame, ax: plt.Axes, objective1, objective2, 
     #     print(optimum_points_df)
     #     return ax
     #
-    if best_candidate_index != -1:
-        optimal_solution = optimum_points_df.loc[best_candidate_index]
-        print('\n################################################################')
-        print(f'Values of the optimal solution for objectives {get_label(objective1)}, {get_label(objective2)}:')
-        print(optimal_solution)
-        print('\n')
+    if best_candidate_index is not None:
+        if type(best_candidate_index) not in [list, tuple]:
+            raise TypeError('indices for best candidate(s) are accepted only in iterable type (list, tuple)')
+        number_of_candidates = len(best_candidate_index)
+        for i in range(number_of_candidates):
+            optimal_solution = optimum_points_df.loc[best_candidate_index[i]]
+            print('\n################################################################')
+            print(f'Values of the optimal solution for objectives {get_label(objective1)}, {get_label(objective2)}:')
+            print(optimal_solution)
+            print('\n')
 
-        annotation_position = (optimal_solution[objective1], optimal_solution[objective2])
-        ax.annotate('best optimum', xy=annotation_position, xytext=(-80, -20), textcoords='offset points',
-                    arrowprops=dict(arrowstyle='->'), fontsize=fontsize*5/6)
+            annotation_position = (optimal_solution[objective1], optimal_solution[objective2])
+            ax.annotate(str(best_candidate_index[i]), xy=annotation_position, xytext=(-80, -20), textcoords='offset points',
+                        arrowprops=dict(arrowstyle='->'), fontsize=fontsize*5/6)
         return ax
 
     print('\n################################################################')

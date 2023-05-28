@@ -5,7 +5,7 @@ import os
 
 from tudatpy.kernel import constants
 import CapsuleEntryUtilities as Util
-
+plt.rc('font', size=15)
 current_dir = os.path.dirname(__file__)
 
 output_folder = current_dir + '/SimulationOutput/IntegratorTuning/'
@@ -17,13 +17,13 @@ bm_epochs_plot = (bm_epochs - bm_epochs[0]) / constants.JULIAN_DAY
 bm_position_error = benchmark_error_matrix[:,1:4]
 bm_distance_error = LA.norm(bm_position_error, axis=1)
 
-cut_beginning_boundary_values_by = 5
+cut_beginning_boundary_values_by = 8
 cut_end_boundary_values_by = 2
 
 # from -5 to +2
 number_of_settings = range(-5, 2)
 
-fig, ax = plt.subplots(figsize=(6,5))
+fig, ax = plt.subplots(figsize=(6,5), constrained_layout=True)
 # fig3d = plt.figure()
 # ax3d = plt.axes(projection='3d')
 for settings_index in number_of_settings:
@@ -47,12 +47,15 @@ for settings_index in number_of_settings:
     # Plot 3-D Trajectory
 
     # ax3d.plot(position_history[:,0], position_history[:,1], position_history[:,2])
-    fig3d, ax3d = Util.plot_base_trajectory(state_history_matrix)
-    fig3d.show()
+    # fig3d = plt.figure()
+    # ax3d = plt.axes(projection='3d')
+    # fig3d, ax3d = Util.plot_base_trajectory(state_history_matrix, fig3d, ax3d)
+    # fig3d.show()
 
 ax.plot(bm_epochs_plot, bm_distance_error, label='bm')
+ax.set(xlabel='Elapsed time [days]', ylabel='Position error [m]')
 ax.set_yscale('log')
-plt.legend()
+ax.legend()
 plt.show()
 
 

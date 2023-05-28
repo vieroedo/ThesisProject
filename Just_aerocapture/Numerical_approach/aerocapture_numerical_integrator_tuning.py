@@ -20,6 +20,7 @@ from tudatpy.kernel.math import interpolators
 
 # Problem-specific imports
 import CapsuleEntryUtilities as Util
+from JupiterTrajectory_GlobalParameters import *
 
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
@@ -74,7 +75,7 @@ spice_interface.load_standard_kernels()
 #                     0.4559143679738996]
 
 # Atmospheric entry conditions
-atmospheric_entry_interface_altitude = 400e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
+atmospheric_entry_interface_altitude = 450e3  # m (DO NOT CHANGE - consider changing only with valid and sound reasons)
 flight_path_angle_at_atmosphere_entry = -2.1  # degrees
 
 
@@ -83,8 +84,8 @@ flight_path_angle_at_atmosphere_entry = -2.1  # degrees
 ###########################################################################
 
 # Set simulation start epoch
-simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
-
+# simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
+simulation_start_epoch = first_january_2040_epoch
 # Set vehicle properties
 # capsule_density = 250.0  # kg m-3
 
@@ -128,12 +129,12 @@ bodies = environment_setup.create_system_of_bodies(body_settings)
 bodies.create_empty_body('Capsule')
 
 # Set mass of vehicle
-bodies.get_body('Capsule').mass = 2000  # kg
+bodies.get_body('Capsule').mass = vehicle_mass  # kg
 
 # Create aerodynamic coefficients interface (drag and lift only)
-reference_area = 5.  # m^2
-drag_coefficient = 1.2
-lift_coefficient = 0.6
+reference_area = vehicle_reference_area # m^2
+drag_coefficient = vehicle_cd
+lift_coefficient = vehicle_cl
 aero_coefficient_settings = environment_setup.aerodynamic_coefficients.constant(
         reference_area, [drag_coefficient, 0.0, lift_coefficient])  # [Drag, Side-force, Lift]
 environment_setup.add_aerodynamic_coefficient_interface(
@@ -158,10 +159,12 @@ are_dependent_variables_to_save = False if not dependent_variables_to_save else 
 
 # Get current propagator, and define propagation settings
 current_propagator = propagation_setup.propagator.unified_state_model_quaternions
-current_propagator_settings = Util.get_propagator_settings(flight_path_angle_at_atmosphere_entry,
-                                                           atmospheric_entry_interface_altitude, bodies,
+initial_state = Util.get_initial_state(flight_path_angle_at_atmosphere_entry,
+                                       atmospheric_entry_altitude, Util.z_axis, 5600.)
+current_propagator_settings = Util.get_propagator_settings(initial_state,
+                                                           bodies,
                                                            termination_settings,
-                                                           current_propagator=dependent_variables_to_save)
+                                                           dependent_variables_to_save)
 
 # from -5 to +2
 number_of_settings = range(-5, 2)

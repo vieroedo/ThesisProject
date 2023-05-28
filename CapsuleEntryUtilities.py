@@ -557,7 +557,10 @@ def get_propagator_settings(initial_state,
     central_bodies = ['Jupiter']
 
     # Define accelerations for the nominal case and for other variations of the model
-    if model_choice in [0, 1]:
+    if model_choice == 0:
+        acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
+                                                        propagation_setup.acceleration.aerodynamic()]}
+    elif model_choice == 1:
         acceleration_settings_on_vehicle = {'Jupiter': [propagation_setup.acceleration.point_mass_gravity(),
                                                         propagation_setup.acceleration.aerodynamic()]}
     elif model_choice == 2:
@@ -836,7 +839,7 @@ def generate_benchmarks(benchmark_step_size,
 
     atmosph_altitude_termination_settings_arc_0 = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
-        limit_value=4.5e6*1e3,  # + benchmark_step_size*2e2*1e3,
+        limit_value=3.9e6*1e3,  # + benchmark_step_size*2e2*1e3,
         use_as_lower_limit=True,
         terminate_exactly_on_final_condition=True,
         termination_root_finder_settings=root_finders.bisection(relative_variable_tolerance=1e-16, absolute_variable_tolerance=1e-16, root_function_tolerance=1e-16)
@@ -844,7 +847,7 @@ def generate_benchmarks(benchmark_step_size,
 
     atmosph_altitude_termination_settings_arc_1 = propagation_setup.propagator.dependent_variable_termination(
         dependent_variable_settings=propagation_setup.dependent_variable.altitude('Capsule', 'Jupiter'),
-        limit_value=4.5e6*1e3,  # + benchmark_step_size*2e2*1e3 + 10,
+        limit_value=3.9e6*1e3,  # + benchmark_step_size*2e2*1e3 + 10,
         use_as_lower_limit=False,
         terminate_exactly_on_final_condition=True,
         termination_root_finder_settings=root_finders.bisection(relative_variable_tolerance=1e-16,
@@ -1025,7 +1028,7 @@ def compare_benchmarks(first_benchmark: dict,
     """
     # Create 8th-order Lagrange interpolator for first benchmark
     benchmark_interpolator = interpolators.create_one_dimensional_vector_interpolator(
-        first_benchmark, interpolators.lagrange_interpolation(8))
+        first_benchmark, interpolators.lagrange_interpolation(12))
     # Calculate the difference between the benchmarks
     print('Calculating benchmark differences...')
     # Initialize difference dictionaries

@@ -11,7 +11,8 @@ import shutil
 current_dir = os.path.dirname(__file__)
 # select_objective = 'benefit_over_insertion_burn'
 
-use_old_results = False
+use_old_results = True
+use_refined_results = True  # overwrites previous boolean
 
 apply_constraints = True
 filter_results_further = True
@@ -42,8 +43,9 @@ total_columns = decision_variable_list + objectives_list + constraints_list
 #
 # labels_list = decision_variable_nice_labels + objectives_nice_labels
 
-filename_addition_old = '_old' if use_old_results else ''
-grid_search_data = np.loadtxt(current_dir + '/GridSearch/' + 'grid_search_results' + filename_addition_old + '.dat')
+filename_addition = '_old' if use_old_results else ''
+filename_addition = '_refined' if use_refined_results else ''
+grid_search_data = np.loadtxt(current_dir + '/GridSearch/' + 'grid_search_results' + filename_addition + '.dat')
 
 grid_search_df = pd.DataFrame(grid_search_data, columns=total_columns)
 
@@ -82,12 +84,33 @@ fig51, ax51 = plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_
                                  'InterplanetaryVelocity', directly_show=show_plots_singularly, save_fig=save_figures,
                                  save_dir=save_dir, fontsize=fontsize)
 
+coloring = 'final_eccentricity'  # 'EntryFpa'
 fig50_2, ax50_2 = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
-                                    'benefit_over_insertion_burn', 'EntryFpa', [min, max], save_fig=save_figures,
+                                    'benefit_over_insertion_burn', coloring, [min, max], save_fig=save_figures,
                                     save_dir=save_dir, fontsize=fontsize)  #, best_candidate_index=7358)
 fig50_2_zoom, ax50_2_zoom = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
                                               'benefit_over_insertion_burn', 'EntryFpa', [min, max],
                                               save_fig=save_figures, pareto_zoom=True, save_dir=save_dir, fontsize=fontsize)
+
+if use_refined_results:
+    for i, sol in enumerate(best_solutions.keys()):
+        rad_dose_sol = best_solutions[sol]['total_radiation_dose_krad']
+        benefit_ae_sol = best_solutions[sol]['benefit_over_insertion_burn']
+
+        ax50_2.scatter(rad_dose_sol, benefit_ae_sol, color='r', facecolor='none')
+        ax50_2.annotate(str(sol), xy=(rad_dose_sol, benefit_ae_sol), xytext=(-60*(-1)**i, -20*(-1)**i), textcoords='offset points',
+                        arrowprops=dict(arrowstyle='->'), fontsize=fontsize * 5 / 6)
+
+    fig50_2_zoom2, ax50_2_zoom2 = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
+                                                    'benefit_over_insertion_burn', 'EntryFpa', [min, max],
+                                                    save_fig=save_figures, pareto_zoom=True, save_dir=save_dir,
+                                                    fontsize=fontsize,
+                                                    best_candidate_index=[9867])
+else:
+    fig50_2_zoom2, ax50_2_zoom2 = pareto_front_plot(convex_filtered_grid_search_df, 'total_radiation_dose_krad',
+                                                  'benefit_over_insertion_burn', 'EntryFpa', [min, max],
+                                                  save_fig=save_figures, pareto_zoom=True, save_dir=save_dir, fontsize=fontsize,
+                                                  best_candidate_index=[7358, 9857])
 
 
 fig55, ax55 = plot_with_colorbar(filtered_grid_search_df, 'total_radiation_dose_krad', 'payload_mass_fraction',

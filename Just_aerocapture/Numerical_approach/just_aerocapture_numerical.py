@@ -24,6 +24,8 @@ import CapsuleEntryUtilities as Util
 import class_AerocaptureNumericalProblem as ae_model
 from handle_functions import *
 
+run_best_solutions = True
+select_solution = 9857
 
 write_results_to_file = True  # when in doubt leave true (idk anymore what setting it to false does hehe)
 
@@ -60,13 +62,18 @@ atmospheric_entry_interface_altitude = Util.atmospheric_entry_altitude  # m (DO 
 flight_path_angle_at_atmosphere_entry = -3  # degrees
 interplanetary_arrival_velocity = 5600  # m/s
 
+if run_best_solutions:
+    flight_path_angle_at_atmosphere_entry = best_solutions[select_solution]['EntryFpa']
+    interplanetary_arrival_velocity = best_solutions[select_solution]['InterplanetaryVelocity']
+
+
 ###########################################################################
 # DEFINE SIMULATION SETTINGS ##############################################
 ###########################################################################
 
 # Set simulation start epoch
-simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
-
+# simulation_start_epoch = 11293 * constants.JULIAN_DAY  # s
+simulation_start_epoch = first_january_2040_epoch
 
 # ###########################################################################
 # # CREATE AEOCAPTURE PROBLEM ###############################################
@@ -213,5 +220,8 @@ unprocessed_state_history = dynamics_simulator.unprocessed_state_history
 dependent_variable_history = dynamics_simulator.dependent_variable_history
 
 if write_results_to_file:
-    save2txt(state_history, 'simulation_state_history.dat', current_dir + '/SimulationOutput')
-    save2txt(dependent_variable_history, 'simulation_dependent_variable_history.dat', current_dir + '/SimulationOutput')
+    solution_no = ''
+    if run_best_solutions:
+        solution_no = '_' + str(select_solution)
+    save2txt(state_history, 'simulation_state_history' + solution_no + '.dat', current_dir + '/SimulationOutput')
+    save2txt(dependent_variable_history, 'simulation_dependent_variable_history' + solution_no + '.dat', current_dir + '/SimulationOutput')

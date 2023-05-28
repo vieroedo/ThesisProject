@@ -15,6 +15,8 @@ import class_AerocaptureNumericalProblem as ae_model
 import optimization_functions
 from handle_functions import *
 
+do_refinement_of_solutions = True
+
 write_results_to_file = True
 choose_model = 0  # zero is the default model, the final one. 1 is the most raw one, higher numbers are better ones.
 integrator_settings_index = -4
@@ -32,11 +34,19 @@ spice_interface.load_standard_kernels()
 
 # decision_variable_names = ['InterplanetaryVelocity', 'EntryFpa']
 # decision_variable_to_evaluate = ['InterplanetaryVelocity', 'EntryFpa']
-decision_variable_range = [[5100., -5],
-                           [6100., -1.5]]
 
-interplanetary_velocity_boundaries = [5100., 6100.]
-entry_fpa_boundaries_deg = [-5, -1.5]
+if do_refinement_of_solutions:
+    decision_variable_range = [[5800., -3.1],
+                               [6100., -2.9]]
+
+    interplanetary_velocity_boundaries = [5800., 6100.]
+    entry_fpa_boundaries_deg = [-3.1, -2.9]
+else:
+    decision_variable_range = [[5100., -5],
+                               [6100., -1.5]]
+
+    interplanetary_velocity_boundaries = [5100., 6100.]
+    entry_fpa_boundaries_deg = [-5, -1.5]
 
 aerocapture_problem = ae_model.AerocaptureNumericalProblem(decision_variable_range,
                                                            choose_model,
@@ -61,6 +71,9 @@ for current_interplanetary_velocity_no, current_interplanetary_velocity in enume
     for current_entry_fpa_no, current_entry_fpa_deg in enumerate(entry_fpa_range_deg):
         # Set current row number
         current_row_number = current_entry_fpa_no + grid_search_entry_fpa_samples * current_interplanetary_velocity_no
+
+        if do_refinement_of_solutions:
+            print('REFINED SOLUTIONS')
 
         print(f'Simulation No: {current_row_number}     V_inf = {current_interplanetary_velocity/1e3} km/s      Entry fpa: {current_entry_fpa_deg} deg')
 
@@ -94,4 +107,7 @@ if write_results_to_file:
     savedir = current_dir + '/GridSearch/'
     if not os.path.exists(savedir):
         os.mkdir(savedir)
-    np.savetxt(savedir + 'grid_search_results.dat', grid_search_values)
+    filename = 'grid_search_results.dat'
+    if do_refinement_of_solutions:
+        filename = 'grid_search_results_refined.dat'
+    np.savetxt(savedir + filename, grid_search_values)

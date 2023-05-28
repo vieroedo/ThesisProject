@@ -24,10 +24,13 @@ from JupiterTrajectory_GlobalParameters import *
 # import handle_functions as hanfun
 
 # Make everything big
-plt.rc('font', size=12)
+plt.rc('font', size=14)
 
-show_galileo_flight = True
-plot_galileo_tabulated_data = True
+print_best_solutions = True
+select_solution = 9857
+
+show_galileo_flight = False
+plot_galileo_tabulated_data = False
 plot_heatfluxes_in_dep_var_plots = False
 
 plot_figures_for_thesis = False
@@ -55,9 +58,14 @@ if benchmark_portion_to_evaluate == 3:
 else:
     benchmark_output_path = benchmark_output_path + 'portion_' + str(benchmark_portion_to_evaluate) + '/'
 
+if print_best_solutions:
+    solution_no = '_' + str(select_solution)
+else:
+    solution_no = ''
+
 # Retrieve from file
-state_history_matrix = np.loadtxt(current_dir + '/SimulationOutput/' + 'simulation_state_history.dat')
-dependent_variable_history_matrix = np.loadtxt(current_dir + '/SimulationOutput/' + 'simulation_dependent_variable_history.dat')
+state_history_matrix = np.loadtxt(current_dir + '/SimulationOutput/' + 'simulation_state_history' + solution_no + '.dat')
+dependent_variable_history_matrix = np.loadtxt(current_dir + '/SimulationOutput/' + 'simulation_dependent_variable_history' + solution_no + '.dat')
 state_history = dict(zip(state_history_matrix[:,0], state_history_matrix[:,1:]))
 dependent_variable_history = dict(zip(dependent_variable_history_matrix[:,0], dependent_variable_history_matrix[:,1:]))
 
@@ -329,7 +337,7 @@ if plot_figures_for_thesis:
 
 Fig_vh, axs_vh = plt.subplots(figsize = (6,5))
 axs_vh.plot(airspeed[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3, altitude[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
-axs_vh.set(xlabel='airspeed [km/s]', ylabel='altitude [km]')
+axs_vh.set(xlabel='Airspeed [km/s]', ylabel='Altitude [km]')
 
 
 ## HEAT FLUXES COMPARISON
@@ -440,12 +448,18 @@ for i, current_state_to_eval in enumerate(states_to_evaluate):
         print(f'Target pericenter velocity: {target_velocity / 1e3:.3f} km/s   (target orbit eccentricity: 0.98)')
         print(f'The required delta v to impart at pericenter to have eccentricity of 0.98 is of: {delta_v/1e3:.3f} km/s')
 
-        test_specific_impulse = 318  # s
+        test_specific_impulse = 320  # s
         g_0 = 9.80665  # m/s^2
         mass_fraction_mf_mi = np.exp(-delta_v/(g_0*test_specific_impulse))
+
+        propellant_mass_fraction = 1.12 * (
+                    1 - np.exp(-delta_v / (test_specific_impulse * g_0)))
+        payload_mass_fraction = 1 - propellant_mass_fraction
+
         vehicle_mass = Util.vehicle_mass
         final_mass = mass_fraction_mf_mi * vehicle_mass
         propellant_mass = vehicle_mass - final_mass
+        propellant_mass = propellant_mass_fraction * vehicle_mass
         print(f'Which corresponds to a propellant mass of {propellant_mass:.3f} kg, for a propellant mass fraction of {propellant_mass/vehicle_mass:.5f}')
 
 v_initial = Util.velocity_from_energy(states_dict['initial'], initial_orbit_pericenter,jupiter_gravitational_parameter)
@@ -810,5 +824,56 @@ high_radiation_areas_elapsed_time = (very_high_radiation_epochs[0] - high_radiat
 very_high_rad_elapsed_time = (very_high_radiation_epochs[-1] - very_high_radiation_epochs[0]) / constants.JULIAN_DAY
 
 print(f'The spacecraft passes {high_radiation_areas_elapsed_time} days in the high radiation area, and {very_high_rad_elapsed_time} days in the very high rad area')
+
+
+
+
+fig_traj_val_1, ax_traj_val_1 = plt.subplots(3, 1, figsize=(6, 5), sharex='col', constrained_layout=True)
+fig_traj_val_2, ax_traj_val_2 = plt.subplots(3, 1, figsize=(6, 5), sharex='col', constrained_layout=True)
+
+ax_traj_val_1[-1].set_xlabel('Elapsed time [s]')
+ax_traj_val_2[-1].set_xlabel('Elapsed time [s]')
+
+
+# epochs_ae_phase = epochs_vector[entry_epochs_cells].reshape(atm_entry_vector_length)
+# epochs_plot_ae_phase = epochs_ae_phase - epochs_ae_phase[0]
+
+ax_traj_val_1[0].plot(epochs_plot_ae_phase, drag_acc_mod, label='drag')
+ax_traj_val_1[0].plot(epochs_plot_ae_phase, lift_acc_mod, label='lift')
+ax_traj_val_1[0].plot(epochs_plot_ae_phase, grav_acc[entry_epochs_cells].reshape(atm_entry_vector_length),
+              label='gravity')
+ax_traj_val_1[0].set(ylabel=r'Acceleration [m/s$^2$]')
+ax_traj_val_1[0].legend()
+
+ax_traj_val_1[1].plot(epochs_plot_ae_phase, altitude[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
+ax_traj_val_1[1].axhline(y=atmosphere_altitude_interfaces[0] / 1e3, color='grey', linestyle='dotted')
+ax_traj_val_1[1].axhline(y=atmosphere_altitude_interfaces[1] / 1e3, color='grey', linestyle='dotted')
+ax_traj_val_1[1].set(ylabel='Altitude [km]')
+
+ax_traj_val_1[2].plot(epochs_plot_ae_phase,
+              flight_path_angle[entry_epochs_cells].reshape(atm_entry_vector_length) * 180 / np.pi)
+ax_traj_val_1[2].axhline(y=atmosphere_fpa_interfaces[0] * 180 / np.pi, color='grey', linestyle='dotted')
+ax_traj_val_1[2].axhline(y=atmosphere_fpa_interfaces[1] * 180 / np.pi, color='grey', linestyle='dotted')
+ax_traj_val_1[2].set(ylabel=r'$\gamma$ [deg]')
+
+ax_traj_val_2[0].plot(epochs_plot_ae_phase, mach_number[entry_epochs_cells].reshape(atm_entry_vector_length))
+ax_traj_val_2[0].set(ylabel='Mach number [-]')
+
+ax_traj_val_2[1].plot(epochs_plot_ae_phase, atmospheric_density[entry_epochs_cells].reshape(atm_entry_vector_length))
+ax_traj_val_2[1].set(ylabel=r'Density [kg/m$^3$]', yscale='log')
+
+ax_traj_val_2[2].plot(epochs_plot_ae_phase, airspeed[entry_epochs_cells].reshape(atm_entry_vector_length) / 1e3)
+ax_traj_val_2[2].set(ylabel='Airspeed [km/s]')
+
+
+final_conv_hfx, final_rad_hfx = Util.calculate_trajectory_heat_fluxes(atmospheric_density,airspeed,nose_radius)  # W/m2
+fig_final_hfx, ax_final_hfx = plt.subplots(figsize=(6, 5), constrained_layout=True)
+
+ax_final_hfx.plot(epochs_plot_ae_phase, final_conv_hfx[entry_epochs_cells]/1e4, label=r'$q_C$')
+ax_final_hfx.plot(epochs_plot_ae_phase, final_rad_hfx[entry_epochs_cells]/1e4, label=r'$q_R$')
+ax_final_hfx.set(xlabel='Elapsed time [s]')
+ax_final_hfx.set(ylabel=r'Heat fluxes [W/cm$^2$]')
+ax_final_hfx.legend()
+
 
 plt.show()

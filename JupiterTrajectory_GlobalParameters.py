@@ -9,6 +9,7 @@ from numpy import linalg as LA
 from matplotlib import pyplot as plt
 import os
 import warnings
+
 global_parameters_file_directory = os.path.dirname(__file__)
 
 # Load standard spice kernels
@@ -24,7 +25,6 @@ global_interpolator_settings = interpolators.lagrange_interpolation(
 # Global frame orientation
 global_frame_orientation = 'ECLIPJ2000'
 
-
 # VEHICLE PARAMETERS ###################################################################################################
 # Atmospheric entry interface
 atmospheric_entry_altitude = 450e3  # m
@@ -32,7 +32,7 @@ atmospheric_entry_altitude = 450e3  # m
 # Vehicle properties
 vehicle_mass = 2000  # kg
 vehicle_reference_area = 5.  # m^2
-vehicle_radius = np.sqrt(vehicle_reference_area/np.pi)
+vehicle_radius = np.sqrt(vehicle_reference_area / np.pi)
 vehicle_nose_radius = vehicle_radius  # 0.222  # m
 # vehicle_reference_area = np.pi * vehicle_radius**2    choose which one you want to use as parameter
 vehicle_cd = 1.2
@@ -46,7 +46,7 @@ vehicle_shield_thickness = 2.7  # g/cm2
 # JUPITER ENVIRONMENT ##################################################################################################
 # Jupiter physical values
 jupiter_mass = 1898.6e24  # kg
-jupiter_radius = spice_interface.get_average_radius('Jupiter') # m     legacy value: 69911e3
+jupiter_radius = spice_interface.get_average_radius('Jupiter')  # m     legacy value: 69911e3
 jupiter_SOI_radius = 48.2e9  # m
 jupiter_gravitational_parameter = spice_interface.get_body_gravitational_parameter('Jupiter')
 jupiter_surface_acceleration = jupiter_gravitational_parameter / jupiter_radius ** 2
@@ -63,8 +63,8 @@ jupiter_1bar_density = 0.16  # kg/m^3
 # Parameters for each layer: T_0, h_0, rho_0, alpha
 jupiter_atmosphere_exponential_layered_model = {
     'layer_1': [425.0, -132e3, 1.5, -0.56e3],
-    'layer_2': [100.0,   50e3, 2e-2, 2.7e3],
-    'layer_3': [200.0,  320e3, 2e-7, 0.9067e3],
+    'layer_2': [100.0, 50e3, 2e-2, 2.7e3],
+    'layer_3': [200.0, 320e3, 2e-7, 0.9067e3],
     'layer_4': [950.0, 1000e3, 3e-11, np.inf]
 }
 
@@ -73,42 +73,42 @@ jupiter_atmosphere_exponential_layered_model = {
 # Entries for each moon: 'SMA' 'Mass' 'Radius' 'Orbital_Period' 'SOI_Radius' 'mu' 'g_0'
 moons_optimization_parameter_dict = {0: 'NoMoon', 1: 'Io', 2: 'Europa', 3: 'Ganymede', 4: 'Callisto'}
 galilean_moons_data = {
-                       'NoMoon': {'SMA': 1,
-                                  'Mass': 1,
-                                  'Radius': 1,
-                                  'Orbital_Period': 1,
-                                  'SOI_Radius': 1,
-                                  'mu': 1,
-                                  'g_0': 1},
-                       'Io': {'SMA': 421.77e6,
-                              'Mass': 893.3e20,
-                              'Radius': 1821.3e3,
-                              'Orbital_Period': 1.769138 * constants.JULIAN_DAY,
-                              'SOI_Radius': 7836e3,
-                              'mu': 893.3e20 * constants.GRAVITATIONAL_CONSTANT,
-                              'g_0': 893.3e20 * constants.GRAVITATIONAL_CONSTANT / (1821.3e3**2)},
-                       'Europa': {'SMA': 671.08e6,
-                                  'Mass': 479.7e20,
-                                  'Radius': 1565e3,
-                                  'Orbital_Period': 3.551810 * constants.JULIAN_DAY,
-                                  'SOI_Radius': 9723e3,
-                                  'mu': 479.7e20 * constants.GRAVITATIONAL_CONSTANT,
-                                  'g_0': 479.7e20 * constants.GRAVITATIONAL_CONSTANT / (1565e3**2)},
-                       'Ganymede': {'SMA': 1070.4e6,
-                                    'Mass': 1482e20,
-                                    'Radius': 2634e3,
-                                    'Orbital_Period': 7.154553 * constants.JULIAN_DAY,
-                                    'SOI_Radius': 24351e3,
-                                    'mu': 1482e20 * constants.GRAVITATIONAL_CONSTANT,
-                                    'g_0': 1482e20 * constants.GRAVITATIONAL_CONSTANT / (2634e3**2)},
-                       'Callisto': {'SMA': 1882.8e6,
-                                    'Mass': 1076e20,
-                                    'Radius': 2403e3,
-                                    'Orbital_Period': 16.689018 * constants.JULIAN_DAY,
-                                    'SOI_Radius': 37684e3,
-                                    'mu': 1076e20 * constants.GRAVITATIONAL_CONSTANT,
-                                    'g_0': 1076e20 * constants.GRAVITATIONAL_CONSTANT / (2403e3**2)}
-                       }
+    'NoMoon': {'SMA': 1,
+               'Mass': 1,
+               'Radius': 1,
+               'Orbital_Period': 1,
+               'SOI_Radius': 1,
+               'mu': 1,
+               'g_0': 1},
+    'Io': {'SMA': 421.77e6,
+           'Mass': 893.3e20,
+           'Radius': 1821.3e3,
+           'Orbital_Period': 1.769138 * constants.JULIAN_DAY,
+           'SOI_Radius': 7836e3,
+           'mu': 893.3e20 * constants.GRAVITATIONAL_CONSTANT,
+           'g_0': 893.3e20 * constants.GRAVITATIONAL_CONSTANT / (1821.3e3 ** 2)},
+    'Europa': {'SMA': 671.08e6,
+               'Mass': 479.7e20,
+               'Radius': 1565e3,
+               'Orbital_Period': 3.551810 * constants.JULIAN_DAY,
+               'SOI_Radius': 9723e3,
+               'mu': 479.7e20 * constants.GRAVITATIONAL_CONSTANT,
+               'g_0': 479.7e20 * constants.GRAVITATIONAL_CONSTANT / (1565e3 ** 2)},
+    'Ganymede': {'SMA': 1070.4e6,
+                 'Mass': 1482e20,
+                 'Radius': 2634e3,
+                 'Orbital_Period': 7.154553 * constants.JULIAN_DAY,
+                 'SOI_Radius': 24351e3,
+                 'mu': 1482e20 * constants.GRAVITATIONAL_CONSTANT,
+                 'g_0': 1482e20 * constants.GRAVITATIONAL_CONSTANT / (2634e3 ** 2)},
+    'Callisto': {'SMA': 1882.8e6,
+                 'Mass': 1076e20,
+                 'Radius': 2403e3,
+                 'Orbital_Period': 16.689018 * constants.JULIAN_DAY,
+                 'SOI_Radius': 37684e3,
+                 'mu': 1076e20 * constants.GRAVITATIONAL_CONSTANT,
+                 'g_0': 1076e20 * constants.GRAVITATIONAL_CONSTANT / (2403e3 ** 2)}
+}
 ########################################################################################################################
 
 
@@ -117,8 +117,8 @@ galilean_moons_data = {
 galileo_mass = 339.  # kg
 galileo_radius = 0.632  # m
 galileo_nose_radius = galileo_radius  # 0.222  # m
-galileo_ref_area = galileo_radius**2 * np.pi  # m^2
-galileo_cd = 1.05 #1.02
+galileo_ref_area = galileo_radius ** 2 * np.pi  # m^2
+galileo_cd = 1.05  # 1.02
 galileo_cl = 0.
 
 # Galileo entry interface parameters
@@ -132,7 +132,8 @@ galileo_entry_altitude = 450e3  # m
 galileo_mission_directory = '/Just_aerocapture/Numerical_approach/GalileoMission/'
 
 # Galileo in-flight data taken from Table 6 of DOI: 10.1029/98JE01766
-galileo_flight_data_seiff1998 = np.loadtxt(global_parameters_file_directory + galileo_mission_directory + 'galileo_flight_data.txt')
+galileo_flight_data_seiff1998 = np.loadtxt(
+    global_parameters_file_directory + galileo_mission_directory + 'galileo_flight_data.txt')
 galileo_flight_epoch = galileo_flight_data_seiff1998[:, 0]
 galileo_flight_altitude = galileo_flight_data_seiff1998[:, 1] * 1e3
 galileo_flight_velocity = galileo_flight_data_seiff1998[:, 2] * 1e3
@@ -144,14 +145,17 @@ galileo_flight_altitude_boundaries = [galileo_flight_altitude[-1], galileo_fligh
 # Galileo in-flight data taken from  DOI: 10.1029/98JE01766
 # Table 8
 jupiter_upper_atmosphere_data_seiff1998 = np.loadtxt(global_parameters_file_directory + galileo_mission_directory +
-                                   'galileo_flight_data_2.txt')
+                                                     'galileo_flight_data_2.txt')
 # Table 7
 jupiter_lower_atmosphere_data_seiff1998 = np.loadtxt(global_parameters_file_directory + galileo_mission_directory +
-                                   'galileo_lower_atm_flight_data_2.txt')
-jupiter_altitude_atmosphere_values_seiff1998 = np.concatenate((jupiter_upper_atmosphere_data_seiff1998[:, 0],jupiter_lower_atmosphere_data_seiff1998[:, 1]))
-jupiter_density_atmosphere_values_seiff1998 = np.concatenate((jupiter_upper_atmosphere_data_seiff1998[:, 3],jupiter_lower_atmosphere_data_seiff1998[:, 3]))
+                                                     'galileo_lower_atm_flight_data_2.txt')
+jupiter_altitude_atmosphere_values_seiff1998 = np.concatenate(
+    (jupiter_upper_atmosphere_data_seiff1998[:, 0], jupiter_lower_atmosphere_data_seiff1998[:, 1]))
+jupiter_density_atmosphere_values_seiff1998 = np.concatenate(
+    (jupiter_upper_atmosphere_data_seiff1998[:, 3], jupiter_lower_atmosphere_data_seiff1998[:, 3]))
 atmosphere_altitude_values_boundaries_seiff1998 = [jupiter_altitude_atmosphere_values_seiff1998[-1],
-                                                   jupiter_altitude_atmosphere_values_seiff1998[0]]  # 0=1000km  -1=-135km
+                                                   jupiter_altitude_atmosphere_values_seiff1998[
+                                                       0]]  # 0=1000km  -1=-135km
 ########################################################################################################################
 
 
@@ -160,6 +164,7 @@ atmosphere_altitude_values_boundaries_seiff1998 = [jupiter_altitude_atmosphere_v
 MJD200_date = 66154  # 01/01/2040
 J2000_date = MJD200_date - 51544
 first_january_2040_epoch = J2000_date * constants.JULIAN_DAY
+
 
 ########################################################################################################################
 
@@ -179,25 +184,25 @@ def radiation_intensity_function(altitude: np.ndarray):
             warnings.warn('altitude is below zero!')
             radiation_intensity[index] = 0.
 
-        if jupiter_radius < distance_from_jupiter_centre[index] < 1.5*jupiter_radius:
-            x_0, x_1 = 1*jupiter_radius, 1.5*jupiter_radius
+        if jupiter_radius < distance_from_jupiter_centre[index] < 1.5 * jupiter_radius:
+            x_0, x_1 = 1 * jupiter_radius, 1.5 * jupiter_radius
             y_0, y_1 = 0, 1.5e5
             m_coeff = (y_1 - y_0) / (x_1 - x_0)
             q_coeff = y_0 - m_coeff * x_0
             radiation_intensity[index] = m_coeff * distance_from_jupiter_centre[index] + q_coeff
 
-        if 1.5*jupiter_radius < distance_from_jupiter_centre[index] < 4*jupiter_radius:
+        if 1.5 * jupiter_radius < distance_from_jupiter_centre[index] < 4 * jupiter_radius:
             MINOR_INNER_MOONS_RAD_LEVEL = 1.5e5
             radiation_intensity[index] = MINOR_INNER_MOONS_RAD_LEVEL
 
-        if 4*jupiter_radius < distance_from_jupiter_centre[index] < 16 * jupiter_radius:
+        if 4 * jupiter_radius < distance_from_jupiter_centre[index] < 16 * jupiter_radius:
             x_0, x_1 = 4 * jupiter_radius, 16 * jupiter_radius
             y_0, y_1 = 1.5e5, 1e2
             m_coeff = (y_1 - y_0) / (x_1 - x_0)
             q_coeff = y_0 - m_coeff * x_0
             radiation_intensity[index] = m_coeff * distance_from_jupiter_centre[index] + q_coeff
 
-        if distance_from_jupiter_centre[index] > 16*jupiter_radius:
+        if distance_from_jupiter_centre[index] > 16 * jupiter_radius:
             # Same m_coeff as before, but now different qcoeff
             x_0, x_1 = 4 * jupiter_radius, 16 * jupiter_radius
             y_0, y_1 = 1.5e5, 1e2
@@ -207,8 +212,41 @@ def radiation_intensity_function(altitude: np.ndarray):
             radiation_intensity[index] = rad_level if rad_level > 0 else 0
 
     return radiation_intensity / constants.JULIAN_DAY
+
+
 # Debug plot:
 # plt.plot(np.linspace(0,16,200), radiation_intensity_function(np.linspace(0,16*jupiter_radius,200)))
 # plt.show()
 
 ########################################################################################################################
+
+
+# Best solutions from optimization
+
+best_solutions = {
+    7358: {
+        'InterplanetaryVelocity': 5.837374e+03,
+        'EntryFpa': -2.949495e+00,
+        'payload_mass_fraction': 4.470431e-01,
+        'total_radiation_dose_krad': 9.610917e+01,
+        'benefit_over_insertion_burn': -3.759677e-01,
+        'maximum_aerodynamic_load': 6.041796e+00,
+        'peak_heat_flux': 5.797463e+06,
+        'minimum_jupiter_distance': 7.021207e+07,
+        'maximum_jupiter_distance': 4.820000e+10,
+        'final_eccentricity': 9.897191e-01
+    },
+
+    9857: {
+        'InterplanetaryVelocity': 6.089899e+03,
+        'EntryFpa': -2.984848e+00,
+        'payload_mass_fraction': 4.409519e-01,
+        'total_radiation_dose_krad': 9.619250e+01,
+        'benefit_over_insertion_burn': -3.744960e-01,
+        'maximum_aerodynamic_load': 7.060132e+00,
+        'peak_heat_flux': 6.026576e+06,
+        'minimum_jupiter_distance': 7.020820e+07,
+        'maximum_jupiter_distance': 4.820000e+10,
+        'final_eccentricity': 9.869964e-01
+    }
+}
